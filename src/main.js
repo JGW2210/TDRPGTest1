@@ -1,18 +1,22 @@
-// Vaeldrift, the Shattered Meridian — bootstrap & interaction wiring.
+// Vaeldrift, run two — bootstrap & interaction wiring: world map, gated
+// travel, local dioramas, diorama battles, blind item draws, secrets, death.
 
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { mulberry32, pick } from './rng.js';
-import { findPath } from './hex.js';
+import { mulberry32, hash2, pick } from './rng.js';
+import { findPath, keyOf, neighborsOf, hexDist } from './hex.js';
 import { generateWorld } from './worldgen.js';
-import { WorldView } from './world3d.js';
+import { WorldView, TIER_COLORS } from './world3d.js';
 import { PlayerToken } from './player.js';
 import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
+import { BattleSystem } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome } from './names.js';
+import { makeTrader, mysteryOutcome, BIOMES } from './names.js';
+import { drawItem, CONSUMABLES } from './items.js';
+import { run } from './run.js';
 
-const WORLD_HINT = 'drag to pan · scroll to zoom · right-drag to orbit · click a hex to travel · click <b>your</b> hex to explore it';
+const WORLD_HINT = 'drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it · <b>I</b> inventory';
 const LOCAL_HINT = 'drag to orbit the diorama · click a site to visit it · <b>Esc</b> or ↩ to return';
 
 // ------------------------------------------------------------------ setup ---
@@ -29,11 +33,12 @@ const dom = renderer.domElement;
 
 const worldScene = new THREE.Scene();
 worldScene.background = new THREE.Color(0x05060f);
-const worldCamera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 2500);
+const worldCamera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 3000);
 
 const worldView = new WorldView(world, worldScene);
 const player = new PlayerToken(worldScene, world.start);
 worldView.updateFog(world.start, { animate: false });
+run.hexesVisited.add(keyOf(world.start.q, world.start.r));
 
 const worldRig = new CameraRig(worldCamera, dom, {
   focus: { x: world.start.x, z: world.start.z },
@@ -43,7 +48,7 @@ const worldRig = new CameraRig(worldCamera, dom, {
   minPitch: CONFIG.camera.minPitch,
   maxPitch: CONFIG.camera.maxPitch,
   pitch: CONFIG.camera.startPitch,
-  bounds: worldView.worldRadius * 1.08,
+  bounds: worldView.worldRadius * 1.4,
 });
 
 const localCamera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
@@ -54,18 +59,26 @@ const localRig = new CameraRig(localCamera, dom, {
 });
 localRig.enabled = false;
 const localView = new LocalView();
+const battle = new BattleSystem(renderer);
 
-let mode = 'world';          // 'world' | 'transition' | 'local'
-let activeScene = 'world';
+let mode = 'world';          // 'world' | 'transition' | 'local' | 'battle'
+let activeScene = 'world';   // 'world' | 'local' | 'battle'
 let followPlayer = true;
 let dive = null;
-let shards = 10;
+let currentLocalTile = null;
+let battleReturn = null;     // { scene: 'world'|'local', tile }
 let exploreHintShown = false;
 
 ui.init(world);
-ui.setLocation(world.start, kingdomOf(world.start));
-ui.setShards(shards);
+refreshHud(world.start);
 ui.setHint(WORLD_HINT);
+
+function refreshHud(tile) {
+  ui.setLocation(tile, kingdomOf(tile));
+  ui.setRegion(world.regionOf(tile));
+  ui.setShards(run.shards);
+  ui.setStats(run);
+}
 
 // ------------------------------------------------------------ interaction ---
 
@@ -80,7 +93,8 @@ function pickWorld(cx, cy) {
   const hits = raycaster.intersectObjects([worldView.tileMesh, ...worldView.hitboxes], false);
   if (!hits.length) return null;
   const h = hits[0];
-  return h.object === worldView.tileMesh ? worldView.tileByIdx[h.instanceId] : h.object.userData.tile;
+  const tile = h.object === worldView.tileMesh ? worldView.tileByIdx[h.instanceId] : h.object.userData.tile;
+  return tile && !tile.void && !tile.secret ? tile : null;
 }
 
 function pickLocal(cx, cy) {
@@ -92,8 +106,14 @@ function kingdomOf(tile) {
   return tile.kingdom ? world.kingdomById[tile.kingdom] : null;
 }
 
+const gateLocked = t => t.gate && !run.openedGates.has(keyOf(t.q, t.r));
+
+function biomeName(tile) { return (BIOMES[tile.biome] || {}).name || '—'; }
+
+function expectedPower(tier) { return 10 + tier * 13; }
+
 dom.addEventListener('pointermove', e => {
-  if (ui.modalOpen || mode === 'transition') return;
+  if (ui.modalOpen || mode === 'transition' || mode === 'battle') return;
   if (mode === 'world') {
     if (worldRig.dragMode) { worldView.setHighlight(null); ui.tooltip(null); return; }
     const tile = pickWorld(e.clientX, e.clientY);
@@ -106,19 +126,32 @@ dom.addEventListener('pointermove', e => {
     dom.style.cursor = 'pointer';
     if (tile.fogState === 0) {
       ui.tooltip(`<div class="tt-name">Unmapped Reaches</div><div class="tt-biome">the shroud lies heavy here</div>`, e.clientX, e.clientY);
+    } else if (gateLocked(tile)) {
+      const g = tile.gate;
+      const c = '#' + new THREE.Color(TIER_COLORS[Math.min(g.tier, TIER_COLORS.length - 1)]).getHexString();
+      const ready = run.power >= expectedPower(g.tier);
+      ui.tooltip(
+        `<div class="tt-name">${tile.landmark.name.split(',')[0]}</div>` +
+        `<div class="tt-biome">warded causeway into ${world.regions[g.into].name}</div>` +
+        `<div class="tt-king" style="color:${c}">${'☠'.repeat(Math.min(5, g.tier))} tier ${g.tier} warden</div>` +
+        `<div class="tt-extra">${ready ? 'your power feels equal to this' : 'this ward is beyond your current strength…'} (you: ${run.power} · foe: ~${expectedPower(g.tier)})</div>`,
+        e.clientX, e.clientY
+      );
     } else {
       const k = kingdomOf(tile);
       const kHex = k ? '#' + k.color.toString(16).padStart(6, '0') : '#9aa3cf';
       const lm = tile.landmark;
+      const reg = world.regionOf(tile);
       const memory = tile.fogState === 1 ? ' <span style="color:#59639e">(hazy memory)</span>' : '';
       const extra = tile === player.tile
         ? '<div class="tt-extra">✦ click to explore this hex</div>'
         : '<div class="tt-extra">click to travel here</div>';
       ui.tooltip(
         `<div class="tt-name">${tile.name}${memory}</div>` +
-        `<div class="tt-biome">${lm ? lm.type + ' · ' : ''}${tile.biomeName ?? ''}${biomeName(tile)}</div>` +
+        `<div class="tt-biome">${lm ? lm.type + ' · ' : ''}${biomeName(tile)} · ${reg.name}</div>` +
         `<div class="tt-king" style="color:${kHex}">${k ? k.name : 'The Driftlands'}</div>` +
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
+        (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
         extra,
         e.clientX, e.clientY
       );
@@ -131,27 +164,23 @@ dom.addEventListener('pointermove', e => {
   }
 });
 
-function biomeName(tile) {
-  const names = {
-    MEADOW: 'Starlit Meadow', FOREST: 'Sighing Forest', MOUNTAIN: 'Cloudpiercers',
-    VOLCANO: 'Ember Wastes', DESERT: 'Glass Dunes', TUNDRA: 'Pale Expanse',
-    SEA: 'Astral Shallows', CRYSTAL: 'Prism Fields',
-  };
-  return names[tile.biome];
-}
-
 dom.addEventListener('pointerdown', e => {
   if (mode === 'world' && e.button === 0 && !e.shiftKey) followPlayer = false;
 });
 
 dom.addEventListener('click', e => {
-  if (ui.modalOpen || mode === 'transition') return;
+  if (ui.modalOpen || mode === 'transition' || mode === 'battle') return;
   if (mode === 'world') {
     if (worldRig.wasDrag) return;
     const tile = pickWorld(e.clientX, e.clientY);
     if (!tile) return;
-    if (tile === player.tile && !player.isMoving) enterLocal(tile);
-    else travelTo(tile);
+    if (tile === player.tile && !player.isMoving) {
+      enterLocal(tile);
+    } else if (gateLocked(tile)) {
+      approachGate(tile);
+    } else {
+      travelTo(tile);
+    }
   } else if (mode === 'local') {
     if (localRig.wasDrag) return;
     const data = pickLocal(e.clientX, e.clientY);
@@ -159,31 +188,108 @@ dom.addEventListener('click', e => {
   }
 });
 
-function travelTo(target) {
+// ---------------------------------------------------------------- travel ---
+
+function travelTo(target, onArrive = null) {
   if (target.void) return;
   const from = player.hop ? player.hop.to : player.tile;
-  if (from === target) return;
-  const path = findPath(world.tiles, from, target);
-  if (!path) { ui.toast('The rift denies passage — no road threads that stretch of void.'); return; }
+  if (from === target) { if (onArrive) onArrive(); return; }
+  const path = findPath(world.tiles, from, target, gateLocked);
+  if (!path) {
+    ui.toast(world.gates.some(g => gateLocked(g))
+      ? 'No open road leads there — a warden bars the way.'
+      : 'The rift denies passage — no road threads that stretch of void.');
+    return;
+  }
   followPlayer = true;
+  const fast = run.flags.fastTravel || path.length > CONFIG.fastPathLen;
+  player.hopTime = fast ? CONFIG.hopDurationFast : CONFIG.hopDuration;
   player.setPath(path,
-    tile => { // each landing
+    tile => {
+      run.hexesVisited.add(keyOf(tile.q, tile.r));
       worldView.updateFog(tile);
-      ui.setLocation(tile, kingdomOf(tile));
+      if (run.flags.revealRegion) revealRegionMemory(tile);
+      refreshHud(tile);
       if (followPlayer && !worldRig.dragMode) worldRig.panTo({ x: tile.x, z: tile.z });
     },
-    tile => { // journey's end
-      if (tile.landmark) ui.toast(`You arrive at <b>${tile.name}</b>.`);
+    tile => {
+      if (tile.landmark && tile.landmark.type !== 'gate') ui.toast(`You arrive at <b>${tile.name}</b>.`);
       if (!exploreHintShown) {
         exploreHintShown = true;
         ui.toast('✦ Click the hex you stand on to explore it up close.', true);
       }
+      if (onArrive) onArrive();
     });
+}
+
+const revealedRegions = new Set();
+function revealRegionMemory(tile) {
+  const reg = world.regionOf(tile);
+  if (reg.id >= 100 || revealedRegions.has(reg.id)) return;
+  revealedRegions.add(reg.id);
+  for (const t of reg.tiles || []) worldView.explored.add(keyOf(t.q, t.r));
+  worldView.updateFog(tile, { animate: false });
+  ui.toast(`The Meridian Compass charts ${reg.name} into memory.`, true);
+}
+
+// ----------------------------------------------------------------- gates ---
+
+function approachGate(gateTile) {
+  const adj = neighborsOf(gateTile.q, gateTile.r)
+    .map(([q, r]) => world.tiles.get(keyOf(q, r)))
+    .filter(t => t && !t.void && !gateLocked(t))
+    .sort((a, b) => hexDist(a.q, a.r, player.tile.q, player.tile.r) - hexDist(b.q, b.r, player.tile.q, player.tile.r));
+  if (!adj.length) { ui.toast('No path reaches the gate’s threshold.'); return; }
+  const here = adj.find(t => t === player.tile);
+  if (here) { challengeGate(gateTile); return; }
+  travelTo(adj[0], () => challengeGate(gateTile));
+}
+
+function challengeGate(gateTile) {
+  const g = gateTile.gate;
+  const ready = run.power >= expectedPower(g.tier);
+  ui.openModal({
+    type: 'battle', subtype: 'warden',
+    name: gateTile.landmark.name,
+    flavor: `The causeway into ${world.regions[g.into].name} is sealed behind folded starlight. The Warden unfolds to meet you — ${'☠'.repeat(Math.min(5, g.tier))} tier ${g.tier}. ` +
+      (ready ? 'Your power feels equal to this.' : 'Your power does not yet feel equal to this. It will let you try anyway.'),
+    actions: ['⚔ Challenge the Warden', 'Withdraw'],
+  }, {
+    onAction: label => {
+      if (label.startsWith('⚔')) {
+        ui.closeModal();
+        startBattle({
+          team: { biome: g.biome, tier: g.tier, count: 1, boss: true, bossName: gateTile.landmark.name },
+          title: gateTile.landmark.name,
+          onWin: () => {
+            run.openedGates.add(keyOf(gateTile.q, gateTile.r));
+            worldView.openGate(gateTile);
+            ui.toast(`⚑ The ward shatters — ${world.regions[g.into].name} lies open.`, true);
+            const bossDraw = drawItem(mulberry32(hash2(gateTile.q, gateTile.r, world.seed + 777) * 0xffffffff | 0), 'BOSS', run.ownedIds);
+            if (bossDraw) grantItem(bossDraw);
+          },
+        });
+      } else ui.closeModal();
+    },
+    onClose: () => {},
+  });
 }
 
 // -------------------------------------------------------- local view flow ---
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
+
+function sitesFor(tile) {
+  let sites = world.getSites(tile);
+  if (worldView.traderOnTile(tile) && !sites.some(s => s.type === 'trader')) {
+    const rng = mulberry32((world.seed + tile.q * 131 + tile.r * 197) >>> 0);
+    const t = makeTrader(rng, 1, null);
+    t.id = 'wander:' + tile.q + ',' + tile.r;
+    sites = [t, ...sites];
+  }
+  for (const s of sites) s.cleared = run.clearedSites.has(s.id);
+  return sites;
+}
 
 async function enterLocal(tile) {
   mode = 'transition';
@@ -199,13 +305,7 @@ async function enterLocal(tile) {
   await delay(460);
   dive = null;
 
-  let sites = world.getSites(tile);
-  if (worldView.traderOnTile(tile) && !sites.some(s => s.type === 'trader')) {
-    const rng = mulberry32((world.seed + tile.q * 131 + tile.r * 197) >>> 0);
-    const t = makeTrader(rng, 1, null);
-    t.id = 'wander:' + tile.q + ',' + tile.r;
-    sites = [t, ...sites];
-  }
+  const sites = sitesFor(tile);
   localView.build(tile, world, sites);
   localRig.yaw = worldRig.yaw;
   localRig.pitch = 0.85;
@@ -215,7 +315,8 @@ async function enterLocal(tile) {
   localRig.enabled = true;
   activeScene = 'local';
   mode = 'local';
-  ui.setExploring(tile.name);
+  currentLocalTile = tile;
+  ui.setExploring(tile.name + (sites.length ? '' : ' — nothing stirs here'));
   ui.setHint(LOCAL_HINT);
   ui.showReturn(true);
   ui.fade(false);
@@ -234,39 +335,196 @@ async function exitLocal() {
   worldRig.enabled = true;
   worldRig.dist = Math.max(16, worldRig.dist);
   mode = 'world';
-  ui.setLocation(player.tile, kingdomOf(player.tile));
+  currentLocalTile = null;
+  refreshHud(player.tile);
   ui.setHint(WORLD_HINT);
   ui.showReturn(false);
   ui.fade(false);
 }
 
+// ---------------------------------------------------------------- battles ---
+
+async function startBattle({ team, title, onWin, siteId }) {
+  const from = mode; // 'world' or 'local'
+  battleReturn = { scene: from === 'local' ? 'local' : 'world', tile: currentLocalTile };
+  mode = 'transition';
+  worldRig.enabled = false;
+  localRig.enabled = false;
+  worldView.setHighlight(null);
+  ui.tooltip(null);
+  if (ui.modalOpen) ui.closeModal();
+  ui.fade(true);
+  await delay(460);
+  activeScene = 'battle';
+  mode = 'battle';
+  ui.setHint('click or press <b>space</b> when the marker crosses the gold band');
+  battle.start({
+    team, title,
+    onEnd: async result => {
+      mode = 'transition';
+      ui.fade(true);
+      await delay(200);
+      if (result.lost) {
+        activeScene = 'world';
+        mode = 'dead';
+        worldRig.enabled = false;
+        localRig.enabled = false;
+        ui.fade(false);
+        ui.showDeath(run, world);
+        return;
+      }
+      if (result.won) {
+        if (siteId) {
+          run.clearedSites.add(siteId);
+          checkGlint(battleReturn.tile);
+        }
+        if (onWin) onWin();
+      }
+      // return to where we came from
+      if (battleReturn.scene === 'local' && battleReturn.tile) {
+        const tile = battleReturn.tile;
+        localView.build(tile, world, sitesFor(tile));
+        localRig.enabled = true;
+        activeScene = 'local';
+        mode = 'local';
+        ui.setExploring(tile.name);
+        ui.setHint(LOCAL_HINT);
+        ui.showReturn(true);
+      } else {
+        activeScene = 'world';
+        worldRig.enabled = true;
+        mode = 'world';
+        ui.setHint(WORLD_HINT);
+        ui.showReturn(false);
+      }
+      refreshHud(player.tile);
+      ui.fade(false);
+    },
+  });
+  ui.fade(false);
+}
+
+function checkGlint(tile) {
+  if (!tile) return;
+  const sites = world.getSites(tile);
+  const meaningful = sites.filter(s => s.type === 'battle' || s.type === 'pedestal' || s.subtype === 'cache' || s.subtype === 'mystery');
+  if (meaningful.every(s => run.clearedSites.has(s.id))) worldView.setGlint(tile, false);
+}
+
 // ------------------------------------------------------------ site actions ---
+
+function grantItem(item) {
+  const before = new Set(run.synergies.map(s => s.id));
+  run.addItem(item);
+  const fresh = run.synergies.filter(s => !before.has(s.id));
+  ui.showItemCard(item, fresh, () => refreshHud(player.tile));
+}
+
+function buildOffers(site, tile) {
+  const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 553) * 0xffffffff));
+  const tier = world.regionOf(tile).tier;
+  const markup = 1 + (run.flags.shopMarkup || 0);
+  const offers = [
+    { kind: 'consumable', id: 'charge', price: Math.round(6 * markup) },
+    { kind: 'consumable', id: 'dew', price: Math.round(5 * markup) },
+  ];
+  if (rng() < 0.6) offers.push({ kind: 'consumable', id: 'feather', price: Math.round(8 * markup) });
+  const pool = ['MEADOW', 'FOREST', 'MOUNTAIN', 'VOLCANO', 'DESERT', 'TUNDRA', 'SEA', 'CRYSTAL'][Math.floor(rng() * 8)];
+  const item = drawItem(rng, pool, run.ownedIds);
+  if (item && site.subtype !== 'wandering') {
+    offers.push({ kind: 'item', item, price: Math.round((22 + tier * 9) * markup) });
+  }
+  return offers;
+}
+
+function renderShop(site) {
+  const extra = document.getElementById('modal-extra');
+  extra.innerHTML = '';
+  for (const offer of site.offers) {
+    const sold = offer.sold;
+    const row = document.createElement('div');
+    row.className = 'ware';
+    const label = offer.kind === 'item'
+      ? `<b>${offer.item.name}</b> <span style="color:var(--ink-dim);font-size:12px">${offer.item.desc}</span>`
+      : `${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} <span style="color:var(--ink-dim);font-size:12px">${CONSUMABLES[offer.id].desc}</span>`;
+    row.innerHTML = `<span>${label}</span><span class="price">${sold ? 'sold' : '☆ ' + offer.price}</span>`;
+    if (!sold) {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => {
+        if (!run.spendShards(offer.price)) { ui.toast('Not enough star-shards. The trader’s sympathy is complimentary.'); return; }
+        offer.sold = offer.kind === 'item';
+        if (offer.kind === 'item') grantItem(offer.item);
+        else { run.consumables[offer.id]++; ui.toast(`${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} acquired.`); }
+        refreshHud(player.tile);
+        renderShop(site);
+      });
+    }
+    extra.appendChild(row);
+  }
+}
 
 const ACTION_LINES = {
   'Scout the Ground': 'You note the footing, the cover, and one suspiciously loose boulder. It will remember you too.',
   'Watch a Bout': 'Two duellists bow, clash, and settle a dispute over cheese tariffs. The crowd weeps openly.',
-  'Browse Wares': 'The wares gleam. Your purse hums nervously and pretends to be empty.',
-  'Gather Rumors': null, // handled specially
   'Rest': 'You rest. The stars rearrange themselves politely while you sleep.',
   'Seek an Audience': 'The court can see you at the third bell of next season. Bring a hat; the throne room has opinions.',
-  'View the Relic': 'You lean close to the sun-glass. The relic taps back, twice. The curator faints on schedule.',
   'Explore': 'You wander the stones until the light changes. Something small and grateful follows you back to the path.',
   'Pay Respects': 'You bow. Far overhead, one star bows back — barely, but unmistakably.',
   'Search the Rubble': 'Beneath a cracked lintel you find a marble that shows the room behind you, three heartbeats late.',
   'Study the Warnings': 'The sixth language turns out to be a recipe. The apology, however, is sincere.',
   'Descend (soon™)': 'The stair breathes out cold air and patience. The deep places open in a later build.',
-  'Take the Watch': null,
 };
 
 function handleAction(site, label, btn) {
-  if (label.startsWith('⚔')) {
-    ui.toast(`⚔ ${site.enemy || 'The foe'} bristles and waits — combat arrives with the next age of the world.`);
+  if (site.cleared && (site.type === 'battle' || site.type === 'pedestal' || site.subtype === 'cache' || site.subtype === 'mystery')) {
+    ui.toast('That matter is already settled.');
+    return;
+  }
+  if (label.startsWith('⚔') && site.team) {
+    startBattle({
+      team: site.team, title: site.name, siteId: site.id,
+      onWin: site.team.boss && site.team.satellite ? () => {
+        ui.toast('☄ The satellite’s heart is yours to claim.', true);
+      } : null,
+    });
+    return;
+  }
+  if (label === 'Claim the Gift') {
+    const rng = mulberry32(Math.floor(hash2(site.id.length * 31 + site.id.charCodeAt(0), site.id.charCodeAt(site.id.length - 3) || 7, world.seed + 999) * 0xffffffff));
+    const item = drawItem(rng, site.pool, run.ownedIds);
+    run.clearedSites.add(site.id);
+    ui.closeModal();
+    if (item) grantItem(item);
+    else { const got = run.gainShards(20); ui.toast(`The pedestal stands empty of gifts — but ${got} ☆ pool in the hollow.`, true); }
+    if (currentLocalTile) {
+      localView.build(currentLocalTile, world, sitesFor(currentLocalTile));
+      checkGlint(currentLocalTile);
+    }
+    refreshHud(player.tile);
+    return;
+  }
+  if (label === 'Open the Cache') {
+    run.clearedSites.add(site.id);
+    if (site.cacheShards) {
+      const got = run.gainShards(site.cacheShards);
+      ui.toast(`☆ ${got} star-shards, freed from the dark.`, true);
+    }
+    if (site.cacheConsumables) {
+      for (const [k, v] of Object.entries(site.cacheConsumables)) run.consumables[k] += v;
+      ui.toast('✸ The keg holds star-charges and one very nervous dew bottle.', true);
+    }
+    ui.closeModal();
+    if (currentLocalTile) {
+      localView.build(currentLocalTile, world, sitesFor(currentLocalTile));
+      checkGlint(currentLocalTile);
+    }
+    refreshHud(player.tile);
     return;
   }
   if (label === 'Haggle') {
     const win = Math.random() < 0.5;
-    shards = Math.max(0, shards + (win ? 1 : -1));
-    ui.setShards(shards);
+    run.shards = Math.max(0, run.shards + (win ? 1 : -1));
+    refreshHud(player.tile);
     ui.toast(win
       ? 'You haggle masterfully and are up one star-shard. The trader applauds your rudeness. (+1 ☆)'
       : 'You haggle, lose the thread entirely, and somehow buy a receipt. (−1 ☆)');
@@ -274,21 +532,28 @@ function handleAction(site, label, btn) {
   }
   if (label === 'Investigate') {
     const out = mysteryOutcome(mulberry32((Math.random() * 2 ** 31) | 0));
-    shards = Math.max(0, shards + out.shards);
-    ui.setShards(shards);
+    run.shards = Math.max(0, run.shards + out.shards);
+    run.clearedSites.add(site.id);
+    refreshHud(player.tile);
     ui.modalOutcome(out.text + (out.shards ? `  (${out.shards > 0 ? '+' : ''}${out.shards} ☆)` : ''));
     btn.disabled = true;
+    if (currentLocalTile) checkGlint(currentLocalTile);
     return;
   }
   if (label === 'Gather Rumors') {
     const rumor = pick(mulberry32((Math.random() * 2 ** 31) | 0), [
-      `They say ${pick(Math.random, world.dungeons).name} has started humming at night.`,
-      `A caravaneer swears the Hollow Star blinked last week. Twice.`,
-      `The Pale Tarot drew "The Door" three dawns running. Selenost is nervous.`,
-      `Word is a wandering trader pays double for anything that glows and apologizes.`,
+      `They say ${pick(Math.random, world.dungeons.length ? world.dungeons : [{ name: 'a far vault' }]).name} has started humming at night.`,
+      `A caravaneer swears one of the wardens naps at its post. Nobody will say which tier.`,
+      `Sealed hollows hide in the rifts — walk the cracked hexes and let a star-charge speak.`,
+      `Beyond the shallows, star-bridges reach the wandering worlds. The bosses there hoard astral relics.`,
       `The Umbral Choir is recruiting basses. No one asks what happened to the old ones.`,
     ]);
     ui.toast('🗣 ' + rumor);
+    return;
+  }
+  if (label === 'Browse Wares') {
+    site.offers ??= buildOffers(site, currentLocalTile || player.tile);
+    renderShop(site);
     return;
   }
   const line = ACTION_LINES[label];
@@ -301,6 +566,31 @@ function openSite(site) {
     onAction: (label, btn) => handleAction(site, label, btn),
     onClose: () => { localRig.enabled = (mode === 'local'); },
   });
+  if (site.type === 'trader') {
+    site.offers ??= buildOffers(site, currentLocalTile || player.tile);
+    renderShop(site);
+  }
+}
+
+// ------------------------------------------------------------- detonation ---
+
+function detonate() {
+  if (mode !== 'world' || player.isMoving) { ui.toast('Steady ground is required for demolition.'); return; }
+  if (run.consumables.charge <= 0) { ui.toast('No star-charges left. Traders sell them, and foes sometimes drop them.'); return; }
+  run.consumables.charge--;
+  refreshHud(player.tile);
+  const secret = neighborsOf(player.tile.q, player.tile.r)
+    .map(([q, r]) => world.tiles.get(keyOf(q, r)))
+    .find(t => t && t.secret);
+  player.burstNow?.();
+  if (secret) {
+    world.revealSecret(secret);
+    worldView.revealSecretTile(secret);
+    worldView.updateFog(player.tile, { animate: false });
+    ui.toast('✸ The blast peels the void back — a sealed hex stands revealed!', true);
+  } else {
+    ui.toast('✸ The blast echoes over nothing. The charge is spent; the void is unimpressed.');
+  }
 }
 
 // ----------------------------------------------------------------- buttons ---
@@ -310,21 +600,26 @@ document.getElementById('btn-recenter').addEventListener('click', () => {
   followPlayer = true;
   worldRig.panTo({ x: player.group.position.x, z: player.group.position.z });
 });
-document.getElementById('btn-seed').addEventListener('click', () => {
+document.getElementById('btn-return').addEventListener('click', exitLocal);
+document.getElementById('btn-detonate').addEventListener('click', detonate);
+document.getElementById('btn-inventory').addEventListener('click', () => ui.toggleInventory(run));
+document.getElementById('inv-close').addEventListener('click', () => ui.toggleInventory(run, false));
+document.getElementById('btn-newrun').addEventListener('click', () => {
   location.href = '?seed=' + Math.floor(Math.random() * 1e6);
 });
-document.getElementById('btn-return').addEventListener('click', exitLocal);
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape') {
     if (ui.modalOpen) ui.closeModal();
+    else if (!document.getElementById('inventory').classList.contains('hidden')) ui.toggleInventory(run, false);
     else if (mode === 'local') exitLocal();
   }
+  if (e.code === 'KeyI' && mode !== 'battle') ui.toggleInventory(run);
 });
 
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
-  for (const c of [worldCamera, localCamera]) {
+  for (const c of [worldCamera, localCamera, battle.camera]) {
     c.aspect = innerWidth / innerHeight;
     c.updateProjectionMatrix();
   }
@@ -332,14 +627,19 @@ window.addEventListener('resize', () => {
 
 // -------------------------------------------------------------------- loop ---
 
-// tiny handle for automated smoke tests
 window.__vael = {
   get mode() { return mode; },
   get playerTile() { return player.tile; },
   get isMoving() { return player.isMoving; },
+  run, world, battle,
   pickAt: (x, y) => { const t = pickWorld(x, y); return t ? { q: t.q, r: t.r, name: t.name } : null; },
   travel: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t && !t.void) travelTo(t); },
-  world,
+  testBattle: (tier = 1, biome = 'MEADOW', boss = false) =>
+    startBattle({ team: { biome, tier, count: 2, boss }, title: 'Test Battle' }),
+  openGateAt: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t?.gate) challengeGate(t); },
+  detonate,
+  smite: () => { for (const e of battle.enemies || []) if (!e.dead) e.hp = 1; },
+  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); refreshHud(player.tile); } }); },
 };
 
 const clock = new THREE.Clock();
@@ -358,22 +658,26 @@ function loop() {
     worldRig.apply();
   }
 
-  if (activeScene === 'world') {
+  if (activeScene === 'battle') {
+    battle.update(dt);
+    if (battle.scene) renderer.render(battle.scene, battle.camera);
+  } else if (activeScene === 'local') {
+    localRig.update(dt);
+    localView.update(dt, localCamera);
+    if (localView.scene) renderer.render(localView.scene, localCamera);
+  } else {
     worldRig.update(dt);
     worldView.update(dt, worldCamera);
     player.layerY = worldView.layer.position.y;
     player.update(dt, worldCamera, worldRig.focus);
     renderer.render(worldScene, worldCamera);
-  } else {
-    localRig.update(dt);
-    localView.update(dt, localCamera);
-    if (localView.scene) renderer.render(localView.scene, localCamera);
   }
 
   if (firstFrame) {
     firstFrame = false;
     ui.loadingDone();
-    ui.toast(`You wake in <b>${world.start.name}</b>, beneath the Hollow Star.`, true);
+    ui.toast(`You wake in <b>${world.start.name}</b>, beneath the light of ${world.sun.name}.`, true);
+    ui.toast('The rifts are sealed by warded causeways. Grow strong, then challenge the wardens.', true);
   }
 }
 loop();

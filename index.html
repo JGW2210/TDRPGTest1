@@ -26,18 +26,22 @@
     <div class="hud-sub">the Shattered Meridian</div>
     <div class="hud-loc" id="hud-loc">—</div>
     <div class="hud-king" id="hud-king"></div>
+    <div class="hud-region" id="hud-region"></div>
+    <div class="hud-stats" id="hud-stats"></div>
     <div class="hud-shards" id="hud-shards">☆ 10 star-shards</div>
+    <div class="hud-consum" id="hud-consum"></div>
   </header>
 
   <aside id="legend"></aside>
 
   <div id="controls">
+    <button id="btn-inventory" title="Your items, abilities and synergies (I)">🎒 Inventory</button>
+    <button id="btn-detonate" title="Detonate a star-charge where you stand — sealed hexes crack open">✸ Detonate</button>
     <button id="btn-recenter" title="Return the camera to your token">◎ Recenter</button>
-    <button id="btn-seed" title="Regenerate the world with a fresh seed">✦ New World</button>
     <button id="btn-return" class="hidden" title="Rise back to the world map">↩ Return to World Map</button>
   </div>
 
-  <footer id="hint">drag to pan · scroll to zoom · right-drag to orbit · click a hex to travel · click <b>your</b> hex to explore it</footer>
+  <footer id="hint">drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it</footer>
 
   <div id="tooltip" class="hidden"></div>
 
@@ -50,6 +54,50 @@
       <div id="modal-extra"></div>
       <div id="modal-actions"></div>
     </div>
+  </div>
+
+  <div id="itemcard-scrim" class="hidden">
+    <div id="itemcard">
+      <div class="ic-glow"></div>
+      <div class="ic-kicker" id="ic-kicker">A GIFT, FACE-DOWN</div>
+      <h2 id="ic-name"></h2>
+      <div id="ic-desc"></div>
+      <p id="ic-flavor"></p>
+      <div id="ic-synergy"></div>
+      <div class="ic-actions"><button id="ic-take">Take it</button></div>
+    </div>
+  </div>
+
+  <aside id="inventory" class="hidden">
+    <h3>THE WANDERER’S PACK <button id="inv-close">✕</button></h3>
+    <div id="inv-stats"></div>
+    <div id="inv-synergies"></div>
+    <div id="inv-items"></div>
+  </aside>
+
+  <div id="battle" class="hidden">
+    <div id="b-title"></div>
+    <div id="b-enemies"></div>
+    <div id="b-player"></div>
+    <div id="b-log"></div>
+    <div id="b-menu" class="hidden"></div>
+    <div id="b-timing" class="hidden">
+      <div class="bt-track">
+        <div class="bt-zone good"></div>
+        <div class="bt-zone perfect"></div>
+        <div class="bt-marker"></div>
+      </div>
+      <div class="bt-label" id="b-timing-label">Strike!</div>
+    </div>
+    <div id="b-float"></div>
+  </div>
+
+  <div id="death" class="hidden">
+    <div class="death-rune">ᚦ</div>
+    <h1>THE PAPER BURNS</h1>
+    <p class="death-sub">Vaeldrift folds itself away, and somewhere a new meridian is drawn.</p>
+    <div id="death-stats"></div>
+    <button id="btn-newrun">☄ Wake in a New World</button>
   </div>
 
   <div id="toasts"></div>

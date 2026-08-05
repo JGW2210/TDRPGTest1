@@ -41,9 +41,21 @@ export function neighborsOf(q, r) {
   return DIRS.map(([dq, dr]) => [q + dq, r + dr]);
 }
 
+// Hexes on the straight line from a to b, inclusive (cube-lerp + round).
+export function hexLine(aq, ar, bq, br) {
+  const N = hexDist(aq, ar, bq, br);
+  const out = [];
+  for (let i = 0; i <= N; i++) {
+    const t = N === 0 ? 0 : i / N;
+    out.push(axialRound(aq + (bq - aq) * t + 1e-6, ar + (br - ar) * t + 1e-6));
+  }
+  return out;
+}
+
 // A* over the tile map. `tiles` is a Map of key -> tile with tile.void flag.
+// `blocked(tile)` marks additionally impassable tiles (e.g. locked gates).
 // Returns array of tiles from start (exclusive) to goal (inclusive), or null.
-export function findPath(tiles, start, goal) {
+export function findPath(tiles, start, goal, blocked = null) {
   if (start === goal) return [];
   const startKey = keyOf(start.q, start.r), goalKey = keyOf(goal.q, goal.r);
   const open = new MinHeap();
@@ -65,6 +77,7 @@ export function findPath(tiles, start, goal) {
       const nKey = keyOf(nq, nr);
       const n = tiles.get(nKey);
       if (!n || n.void) continue;
+      if (blocked && blocked(n)) continue;
       const ng = g + 1;
       if (ng < (gScore.get(nKey) ?? Infinity)) {
         gScore.set(nKey, ng);
