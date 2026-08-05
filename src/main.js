@@ -638,6 +638,7 @@ window.__vael = {
     startBattle({ team: { biome, tier, count: 2, boss }, title: 'Test Battle' }),
   openGateAt: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t?.gate) challengeGate(t); },
   detonate,
+  lookAt: (x, z, dist) => { worldRig.panTo({ x, z }, { instant: true }); if (dist) { worldRig.dist = dist; worldRig.apply(); } },
   smite: () => { for (const e of battle.enemies || []) if (!e.dead) e.hp = 1; },
   give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); refreshHud(player.tile); } }); },
 };

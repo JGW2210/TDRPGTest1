@@ -51,6 +51,23 @@ export const SATELLITES = [
   },
 ];
 
+// ------------------------------------------------------ cosmic landmarks ---
+
+export const CELESTIALS = {
+  giant: { name: 'Thal-Vaur, the Sleeping Giant', sub: 'it has not turned over in an age' },
+  comet: { name: 'The Errand', sub: 'always going, never arriving' },
+  shattermoons: [
+    { name: 'The Sundered Daughter', sub: 'a moon that argued with the tide' },
+    { name: 'Grief-of-Glass', sub: 'still falling, very slowly' },
+  ],
+  constellations: [
+    { name: 'The Ferryman', sub: 'constellation' },
+    { name: 'The Spilled Cup', sub: 'constellation' },
+    { name: 'The Patient Hound', sub: 'constellation' },
+    { name: 'The Second Cartographer', sub: 'constellation' },
+  ],
+};
+
 // ----------------------------------------------------------- region names ---
 
 const REGION_PRE = {

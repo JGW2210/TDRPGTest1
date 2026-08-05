@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { hash2 } from './rng.js';
 import { keyOf, hexDist, neighborsOf } from './hex.js';
-import { BIOMES } from './names.js';
+import { BIOMES, CELESTIALS } from './names.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeMistTexture, makeStarTexture,
   makeGlowTexture, makeTraderTexture, makeLabelTexture,
@@ -56,6 +56,7 @@ export class WorldView {
 
     this._buildLights();
     this._buildBase();
+    this._buildCelestials();
     this._buildTiles();
     this._buildDecorations();
     this._buildLandmarks();
@@ -200,6 +201,258 @@ export class WorldView {
     }
 
     this.scene.add(g);
+  }
+
+  // ---------------------------------------------- cosmic landmark objects ---
+  // Sky-layer scenery, never fogged: planet bodies looming over the
+  // satellites, constellations and shattered moons above the rifts, a
+  // sleeping giant beyond the rim, and a comet that never stops orbiting.
+  _buildCelestials() {
+    const g = new THREE.Group();
+    this.scene.add(g);
+    this.celestialSpinners = [];
+    const R = this.worldRadius;
+    const seed = this.world.seed;
+    const rng = (a, b) => hash2(a | 0, b | 0, seed + 8888);
+
+    const skyLabel = (text, sub, color = '#c9d2ff', scale = 0.02, opacity = 0.75) => {
+      const tex = makeLabelTexture(text, { sub, color });
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, opacity, depthTest: false, fog: false,
+      }));
+      sp.scale.set(tex.userData.w * scale, tex.userData.h * scale, 1);
+      sp.renderOrder = 10;
+      return sp;
+    };
+    const glowSprite = (color, size, opacity = 0.5) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(color), transparent: true, opacity,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      sp.scale.setScalar(size);
+      return sp;
+    };
+
+    // --- planet bodies over the three satellites --------------------------
+    for (const sat of this.world.satellites) {
+      const { x, z } = sat.center;
+      const holder = new THREE.Group();
+      holder.position.set(x, 7.2, z);
+
+      if (sat.def.id === 'luna') {
+        // the Pale Daughter: a cratered silver moon in a halo of dust
+        const body = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(2.4, 1),
+          new THREE.MeshStandardMaterial({
+            color: 0xd8dcee, flatShading: true, roughness: 0.9,
+            emissive: 0x9aa4d8, emissiveIntensity: 0.25,
+          })
+        );
+        holder.add(body);
+        for (let i = 0; i < 7; i++) {
+          const crater = new THREE.Mesh(
+            new THREE.CircleGeometry(0.2 + rng(i, 1) * 0.3, 8),
+            new THREE.MeshBasicMaterial({ color: 0x8a90b8, side: THREE.DoubleSide })
+          );
+          const dir = new THREE.Vector3().randomDirection();
+          crater.position.copy(dir).multiplyScalar(2.42);
+          crater.lookAt(crater.position.clone().multiplyScalar(2));
+          holder.add(crater);
+        }
+        const halo = new THREE.Mesh(
+          new THREE.TorusGeometry(3.4, 0.04, 6, 48),
+          new THREE.MeshBasicMaterial({
+            color: 0xe8ecff, transparent: true, opacity: 0.4,
+            blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+          })
+        );
+        halo.rotation.x = Math.PI / 2 - 0.25;
+        holder.add(halo, glowSprite('#c9d2ff', 9, 0.4));
+        holder.add(new THREE.PointLight(0xc9d2ff, 25, 30, 2));
+        this.celestialSpinners.push({ obj: body, speed: 0.05 });
+      } else if (sat.def.id === 'rubidus') {
+        // Rubidus: a rust wanderer wearing double rings of red dust
+        const body = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(2.6, 1),
+          new THREE.MeshStandardMaterial({
+            color: 0xa8503c, flatShading: true, roughness: 0.85,
+            emissive: 0x662418, emissiveIntensity: 0.5,
+          })
+        );
+        holder.add(body);
+        for (const [rad, op] of [[3.6, 0.5], [4.3, 0.28]]) {
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(rad, 0.09, 6, 56),
+            new THREE.MeshBasicMaterial({
+              color: 0xff8a5a, transparent: true, opacity: op,
+              blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+            })
+          );
+          ring.rotation.x = Math.PI / 2 + 0.42;
+          holder.add(ring);
+        }
+        holder.add(glowSprite('#ff8a5a', 9, 0.35));
+        holder.add(new THREE.PointLight(0xff7a4a, 25, 30, 2));
+        this.celestialSpinners.push({ obj: body, speed: 0.08 });
+      } else {
+        // the Viridian Comet: a green head streaming a long frozen tail
+        const body = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(1.9, 0),
+          new THREE.MeshStandardMaterial({
+            color: 0x3c8a5e, flatShading: true, roughness: 0.4,
+            emissive: 0x2affa0, emissiveIntensity: 0.6,
+          })
+        );
+        holder.add(body);
+        const away = new THREE.Vector3(x, 0, z).normalize(); // tail points away from the sun
+        for (let i = 1; i <= 6; i++) {
+          const puff = glowSprite('#8affc4', 3.4 - i * 0.42, 0.4 - i * 0.05);
+          puff.position.copy(away).multiplyScalar(i * 1.7);
+          puff.position.y += i * 0.35;
+          holder.add(puff);
+        }
+        holder.add(glowSprite('#8affc4', 8, 0.45));
+        holder.add(new THREE.PointLight(0x6affb4, 25, 30, 2));
+        this.celestialSpinners.push({ obj: body, speed: 0.3 });
+      }
+      const lbl = skyLabel(sat.def.name, 'wandering world', '#c9d2ff', 0.014);
+      lbl.position.y = 4.6;
+      holder.add(lbl);
+      holder.userData.baseY = holder.position.y;
+      holder.userData.bobPhase = rng(x | 0, z | 0) * Math.PI * 2;
+      (this.planetBodies ??= []).push(holder);
+      g.add(holder);
+    }
+
+    // --- helper: find spots over the void, spread apart -------------------
+    const voidSpots = [];
+    {
+      const cands = this.world.list
+        .filter(t => t.void && !t.secret && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
+        .sort((a, b) => hash2(b.q, b.r, seed + 9100) - hash2(a.q, a.r, seed + 9100));
+      for (const t of cands) {
+        if (voidSpots.length >= 6) break;
+        if (voidSpots.some(s => hexDist(s.q, s.r, t.q, t.r) < 18)) continue;
+        voidSpots.push(t);
+      }
+    }
+
+    // --- constellations drifting over the rifts ---------------------------
+    this.constellations = [];
+    CELESTIALS.constellations.forEach((def, ci) => {
+      const spot = voidSpots[ci];
+      if (!spot) return;
+      const holder = new THREE.Group();
+      holder.position.set(spot.x, 4.2, spot.z);
+      const pts = [];
+      let px = 0, pz = 0;
+      const n = 5 + Math.floor(rng(ci, 77) * 3);
+      for (let i = 0; i < n; i++) {
+        pts.push(new THREE.Vector3(px, (rng(ci * 31 + i, 5) - 0.5) * 1.6, pz));
+        const a = rng(ci * 17 + i, 9) * Math.PI * 2;
+        px += Math.cos(a) * (1.4 + rng(ci, i) * 1.2);
+        pz += Math.sin(a) * (1.4 + rng(ci, i) * 1.2);
+      }
+      const center = pts.reduce((v, p) => v.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+      for (const p of pts) p.sub(center);
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lines = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({
+        color: 0x8fa4ff, transparent: true, opacity: 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      holder.add(lines);
+      for (const p of pts) {
+        const star = glowSprite('#dfe6ff', 0.9, 0.85);
+        star.position.copy(p);
+        holder.add(star);
+      }
+      const lbl = skyLabel(def.name, def.sub, '#8fa4ff', 0.013, 0.55);
+      lbl.position.y = -1.8;
+      holder.add(lbl);
+      this.constellations.push({ holder, lines, phase: ci * 1.7 });
+      g.add(holder);
+    });
+
+    // --- shattered moons hanging in the rifts ------------------------------
+    CELESTIALS.shattermoons.forEach((def, mi) => {
+      const spot = voidSpots[4 + mi];
+      if (!spot) return;
+      const holder = new THREE.Group();
+      holder.position.set(spot.x, 3.4, spot.z);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xb8bcd8, flatShading: true, roughness: 0.9, emissive: 0x585e88, emissiveIntensity: 0.2,
+      });
+      const nChunks = 7 + Math.floor(rng(mi, 55) * 3);
+      for (let i = 0; i < nChunks; i++) {
+        const chunk = new THREE.Mesh(new THREE.IcosahedronGeometry(0.25 + rng(mi * 9 + i, 3) * 0.55, 0), mat);
+        const a = rng(mi * 13 + i, 4) * Math.PI * 2;
+        const rr = 0.6 + rng(mi * 7 + i, 6) * 2.2;
+        chunk.position.set(Math.cos(a) * rr, (rng(mi + i, 8) - 0.5) * 1.6, Math.sin(a) * rr);
+        chunk.rotation.set(rng(i, 1) * 3, rng(i, 2) * 3, 0);
+        holder.add(chunk);
+      }
+      holder.add(glowSprite('#aab4e8', 6, 0.25));
+      const lbl = skyLabel(def.name, def.sub, '#b8c2e8', 0.012, 0.5);
+      lbl.position.y = -2.4;
+      holder.add(lbl);
+      this.celestialSpinners.push({ obj: holder, speed: 0.04 + mi * 0.02 });
+      g.add(holder);
+    });
+
+    // --- Thal-Vaur, the sleeping giant beyond the rim ----------------------
+    {
+      const holder = new THREE.Group();
+      const a = -1.0; // a gap between the satellites
+      holder.position.set(Math.cos(a) * R * 1.6, 5, Math.sin(a) * R * 1.6);
+      const body = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(8.5, 1),
+        new THREE.MeshStandardMaterial({
+          color: 0x3c3466, flatShading: true, roughness: 0.7,
+          emissive: 0x241d48, emissiveIntensity: 0.6,
+        })
+      );
+      holder.add(body);
+      for (const [rad, op, tilt] of [[12, 0.35, 0.5], [14.5, 0.18, 0.5]]) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(rad, 0.16, 6, 64),
+          new THREE.MeshBasicMaterial({
+            color: 0x8f7ae0, transparent: true, opacity: op,
+            blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+          })
+        );
+        ring.rotation.x = Math.PI / 2 + tilt;
+        holder.add(ring);
+      }
+      holder.add(glowSprite('#8f7ae0', 26, 0.22));
+      const lbl = skyLabel(CELESTIALS.giant.name, CELESTIALS.giant.sub, '#a89ae8', 0.022, 0.7);
+      lbl.position.y = 12.5;
+      holder.add(lbl);
+      this.celestialSpinners.push({ obj: body, speed: 0.012 });
+      g.add(holder);
+    }
+
+    // --- the Errand: a comet forever circling the disc ---------------------
+    {
+      const holder = new THREE.Group();
+      const head = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.55, 0),
+        new THREE.MeshStandardMaterial({
+          color: 0x9fe8ff, flatShading: true, emissive: 0x9fe8ff, emissiveIntensity: 1.6, roughness: 0.3,
+        })
+      );
+      holder.add(head, glowSprite('#9fe8ff', 4.5, 0.7));
+      const lbl = skyLabel(CELESTIALS.comet.name, CELESTIALS.comet.sub, '#9fe8ff', 0.011, 0.55);
+      lbl.position.y = 2.0;
+      holder.add(lbl);
+      this.cometTail = [];
+      for (let i = 0; i < 12; i++) {
+        const puff = glowSprite('#9fe8ff', 2.6 - i * 0.18, 0.4 * (1 - i / 13));
+        this.scene.add(puff);
+        this.cometTail.push(puff);
+      }
+      this.comet = { holder, angle: rng(3, 3) * Math.PI * 2, radius: R * 1.12, y: 7.5, speed: (Math.PI * 2) / 150 };
+      g.add(holder);
+    }
   }
 
   // -------------------------------------------------------- the hex layer ---
@@ -768,6 +1021,34 @@ export class WorldView {
     this.highlight.material.opacity = 0.65 + Math.sin(t * 5) * 0.25;
     this.glintMesh.material.emissiveIntensity = 1.3 + Math.sin(t * 3.2) * 0.7;
     this.layer.position.y = Math.sin(t * 0.5) * 0.06;
+
+    // cosmic landmarks
+    for (const s of this.celestialSpinners) s.obj.rotation.y += s.speed * dt;
+    for (const p of this.planetBodies || []) {
+      p.position.y = p.userData.baseY + Math.sin(t * 0.5 + p.userData.bobPhase) * 0.5;
+    }
+    for (const c of this.constellations) {
+      c.lines.material.opacity = 0.3 + Math.sin(t * 0.8 + c.phase) * 0.15;
+      c.holder.rotation.y += dt * 0.015;
+      c.holder.position.y = 4.2 + Math.sin(t * 0.4 + c.phase) * 0.4;
+    }
+    if (this.comet) {
+      const cm = this.comet;
+      cm.angle += cm.speed * dt;
+      cm.holder.position.set(
+        Math.cos(cm.angle) * cm.radius,
+        cm.y + Math.sin(cm.angle * 3) * 1.5,
+        Math.sin(cm.angle) * cm.radius
+      );
+      for (let i = 0; i < this.cometTail.length; i++) {
+        const back = cm.angle - (i + 1) * 0.022;
+        this.cometTail[i].position.set(
+          Math.cos(back) * cm.radius,
+          cm.y + Math.sin(back * 3) * 1.5,
+          Math.sin(back) * cm.radius
+        );
+      }
+    }
 
     if (this.revealAnims.length) {
       for (const a of this.revealAnims) {
