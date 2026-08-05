@@ -23,7 +23,9 @@ export const ui = {
     const biomeNames = {
       MEADOW: 'Starlit Meadow', FOREST: 'Sighing Forest', MOUNTAIN: 'Cloudpiercers',
       VOLCANO: 'Ember Wastes', DESERT: 'Glass Dunes', TUNDRA: 'Pale Expanse',
-      SEA: 'Astral Shallows', CRYSTAL: 'Prism Fields',
+      SEA: 'Astral Shallows', CRYSTAL: 'Prism Fields', ROAD: 'Warded Causeway',
+      BRIDGE: 'Star-Bridge', LUNAR: 'Lunar Shale', CRIMSON: 'Crimson Waste',
+      VERDANT: 'Verdant Drift', SECRET: 'Hollowed Secret',
     };
     $('hud-loc').innerHTML = `<b>${tile.name}</b><br><span style="color:var(--ink-dim);font-style:italic">${biomeNames[tile.biome]} · hex ${tile.q}, ${tile.r}</span>`;
     const kEl = $('hud-king');
@@ -40,6 +42,72 @@ export const ui = {
   },
 
   setShards(n) { $('hud-shards').textContent = `☆ ${n} star-shards`; },
+
+  setRegion(region) {
+    $('hud-region').innerHTML = region
+      ? `◈ ${region.name} · <span style="color:#ffd98a">tier ${region.tier}</span>`
+      : '';
+  },
+
+  setStats(run) {
+    const s = run.stats;
+    $('hud-stats').innerHTML =
+      `❤ <b>${run.hp}</b>/${s.maxHP} · ⚔ <b>${s.atk}</b> · ➟ <b>${s.spd}</b>` +
+      (s.luck ? ` · ✧ ${s.luck}%` : '') +
+      ` · <span style="color:#ffd98a">power ${run.power}</span>`;
+    $('hud-consum').textContent =
+      `✸ ${run.consumables.charge} charges · ❋ ${run.consumables.dew} dew` +
+      (run.consumables.feather ? ` · ➳ ${run.consumables.feather}` : '');
+    $('btn-detonate').textContent = `✸ Detonate (${run.consumables.charge})`;
+  },
+
+  renderInventory(run) {
+    const s = run.stats;
+    $('inv-stats').innerHTML =
+      `❤ HP <b>${run.hp} / ${s.maxHP}</b> &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
+      `✧ crit <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
+      `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>`;
+    $('inv-synergies').innerHTML = run.synergies.length
+      ? run.synergies.map(sy => `<div class="syn"><b>${sy.name}</b> — ${sy.desc}</div>`).join('')
+      : '<div class="syn" style="opacity:0.6">No synergies yet — certain pairs of relics ignite when carried together…</div>';
+    $('inv-items').innerHTML = run.items.length
+      ? run.items.map(it =>
+        `<div class="inv-item"><span class="pool">${it.pool}</span><br><b>${it.name}</b><br><span class="fx">${it.desc}</span></div>`
+      ).join('')
+      : '<div class="inv-item" style="opacity:0.6">Your pack holds only lint and resolve. Seek the waiting pedestals.</div>';
+  },
+
+  toggleInventory(run, force) {
+    const inv = $('inventory');
+    const show = force ?? inv.classList.contains('hidden');
+    if (show) { this.renderInventory(run); inv.classList.remove('hidden'); }
+    else inv.classList.add('hidden');
+  },
+
+  // The blind-draw reveal: a face-down gift turns over.
+  showItemCard(item, newSynergies, onTaken) {
+    $('ic-kicker').textContent = item.pool === 'BOSS' ? 'CLAIMED FROM THE WARDEN'
+      : item.pool === 'ASTRAL' ? 'A GIFT FROM THE DEEP SKY' : 'THE PEDESTAL TURNS ITS GIFT OVER';
+    $('ic-name').textContent = item.name;
+    $('ic-desc').textContent = item.desc;
+    $('ic-flavor').textContent = item.flavor;
+    $('ic-synergy').innerHTML = (newSynergies || []).map(sy =>
+      `<div class="syn"><b>⚡ SYNERGY IGNITED — ${sy.name}</b><br>${sy.desc}</div>`).join('');
+    $('itemcard-scrim').classList.remove('hidden');
+    $('ic-take').onclick = () => {
+      $('itemcard-scrim').classList.add('hidden');
+      if (onTaken) onTaken();
+    };
+  },
+
+  showDeath(run, world) {
+    $('death-stats').innerHTML =
+      `hexes wandered <b>${run.hexesVisited.size}</b> · battles won <b>${run.battlesWon}</b> · ` +
+      `wardens felled <b>${run.bossesDown}</b><br>` +
+      `relics gathered <b>${run.items.length}</b> · star-shards at the end <b>${run.shards}</b><br>` +
+      `<span style="font-style:italic;color:var(--ink-dim)">seed ${world.seed} is ash now.</span>`;
+    $('death').classList.remove('hidden');
+  },
 
   setHint(text) { $('hint').innerHTML = text; },
 

@@ -15,6 +15,7 @@ const TYPE_STYLE = {
   battle: { glow: '#ff8a5a', pedestal: 0x6e3226, label: '#ffb894', tag: 'battle' },
   trader: { glow: '#ffd98a', pedestal: 0x6e5a26, label: '#ffe2a8', tag: 'trader' },
   side:   { glow: '#8fa8ff', pedestal: 0x2e3a6e, label: '#b8c8ff', tag: 'curiosity' },
+  pedestal: { glow: '#f0c46a', pedestal: 0x5e4a1e, label: '#ffe2a8', tag: 'item pedestal' },
 };
 
 export class LocalView {
@@ -151,15 +152,26 @@ export class LocalView {
     g.add(top);
     this._buildVignette(site, top, tile, rng);
 
-    const tex = makeLabelTexture(site.name, { sub: style.tag, color: style.label });
+    const tex = makeLabelTexture(site.name, {
+      sub: site.cleared ? style.tag + ' · resolved' : style.tag,
+      color: site.cleared ? '#6a7099' : style.label,
+    });
     const label = new THREE.Sprite(new THREE.SpriteMaterial({
       map: tex, transparent: true, depthTest: false, fog: false,
+      opacity: site.cleared ? 0.55 : 1,
     }));
     const s = 0.0082;
     label.scale.set(tex.userData.w * s, tex.userData.h * s, 1);
     label.position.y = 2.1;
     label.renderOrder = 10;
     g.add(label);
+    if (site.cleared) {
+      glow.material.opacity = 0.12;
+      top.traverse(o => {
+        const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const m of mats) { if (m.color) m.color.multiplyScalar(0.45); if (m.emissiveIntensity) m.emissiveIntensity *= 0.2; }
+      });
+    }
 
     const hit = new THREE.Mesh(
       new THREE.CylinderGeometry(1.0, 1.0, 3.0, 6),
@@ -224,8 +236,34 @@ export class LocalView {
       }
       return;
     }
+    if (site.type === 'pedestal') {
+      const column = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.9, 6), std(0x4a4468));
+      column.position.y = 0.45;
+      const gift = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.22),
+        std(0x2a2410, { emissive: 0xf0c46a, emissiveIntensity: site.cleared ? 0.1 : 1.8, roughness: 0.3 })
+      );
+      gift.position.y = 1.25;
+      parent.add(column, gift);
+      return;
+    }
     // side areas by subtype
     switch (site.subtype) {
+      case 'cache': {
+        for (const [dx, dz, ry] of [[-0.25, 0, 0.3], [0.28, 0.1, -0.2], [0, -0.3, 0.8]]) {
+          const crate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), std(0x6b4f2a));
+          crate.position.set(dx, 0.2, dz);
+          crate.rotation.y = ry;
+          parent.add(crate);
+        }
+        const gleam = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.12),
+          std(0x2a2410, { emissive: 0xffd98a, emissiveIntensity: 2 })
+        );
+        gleam.position.y = 0.62;
+        parent.add(gleam);
+        break;
+      }
       case 'mystery': {
         parent.add(billboardPlane(this._shared('mystery', makeMysteryTexture), 1.15, 1.15));
         break;

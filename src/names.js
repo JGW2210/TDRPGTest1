@@ -17,7 +17,106 @@ export const BIOMES = {
   TUNDRA:  { name: 'Pale Expanse',    color: 0xb9d2e4, accent: 0xeaf7ff, deco: 'shard'  },
   SEA:     { name: 'Astral Shallows', color: 0x2b3a78, accent: 0x6f9bff, deco: 'sea'    },
   CRYSTAL: { name: 'Prism Fields',    color: 0x6d4a94, accent: 0xd79bff, deco: 'crystal'},
+  ROAD:    { name: 'Warded Causeway', color: 0x7d7460, accent: 0xf0c46a, deco: null     },
+  BRIDGE:  { name: 'Star-Bridge',     color: 0x4a5aa8, accent: 0x9fe8ff, deco: null     },
+  LUNAR:   { name: 'Lunar Shale',     color: 0xc8c8de, accent: 0xf2f2ff, deco: 'shard'  },
+  CRIMSON: { name: 'Crimson Waste',   color: 0x9e4a3c, accent: 0xff9a6a, deco: 'cactus' },
+  VERDANT: { name: 'Verdant Drift',   color: 0x3c8a5e, accent: 0x8affc4, deco: 'crystal'},
+  SECRET:  { name: 'Hollowed Secret', color: 0x54406e, accent: 0xffd98a, deco: 'crystal'},
 };
+
+// ------------------------------------------------------------- satellites ---
+
+export const SATELLITES = [
+  {
+    id: 'luna',
+    name: 'The Pale Daughter',
+    biome: 'LUNAR',
+    angle: -2.2,
+    boss: { name: 'The Tide-Warden Selureth', flavor: 'A moth-winged colossus of moonlight that keeps the tides of a sea that is no longer there.' },
+  },
+  {
+    id: 'rubidus',
+    name: 'Rubidus, the Rust Wanderer',
+    biome: 'CRIMSON',
+    angle: 0.6,
+    boss: { name: 'The Oxidized King', flavor: 'A crowned engine of red dust and grievance. It remembers being a god of iron; the iron remembers otherwise.' },
+  },
+  {
+    id: 'viridian',
+    name: 'The Viridian Comet',
+    biome: 'VERDANT',
+    angle: 2.6,
+    boss: { name: 'Rootmother of the Long Fall', flavor: 'A garden that learned to hunt during ten thousand years of falling. Its orbit is a stalk; its flowers are patient.' },
+  },
+];
+
+// ------------------------------------------------------ cosmic landmarks ---
+
+export const CELESTIALS = {
+  giant: { name: 'Thal-Vaur, the Sleeping Giant', sub: 'it has not turned over in an age' },
+  comet: { name: 'The Errand', sub: 'always going, never arriving' },
+  shattermoons: [
+    { name: 'The Sundered Daughter', sub: 'a moon that argued with the tide' },
+    { name: 'Grief-of-Glass', sub: 'still falling, very slowly' },
+  ],
+  constellations: [
+    { name: 'The Ferryman', sub: 'constellation' },
+    { name: 'The Spilled Cup', sub: 'constellation' },
+    { name: 'The Patient Hound', sub: 'constellation' },
+    { name: 'The Second Cartographer', sub: 'constellation' },
+  ],
+};
+
+// ----------------------------------------------------------- region names ---
+
+const REGION_PRE = {
+  MEADOW: 'Lark', FOREST: 'Thorn', MOUNTAIN: 'Anvil', VOLCANO: 'Ember',
+  DESERT: 'Glass', TUNDRA: 'Pale', SEA: 'Drift', CRYSTAL: 'Prism',
+};
+const REGION_SUF = ['march', 'reach', 'wild', 'verge', 'fold', 'deep', 'fell', 'hold'];
+
+export function regionName(rng, dominantBiome) {
+  const pre = REGION_PRE[dominantBiome] || 'Star';
+  return 'The ' + pre + pick(rng, REGION_SUF);
+}
+
+// ---------------------------------------------------------- battle rosters ---
+// role: brute (slow, heavy), swift (fast, light), mystic (burn/chill tricks),
+// guard (armored, blocks)
+
+export const FOES = {
+  MEADOW:  [{ n: 'Runeboar', r: 'brute' }, { n: 'Meadow Wisp', r: 'swift' }, { n: 'Sickle Automaton', r: 'guard' }],
+  FOREST:  [{ n: 'Bramble Wolfshade', r: 'swift' }, { n: 'Moss-Sung Treant', r: 'brute' }, { n: 'Owlbat', r: 'swift' }],
+  MOUNTAIN:[{ n: 'Echo Wyvern', r: 'swift' }, { n: 'Granite Sentinel', r: 'guard' }, { n: 'Rockslide Gremlin', r: 'brute' }],
+  VOLCANO: [{ n: 'Cinder Choirling', r: 'mystic' }, { n: 'Magma Seraph', r: 'brute' }, { n: 'Ash Salamander', r: 'swift' }],
+  DESERT:  [{ n: 'Glasscoil Serpent', r: 'swift' }, { n: 'Sun-Bleached Revenant', r: 'brute' }, { n: 'Dune Mawfish', r: 'guard' }],
+  TUNDRA:  [{ n: 'Frostmarrow Stag', r: 'mystic' }, { n: 'The Loosed Hound', r: 'swift' }, { n: 'Sleetclad Mammoth', r: 'brute' }],
+  SEA:     [{ n: 'Star-Drowned Siren', r: 'mystic' }, { n: 'Void Angler', r: 'brute' }, { n: 'Brine Reflection', r: 'swift' }],
+  CRYSTAL: [{ n: 'Prism Shard-Golem', r: 'guard' }, { n: 'Chiming Widow', r: 'mystic' }, { n: 'Facet Stalker', r: 'swift' }],
+  ROAD:    [{ n: 'Toll Wraith', r: 'mystic' }, { n: 'Waylaid Knight', r: 'guard' }],
+  BRIDGE:  [{ n: 'Bridge Haunt', r: 'mystic' }, { n: 'Star Remora', r: 'swift' }],
+  LUNAR:   [{ n: 'Moon Moth', r: 'swift' }, { n: 'Pale Pilgrim', r: 'mystic' }, { n: 'Crater Hermit', r: 'guard' }],
+  CRIMSON: [{ n: 'Rust Hound', r: 'swift' }, { n: 'Oxide Shambler', r: 'brute' }, { n: 'Dust Chorister', r: 'mystic' }],
+  VERDANT: [{ n: 'Seed Sentinel', r: 'guard' }, { n: 'Vine Lasher', r: 'swift' }, { n: 'Bloom Horror', r: 'brute' }],
+  SECRET:  [{ n: 'Hoard Mimic', r: 'brute' }],
+};
+
+const WARDEN_TITLES = {
+  MEADOW: 'Warden of the Quiet Field', FOREST: 'Warden of Whispered Boughs',
+  MOUNTAIN: 'Warden of the Broken Stair', VOLCANO: 'Warden of the Banked Fire',
+  DESERT: 'Warden of the Standing Glass', TUNDRA: 'Warden of the Long White',
+  SEA: 'Warden of the Undertow', CRYSTAL: 'Warden of the Facet Gate',
+};
+const WARDEN_NAMES = [
+  'Ashkarel', 'Bruma', 'Cinderjaw', 'Dolmen', 'Evengard', 'Fyrn', 'Grendhal',
+  'Hollowmere', 'Ironquill', 'Karst', 'Lodenbrand', 'Morrowgate',
+];
+
+export function wardenName(rng, biome, tier) {
+  const title = WARDEN_TITLES[biome] || 'Warden of the Meridian';
+  return `${pick(rng, WARDEN_NAMES)}, ${title} (Tier ${tier})`;
+}
 
 // ------------------------------------------------------ celestial courts ---
 

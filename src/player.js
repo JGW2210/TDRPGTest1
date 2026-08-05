@@ -56,6 +56,8 @@ export class PlayerToken {
 
   get isMoving() { return this.hop !== null || this.path.length > 0; }
 
+  burstNow() { this._spawnBurst(); }
+
   setPath(path, onStep, onDone) {
     this.path = path.slice();
     this.onStep = onStep;
@@ -89,7 +91,7 @@ export class PlayerToken {
     const layerY = this.layerY || 0;   // ride the breathing hex layer
 
     if (this.hop) {
-      this.hop.t += dt / CONFIG.hopDuration;
+      this.hop.t += dt / (this.hopTime || CONFIG.hopDuration);
       const p = Math.min(1, this.hop.t);
       const { from, to } = this.hop;
       g.position.set(
