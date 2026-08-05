@@ -16,6 +16,8 @@ import { makeTrader, mysteryOutcome, BIOMES, FOES } from './names.js';
 import { drawItem, CONSUMABLES } from './items.js';
 import { run } from './run.js';
 import { saveRun, loadRun, clearSave, applySave } from './save.js';
+import { audio } from './audio.js';
+import { meta } from './meta.js';
 
 const WORLD_HINT = 'drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it · <b>I</b> inventory';
 const LOCAL_HINT = 'drag to orbit the diorama · click a site to visit it · <b>Esc</b> or ↩ to return';
@@ -103,9 +105,24 @@ ui.setHint(WORLD_HINT);
 
 function refreshHud(tile) {
   ui.setLocation(tile, kingdomOf(tile));
-  ui.setRegion(world.regionOf(tile));
+  const reg = world.regionOf(tile);
+  ui.setRegion(reg);
   ui.setShards(run.shards);
   ui.setStats(run);
+  audio.setRegionMusic({
+    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+  });
+  announceFeats(meta.bump(s => {
+    s.maxItems = Math.max(s.maxItems, run.items.length);
+    s.maxShards = Math.max(s.maxShards, run.shards);
+  }));
+}
+
+function announceFeats(news) {
+  for (const { feat, unlockedItems } of news) {
+    audio.sfxFeat();
+    ui.toast(`✴ ECHO INSCRIBED — <b>${feat.name}</b>: ${unlockedItems.length} new relics join the pools, forever.`, true);
+  }
 }
 
 // ------------------------------------------------------------ interaction ---
@@ -235,8 +252,16 @@ function travelTo(target, onArrive = null) {
   player.setPath(path,
     tile => {
       run.hexesVisited.add(keyOf(tile.q, tile.r));
+      audio.sfxHop();
       worldView.updateFog(tile);
       if (run.flags.revealRegion) revealRegionMemory(tile);
+      announceFeats(meta.bump(s => {
+        s.hexes++;
+        if (tile.region >= 100) {
+          const satId = world.satellites[tile.region - 100]?.def.id;
+          if (satId && !s.visitedSats.includes(satId)) s.visitedSats.push(satId);
+        }
+      }));
       refreshHud(tile);
       if (followPlayer && !worldRig.dragMode) worldRig.panTo({ x: tile.x, z: tile.z });
     },
@@ -293,8 +318,12 @@ function challengeGate(gateTile) {
           onWin: () => {
             run.openedGates.add(keyOf(gateTile.q, gateTile.r));
             worldView.openGate(gateTile);
+            audio.sfxGate();
             ui.toast(`⚑ The ward shatters — ${world.regions[g.into].name} lies open.`, true);
-            const bossDraw = drawItem(mulberry32(hash2(gateTile.q, gateTile.r, world.seed + 777) * 0xffffffff | 0), 'BOSS', run.ownedIds);
+            announceFeats(meta.bump(s => { s.wardens++; if (g.tier >= 3) s.deepWarden = true; }));
+            const bossDraw = drawItem(
+              mulberry32(hash2(gateTile.q, gateTile.r, world.seed + 777) * 0xffffffff | 0),
+              'BOSS', run.ownedIds, { source: 'boss', tier: g.tier, unlocked: meta.unlockedIds });
             if (bossDraw) grantItem(bossDraw);
           },
         });
@@ -394,12 +423,13 @@ async function startBattle({ team, title, onWin, siteId, waves = null }) {
     await delay(200);
     if (result.lost) {
       clearSave(world.seed);
+      meta.bump(s => { s.deaths++; s.runs++; });
       activeScene = 'world';
       mode = 'dead';
       worldRig.enabled = false;
       localRig.enabled = false;
       ui.fade(false);
-      ui.showDeath(run, world);
+      ui.showDeath(run, world, meta);
       return;
     }
     if (result.won && queue.length) {
@@ -414,6 +444,7 @@ async function startBattle({ team, title, onWin, siteId, waves = null }) {
       return;
     }
     if (result.won) {
+      announceFeats(meta.bump(s => { s.battles++; }));
       if (siteId) {
         run.clearedSites.add(siteId);
         checkGlint(battleReturn.tile);
@@ -459,8 +490,9 @@ function startGauntlet(site, tile) {
     onWin: () => {
       const got = run.gainShards(18 + tier * 8);
       ui.toast(`⚑ The vault is broken open — ☆ ${got} and the Keeper's gift are yours.`, true);
+      announceFeats(meta.bump(s => { s.keepers++; }));
       const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 1234) * 0xffffffff));
-      const item = drawItem(rng, tile.biome, run.ownedIds);
+      const item = drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds });
       if (item) grantItem(item);
     },
     waves: [
@@ -484,6 +516,12 @@ function grantItem(item) {
   const before = new Set(run.synergies.map(s => s.id));
   run.addItem(item);
   const fresh = run.synergies.filter(s => !before.has(s.id));
+  audio.sfxPickup(item.rarity);
+  if (fresh.length) {
+    announceFeats(meta.bump(s => {
+      for (const sy of fresh) if (!s.synergies.includes(sy.id)) s.synergies.push(sy.id);
+    }));
+  }
   ui.showItemCard(item, fresh, () => { refreshHud(player.tile); saveNow(true); });
 }
 
@@ -497,9 +535,10 @@ function buildOffers(site, tile) {
   ];
   if (rng() < 0.6) offers.push({ kind: 'consumable', id: 'feather', price: Math.round(8 * markup) });
   const pool = ['MEADOW', 'FOREST', 'MOUNTAIN', 'VOLCANO', 'DESERT', 'TUNDRA', 'SEA', 'CRYSTAL'][Math.floor(rng() * 8)];
-  const item = drawItem(rng, pool, run.ownedIds);
+  const item = drawItem(rng, pool, run.ownedIds, { source: 'shop', tier, unlocked: meta.unlockedIds });
   if (item && site.subtype !== 'wandering') {
-    offers.push({ kind: 'item', item, price: Math.round((22 + tier * 9) * markup) });
+    const base = { c: 14, u: 22, r: 34, a: 50 }[item.rarity] || 22;
+    offers.push({ kind: 'item', item, price: Math.round((base + tier * 7) * markup) });
   }
   return offers;
 }
@@ -557,13 +596,21 @@ function handleAction(site, label, btn) {
       team: site.team, title: site.name, siteId: site.id,
       onWin: site.team.boss && site.team.satellite ? () => {
         ui.toast('☄ The satellite’s heart is yours to claim.', true);
+        announceFeats(meta.bump(s => {
+          if (!s.sats.includes(site.team.satellite)) s.sats.push(site.team.satellite);
+        }));
       } : null,
     });
     return;
   }
   if (label === 'Claim the Gift') {
     const rng = mulberry32(Math.floor(hash2(site.id.length * 31 + site.id.charCodeAt(0), site.id.charCodeAt(site.id.length - 3) || 7, world.seed + 999) * 0xffffffff));
-    const item = drawItem(rng, site.pool, run.ownedIds);
+    const tileHere = currentLocalTile || player.tile;
+    const source = site.pool === 'ASTRAL' ? 'astral'
+      : site.pool === 'BOSS' ? 'boss'
+      : tileHere.secretRevealed ? 'secret' : 'pedestal';
+    const item = drawItem(rng, site.pool, run.ownedIds,
+      { source, tier: world.regionOf(tileHere).tier, unlocked: meta.unlockedIds });
     run.clearedSites.add(site.id);
     ui.closeModal();
     if (item) grantItem(item);
@@ -657,11 +704,14 @@ function detonate() {
     .map(([q, r]) => world.tiles.get(keyOf(q, r)))
     .find(t => t && t.secret);
   player.burstNow?.();
+  audio.sfxDetonate();
   if (secret) {
     world.revealSecret(secret);
     worldView.revealSecretTile(secret);
     worldView.updateFog(player.tile, { animate: false });
     run.revealedSecrets.add(keyOf(secret.q, secret.r));
+    audio.sfxReveal();
+    announceFeats(meta.bump(s => { s.secrets++; }));
     ui.toast('✸ The blast peels the void back — a sealed hex stands revealed!', true);
   } else {
     ui.toast('✸ The blast echoes over nothing. The charge is spent; the void is unimpressed.');
@@ -702,6 +752,29 @@ ui.inventoryHandlers = {
   },
 };
 
+// the music of the spheres begins on the first human touch (autoplay policy)
+const bootAudio = () => {
+  audio.init();
+  const reg = world.regionOf(player.tile);
+  audio.setRegionMusic({ biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed });
+  updateAudioButton();
+};
+window.addEventListener('pointerdown', bootAudio, { once: true });
+window.addEventListener('keydown', bootAudio, { once: true });
+
+function updateAudioButton() {
+  document.getElementById('btn-audio').textContent = audio.enabled ? '♪' : '♪̸';
+  document.getElementById('btn-audio').style.opacity = audio.enabled ? 1 : 0.45;
+}
+updateAudioButton();
+document.getElementById('btn-audio').addEventListener('click', () => {
+  audio.setEnabled(!audio.enabled);
+  updateAudioButton();
+});
+
+document.getElementById('btn-echoes').addEventListener('click', () => ui.toggleEchoes(meta));
+document.getElementById('echo-close').addEventListener('click', () => ui.toggleEchoes(meta, false));
+
 document.getElementById('btn-recenter').addEventListener('click', () => {
   if (mode !== 'world') return;
   followPlayer = true;
@@ -719,6 +792,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape') {
     if (ui.modalOpen) ui.closeModal();
     else if (!document.getElementById('inventory').classList.contains('hidden')) ui.toggleInventory(run, false);
+    else if (!document.getElementById('echoes').classList.contains('hidden')) ui.toggleEchoes(meta, false);
     else if (mode === 'local') exitLocal();
   }
   if (e.code === 'KeyI' && mode !== 'battle') ui.toggleInventory(run);
@@ -738,7 +812,7 @@ window.__vael = {
   get mode() { return mode; },
   get playerTile() { return player.tile; },
   get isMoving() { return player.isMoving; },
-  run, world, battle, view: worldView,
+  run, world, battle, view: worldView, meta, audio, announceFeats,
   pickAt: (x, y) => { const t = pickWorld(x, y); return t ? { q: t.q, r: t.r, name: t.name } : null; },
   travel: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t && !t.void) travelTo(t); },
   warp: (q, r) => {

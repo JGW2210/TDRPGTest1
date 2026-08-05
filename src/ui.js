@@ -1,5 +1,8 @@
 // DOM layer: HUD, legend, tooltip, site modal, toasts, fades.
 
+import { RARITY } from './items.js';
+import { FEATS } from './meta.js';
+
 const $ = id => document.getElementById(id);
 
 export const ui = {
@@ -86,9 +89,12 @@ export const ui = {
       ? run.synergies.map(sy => `<div class="syn"><b>${sy.name}</b> — ${sy.desc}</div>`).join('')
       : '<div class="syn" style="opacity:0.6">No synergies yet — certain pairs of relics ignite when carried together…</div>';
     $('inv-items').innerHTML = run.items.length
-      ? run.items.map(it =>
-        `<div class="inv-item"><span class="pool">${it.pool}</span><br><b>${it.name}</b><br><span class="fx">${it.desc}</span></div>`
-      ).join('')
+      ? run.items.map(it => {
+        const rar = RARITY[it.rarity] || RARITY.c;
+        return `<div class="inv-item" style="border-color:${rar.color}55">` +
+          `<span class="pool" style="color:${rar.color}">${rar.name.toUpperCase()} · ${it.pool}</span><br>` +
+          `<b>${it.name}</b><br><span class="fx">${it.desc}</span></div>`;
+      }).join('')
       : '<div class="inv-item" style="opacity:0.6">Your pack holds only lint and resolve. Seek the waiting pedestals.</div>';
   },
 
@@ -101,8 +107,12 @@ export const ui = {
 
   // The blind-draw reveal: a face-down gift turns over.
   showItemCard(item, newSynergies, onTaken) {
-    $('ic-kicker').textContent = item.pool === 'BOSS' ? 'CLAIMED FROM THE WARDEN'
+    const rar = RARITY[item.rarity] || RARITY.c;
+    const sourceLine = item.pool === 'BOSS' ? 'CLAIMED FROM THE WARDEN'
       : item.pool === 'ASTRAL' ? 'A GIFT FROM THE DEEP SKY' : 'THE PEDESTAL TURNS ITS GIFT OVER';
+    $('ic-kicker').innerHTML = `<span style="color:${rar.color}">✧ ${rar.name.toUpperCase()} ✧</span><br>${sourceLine}`;
+    $('itemcard').style.borderColor = rar.color;
+    $('ic-name').style.color = rar.color;
     $('ic-name').textContent = item.name;
     $('ic-desc').textContent = item.desc;
     $('ic-flavor').textContent = item.flavor;
@@ -115,13 +125,35 @@ export const ui = {
     };
   },
 
-  showDeath(run, world) {
+  showDeath(run, world, meta) {
     $('death-stats').innerHTML =
       `hexes wandered <b>${run.hexesVisited.size}</b> · battles won <b>${run.battlesWon}</b> · ` +
       `wardens felled <b>${run.bossesDown}</b><br>` +
       `relics gathered <b>${run.items.length}</b> · star-shards at the end <b>${run.shards}</b><br>` +
+      (meta ? `echoes inscribed <b>${meta.data.feats.length} / ${FEATS.length}</b> · relics unlocked <b>${meta.unlockedIds.size}</b><br>` : '') +
       `<span style="font-style:italic;color:var(--ink-dim)">seed ${world.seed} is ash now.</span>`;
     $('death').classList.remove('hidden');
+  },
+
+  renderEchoes(meta) {
+    const done = new Set(meta.data.feats);
+    $('echo-summary').innerHTML =
+      `<b>${meta.unlockedIds.size}</b> relics in the pools · <b>${meta.lockedCount}</b> still sealed · ` +
+      `<b>${meta.data.feats.length}/${FEATS.length}</b> echoes inscribed`;
+    $('echo-list').innerHTML = FEATS.map(f => {
+      const ok = done.has(f.id);
+      return `<div class="echo ${ok ? 'done' : ''}">` +
+        `<span class="echo-mark">${ok ? '✦' : '·'}</span>` +
+        `<b>${f.name}</b> — ${f.desc}` +
+        `<span class="echo-n">${ok ? 'inscribed' : `+${f.unlocks} relics`}</span></div>`;
+    }).join('');
+  },
+
+  toggleEchoes(meta, force) {
+    const el = $('echoes');
+    const show = force ?? el.classList.contains('hidden');
+    if (show) { this.renderEchoes(meta); el.classList.remove('hidden'); }
+    else el.classList.add('hidden');
   },
 
   setHint(text) { $('hint').innerHTML = text; },

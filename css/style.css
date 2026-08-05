@@ -207,6 +207,32 @@ html, body {
 #inv-items .inv-item .pool { font-size: 10px; letter-spacing: 0.18em; color: var(--ink-dim); }
 #inv-items .inv-item .fx { color: #a8bfff; }
 
+/* ---------- echoes ---------- */
+#echoes {
+  position: absolute; top: 16px; right: 16px; bottom: 60px; z-index: 36;
+  width: min(400px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--panel-edge);
+  border-radius: 12px; padding: 14px 16px; overflow-y: auto;
+  backdrop-filter: blur(8px); box-shadow: 0 10px 50px rgba(0,0,0,0.6);
+}
+#echoes.hidden { display: none; }
+#echoes h3 {
+  font-size: 12px; letter-spacing: 0.24em; color: var(--gold); font-weight: normal;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+}
+#echo-close { background: none; border: none; color: var(--ink-dim); font-size: 14px; cursor: pointer; }
+#echo-summary { font-size: 13px; color: #c6ccf2; border-bottom: 1px dashed rgba(126,140,255,0.25); padding-bottom: 8px; margin-bottom: 8px; line-height: 1.6; }
+#echo-summary b { color: var(--gold); }
+.echo {
+  margin: 6px 0; padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.5;
+  border: 1px solid rgba(126,140,255,0.15); color: var(--ink-dim);
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+}
+.echo.done { border-color: rgba(240,196,106,0.4); color: var(--ink); }
+.echo.done b { color: var(--gold); }
+.echo-mark { color: var(--gold); }
+.echo-n { margin-left: auto; font-size: 11px; color: #7d88d8; white-space: nowrap; }
+
 /* ---------- item card ---------- */
 #itemcard-scrim {
   position: absolute; inset: 0; z-index: 46;

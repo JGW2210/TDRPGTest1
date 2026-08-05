@@ -1,288 +1,704 @@
-// The roguelike layer: a Binding-of-Isaac-style table of items and abilities.
-// Items are drawn blind from biome-linked pools; many carry downsides, and
-// certain tag pairs ignite synergies that change how battles play.
+// The roguelike layer: ~150 relics in biome-linked pools, rarity-tiered
+// (c common / u uncommon / r rare / a astral), drawn blind. `core` items are
+// in the pools from the first run; the rest join via Echo feats (meta.js).
 //
 // stat keys: maxHP, atk, spd, luck (crit %), dodge (%), shardGain (%),
-//            timingBonus (widens/boosts timing), blockBonus
-// flag keys are read directly by the battle engine / world systems.
+//            timingBonus, blockBonus
+// flag keys are read by the battle engine / world systems.
 
 import { pick } from './rng.js';
 
+const I = (id, pool, rarity, name, def) => ({ id, pool, rarity, name, ...def });
+
 export const ITEMS = [
-  // ------------------------------------------------------------- MEADOW ---
-  {
-    id: 'clover_locket', pool: 'MEADOW', name: 'Cloverheart Locket',
-    stats: { maxHP: 10, atk: -1 }, tags: ['bloom'],
-    flags: { afterBattleHeal: 3 },
+  // ════════════════════════════════════════════════════════ MEADOW (10) ═══
+  I('clover_locket', 'MEADOW', 'u', 'Cloverheart Locket', {
+    core: true, stats: { maxHP: 10, atk: -1 }, tags: ['bloom'], flags: { afterBattleHeal: 3 },
     desc: '+10 max HP, −1 ATK. Heal 3 after each battle.',
-    flavor: 'Four leaves, three wishes, two owners, one heartbeat.',
-  },
-  {
-    id: 'runeboar_tusk', pool: 'MEADOW', name: 'Runeboar Tusk',
-    stats: { atk: 2 }, tags: [],
-    flags: { chargeDropBonus: 0.15 },
+    flavor: 'Four leaves, three wishes, two owners, one heartbeat.' }),
+  I('runeboar_tusk', 'MEADOW', 'c', 'Runeboar Tusk', {
+    core: true, stats: { atk: 2 }, tags: [], flags: { chargeDropBonus: 0.15 },
     desc: '+2 ATK. Foes drop star-charges more often.',
-    flavor: 'Still warm. Still stubborn.',
-  },
-  {
-    id: 'dawn_thimble', pool: 'MEADOW', name: 'Dawn Thimble',
-    stats: {}, tags: ['sun'],
-    flags: { firstHitPerfect: true },
+    flavor: 'Still warm. Still stubborn.' }),
+  I('dawn_thimble', 'MEADOW', 'r', 'Dawn Thimble', {
+    core: true, stats: {}, tags: ['sun'], flags: { firstHitPerfect: true },
     desc: 'Your first strike each battle is automatically Perfect.',
-    flavor: 'It fits the finger you point with.',
-  },
-  // ------------------------------------------------------------- FOREST ---
-  {
-    id: 'owlbat_whistle', pool: 'FOREST', name: 'Owlbat Whistle',
-    stats: {}, tags: [],
+    flavor: 'It fits the finger you point with.' }),
+  I('lark_feather', 'MEADOW', 'c', 'Lark’s Tail-Feather', {
+    core: true, stats: { spd: 2 }, tags: ['bloom'],
+    desc: '+2 SPD.',
+    flavor: 'The lark has more. The lark is showing off.' }),
+  I('hearth_thread', 'MEADOW', 'c', 'Hearth-Spun Thread', {
+    core: true, stats: { maxHP: 6 }, tags: ['bloom'],
+    desc: '+6 max HP.',
+    flavor: 'Wound from the last hour of a good evening.' }),
+  I('scythe_charm', 'MEADOW', 'u', 'Little Scythe Charm', {
+    stats: { atk: 2 }, tags: ['bloom'], flags: { executeBonus: true },
+    desc: '+2 ATK. Deal +50% damage to foes below 30% health.',
+    flavor: 'For harvests. Mostly.' }),
+  I('dew_ladle', 'MEADOW', 'u', 'Dew-Ladle of the Vale', {
+    stats: {}, tags: ['bloom'], flags: { dewPotency: 10 },
+    desc: 'Star-dew restores +10 more HP.',
+    flavor: 'Scoops deeper than its size suggests. Rude, physics-wise.' }),
+  I('picnic_stone', 'MEADOW', 'c', 'The Picnic Stone', {
+    stats: { maxHP: 4, spd: 1 }, tags: ['bloom'],
+    desc: '+4 max HP, +1 SPD.',
+    flavor: 'Every road is shorter after sitting on it.' }),
+  I('wisp_lantern', 'MEADOW', 'r', 'Wisp-in-a-Lantern', {
+    stats: { luck: 8 }, tags: ['bloom', 'sun'], flags: { visionPlus: 1 },
+    desc: '+8% crit. Your vision reaches one hex further.',
+    flavor: 'It only pretends to be trapped.' }),
+  I('boar_saddle', 'MEADOW', 'r', 'Runeboar War-Saddle', {
+    stats: { atk: 3, maxHP: 6, spd: -1 }, tags: ['bloom'],
+    desc: '+3 ATK, +6 max HP, −1 SPD.',
+    flavor: 'The boar is invisible, absent, or hypothetical. The saddle works regardless.' }),
+
+  // ════════════════════════════════════════════════════════ FOREST (10) ═══
+  I('owlbat_whistle', 'FOREST', 'u', 'Owlbat Whistle', {
+    core: true, stats: {}, tags: [],
     ability: { id: 'echo_shriek', name: 'Echo Shriek', cd: 3, kind: 'aoe', mult: 0.7, desc: 'Strike every foe for 70% ATK.' },
     desc: 'Grants ability: Echo Shriek (all foes, 70% ATK, 3-turn cooldown).',
-    flavor: 'Silent to you. Unforgettable to everyone else.',
-  },
-  {
-    id: 'mosscloak', pool: 'FOREST', name: 'Mosscloak',
-    stats: { dodge: 15, spd: -1 }, tags: ['bloom'],
+    flavor: 'Silent to you. Unforgettable to everyone else.' }),
+  I('mosscloak', 'FOREST', 'c', 'Mosscloak', {
+    core: true, stats: { dodge: 15, spd: -1 }, tags: ['bloom'],
     desc: '+15% dodge, −1 SPD.',
-    flavor: 'Grows on you.',
-  },
-  {
-    id: 'fernking_crown', pool: 'FOREST', name: 'The Fern King’s Crown',
-    stats: { atk: 2, maxHP: 5 }, tags: ['bloom'],
-    flags: { shopMarkup: 0.25 },
+    flavor: 'Grows on you.' }),
+  I('fernking_crown', 'FOREST', 'u', 'The Fern King’s Crown', {
+    core: true, stats: { atk: 2, maxHP: 5 }, tags: ['bloom'], flags: { shopMarkup: 0.25 },
     desc: '+2 ATK, +5 max HP. Merchants resent royalty: shop prices +25%.',
-    flavor: 'Heavy is the head. Itchy, also.',
-  },
-  // ----------------------------------------------------------- MOUNTAIN ---
-  {
-    id: 'echo_hammer', pool: 'MOUNTAIN', name: 'Echo Hammer',
-    stats: {}, tags: [],
-    flags: { perfectEcho: 0.5 },
+    flavor: 'Heavy is the head. Itchy, also.' }),
+  I('thorn_ring', 'FOREST', 'u', 'Ring of Patient Thorns', {
+    core: true, stats: {}, tags: ['bloom'], flags: { thorns: 2 },
+    desc: 'Foes that strike you take 2 damage back.',
+    flavor: 'The forest forgives. The ring does not.' }),
+  I('bark_shield', 'FOREST', 'c', 'Treant-Bark Buckler', {
+    core: true, stats: { maxHP: 5, blockBonus: 1 }, tags: ['bloom'],
+    desc: '+5 max HP. Your Block window is 50% wider.',
+    flavor: 'Donated. Probably.' }),
+  I('spore_pouch', 'FOREST', 'u', 'Sighing Spore Pouch', {
+    stats: {}, tags: ['bloom'],
+    ability: { id: 'spore_cloud', name: 'Spore Cloud', cd: 4, kind: 'weaken_all', atkDown: 2, desc: 'All foes lose 2 ATK.' },
+    desc: 'Grants ability: Spore Cloud (all foes −2 ATK, 4-turn cooldown).',
+    flavor: 'Inhale on the exhale. Never the reverse.' }),
+  I('owl_eyes', 'FOREST', 'r', 'Borrowed Owl Eyes', {
+    stats: { luck: 10 }, tags: ['moon'], flags: { seeIntent: true },
+    desc: '+10% crit. You see what each foe intends.',
+    flavor: 'The owl insisted. The owl is now a bat, professionally.' }),
+  I('root_boots', 'FOREST', 'c', 'Rootbound Boots', {
+    stats: { maxHP: 8, spd: -1 }, tags: ['bloom'],
+    desc: '+8 max HP, −1 SPD.',
+    flavor: 'They anchor beautifully. That is the problem and the point.' }),
+  I('murmur_moth', 'FOREST', 'r', 'Murmuring Moth', {
+    stats: { dodge: 10 }, tags: ['moon', 'bloom'], flags: { firstStrikeDodge: true },
+    desc: '+10% dodge. You always dodge the first blow of each battle.',
+    flavor: 'It whispers incoming trajectories, slightly ahead of schedule.' }),
+  I('heartwood_flask', 'FOREST', 'r', 'Heartwood Flask', {
+    stats: { maxHP: 12 }, tags: ['bloom'], flags: { killHeal: 3 },
+    desc: '+12 max HP. Heal 3 whenever a foe falls.',
+    flavor: 'Sap of a tree that outlived four empires and one very persistent beaver.' }),
+
+  // ══════════════════════════════════════════════════════ MOUNTAIN (10) ═══
+  I('echo_hammer', 'MOUNTAIN', 'r', 'Echo Hammer', {
+    core: true, stats: {}, tags: [], flags: { perfectEcho: 0.5 },
     desc: 'Perfect strikes echo, repeating for 50% damage.',
-    flavor: 'Every blow lands twice: once on the foe, once on the mountain’s memory.',
-  },
-  {
-    id: 'granite_skin', pool: 'MOUNTAIN', name: 'Granite Skin',
-    stats: { spd: -2 }, tags: [],
-    flags: { firstHitHalved: true },
+    flavor: 'Every blow lands twice: once on the foe, once on the mountain’s memory.' }),
+  I('granite_skin', 'MOUNTAIN', 'u', 'Granite Skin', {
+    core: true, stats: { spd: -2 }, tags: [], flags: { firstHitHalved: true },
     desc: 'The first blow you take each battle is halved. −2 SPD.',
-    flavor: 'You are 4% gravel now. It suits you.',
-  },
-  {
-    id: 'vertigo_charm', pool: 'MOUNTAIN', name: 'Vertigo Charm',
-    stats: { spd: 3, luck: 5 }, tags: [],
+    flavor: 'You are 4% gravel now. It suits you.' }),
+  I('vertigo_charm', 'MOUNTAIN', 'c', 'Vertigo Charm', {
+    core: true, stats: { spd: 3, luck: 5 }, tags: [],
     desc: '+3 SPD, +5% crit.',
-    flavor: 'The trick is to fall upward, socially.',
-  },
-  // ------------------------------------------------------------ VOLCANO ---
-  {
-    id: 'emberheart', pool: 'VOLCANO', name: 'Emberheart',
-    stats: {}, tags: ['ember'],
-    flags: { burnOnHit: 2, waterWeak: 2 },
+    flavor: 'The trick is to fall upward, socially.' }),
+  I('anvil_splinter', 'MOUNTAIN', 'c', 'Anvil Splinter', {
+    core: true, stats: { atk: 3, spd: -1 }, tags: [],
+    desc: '+3 ATK, −1 SPD.',
+    flavor: 'A piece of the thing everything else is shaped on.' }),
+  I('cairn_finger', 'MOUNTAIN', 'u', 'Cairn-Builder’s Finger', {
+    stats: { maxHP: 8 }, tags: [], flags: { blockHeal: 2 },
+    desc: '+8 max HP. Successful Blocks restore 2 HP.',
+    flavor: 'Stone remembers being stacked kindly.' }),
+  I('eyrie_horn', 'MOUNTAIN', 'u', 'Eyrie Signal-Horn', {
+    stats: {}, tags: [],
+    ability: { id: 'rally', name: 'Rallying Note', cd: 4, kind: 'heal_self', amount: 10, desc: 'Restore 10 HP.' },
+    desc: 'Grants ability: Rallying Note (heal 10, 4-turn cooldown).',
+    flavor: 'Someone on some peak always answers. It helps.' }),
+  I('avalanche_bell', 'MOUNTAIN', 'r', 'Avalanche Bell', {
+    stats: { atk: 2 }, tags: [], flags: { stunOnPerfect: 25 },
+    desc: '+2 ATK. Perfect strikes have a 25% chance to stun.',
+    flavor: 'Rung once per winter, and never indoors.' }),
+  I('summit_sigil', 'MOUNTAIN', 'r', 'Sigil of the Hollow Summit', {
+    stats: { atk: 2, maxHP: 8, spd: -2 }, tags: [], flags: { shieldHits: 1 },
+    desc: '+2 ATK, +8 max HP, −2 SPD. One extra halved hit each battle.',
+    flavor: 'The stair down still goes down. Bring the sigil, not the question.' }),
+  I('gremlin_contract', 'MOUNTAIN', 'u', 'Gremlin Toll Contract', {
+    stats: { shardGain: 25 }, tags: [], flags: { shopMarkup: 0.15 },
+    desc: 'Shard finds +25%, shop prices +15%. Gremlins take their cut both ways.',
+    flavor: 'Clause 4 is just the word "slide" underlined heavily.' }),
+  I('wyvern_scale_cape', 'MOUNTAIN', 'a', 'Echo Wyvern Scale-Cape', {
+    stats: { dodge: 15, spd: 2, atk: 2 }, tags: [],
+    desc: '+15% dodge, +2 SPD, +2 ATK.',
+    flavor: 'Shed mid-shriek, caught mid-fall, worn mid-legend.' }),
+
+  // ═══════════════════════════════════════════════════════ VOLCANO (10) ═══
+  I('emberheart', 'VOLCANO', 'r', 'Emberheart', {
+    core: true, stats: {}, tags: ['ember'], flags: { burnOnHit: 2, waterWeak: 2 },
     desc: 'Your strikes Burn (2/turn, 2 turns). Take +2 damage from water foes.',
-    flavor: 'A coal that chose you as its fireplace.',
-  },
-  {
-    id: 'choir_coal', pool: 'VOLCANO', name: 'Choir Coal',
-    stats: {}, tags: ['ember'],
+    flavor: 'A coal that chose you as its fireplace.' }),
+  I('choir_coal', 'VOLCANO', 'u', 'Choir Coal', {
+    core: true, stats: {}, tags: ['ember'],
     ability: { id: 'cinder_hymn', name: 'Cinder Hymn', cd: 4, kind: 'burn_all', burn: 3, desc: 'Set every foe Burning (3/turn, 3 turns).' },
     desc: 'Grants ability: Cinder Hymn (burn all foes, 4-turn cooldown).',
-    flavor: 'It hums in your pack. The key is always dread-minor.',
-  },
-  {
-    id: 'slag_plate', pool: 'VOLCANO', name: 'Slag Plate',
-    stats: { maxHP: 12, spd: -2 }, tags: ['ember'],
+    flavor: 'It hums in your pack. The key is always dread-minor.' }),
+  I('slag_plate', 'VOLCANO', 'c', 'Slag Plate', {
+    core: true, stats: { maxHP: 12, spd: -2 }, tags: ['ember'],
     desc: '+12 max HP, −2 SPD.',
-    flavor: 'Forged from the volcano’s discarded opinions.',
-  },
-  // ------------------------------------------------------------- DESERT ---
-  {
-    id: 'glass_quill', pool: 'DESERT', name: 'Glass Quill',
-    stats: { luck: 12 }, tags: ['glass'],
-    flags: { critShatter: 2 },
+    flavor: 'Forged from the volcano’s discarded opinions.' }),
+  I('ashen_knuckle', 'VOLCANO', 'c', 'Ashen Knuckle', {
+    core: true, stats: { atk: 2, maxHP: 3 }, tags: ['ember'],
+    desc: '+2 ATK, +3 max HP.',
+    flavor: 'Shake hands with the mountain. Regret is optional.' }),
+  I('magma_vein', 'VOLCANO', 'u', 'Bottled Magma Vein', {
+    stats: { atk: 3, maxHP: -4 }, tags: ['ember'],
+    desc: '+3 ATK, −4 max HP. It leaks warmth you can’t keep.',
+    flavor: 'DO NOT SHAKE. Or do — who reads labels this deep?' }),
+  I('cinder_censer', 'VOLCANO', 'u', 'Cinder Censer', {
+    stats: {}, tags: ['ember'], flags: { burnOnHit: 1 },
+    desc: 'Your strikes Burn (1/turn, 2 turns). Stacks with other embers.',
+    flavor: 'Swing gently. The smoke writes cursive.' }),
+  I('seraph_feather', 'VOLCANO', 'r', 'Magma Seraph’s Pinion', {
+    stats: { atk: 2, spd: 2 }, tags: ['ember', 'sun'], flags: { burnDouble: true },
+    desc: '+2 ATK, +2 SPD. Your Burn damage is doubled.',
+    flavor: 'It fell upward when she molted. You had to climb for it.' }),
+  I('obsidian_tongue', 'VOLCANO', 'r', 'Obsidian Tongue', {
+    stats: {}, tags: ['ember'],
+    ability: { id: 'smelt', name: 'Smelt', cd: 3, kind: 'smite', mult: 1.9, desc: 'One heavy molten strike at 190% ATK.' },
+    desc: 'Grants ability: Smelt (one strike, 190% ATK, 3-turn cooldown).',
+    flavor: 'Sharp enough to quote you back at yourself.' }),
+  I('vesper_bellows', 'VOLCANO', 'u', 'Vesper Bellows', {
+    stats: {}, tags: ['ember'], flags: { chargeDmg: 6 },
+    desc: 'Star-charges thrown in battle deal +6 damage.',
+    flavor: 'It breathes for the fire when the fire forgets.' }),
+  I('caldera_crown', 'VOLCANO', 'a', 'Crown of the Caldera Organ', {
+    stats: { atk: 4, maxHP: 8 }, tags: ['ember', 'card'], flags: { burnOnHit: 2 },
+    desc: '+4 ATK, +8 max HP. Your strikes Burn (2/turn, 2 turns).',
+    flavor: 'The Choir’s final chord, cast in cooling stone. Wear the crescendo.' }),
+
+  // ════════════════════════════════════════════════════════ DESERT (10) ═══
+  I('glass_quill', 'DESERT', 'r', 'Glass Quill', {
+    core: true, stats: { luck: 12 }, tags: ['glass'], flags: { critShatter: 2 },
     desc: '+12% crit. Crits shatter: your next strike gains +2 damage.',
-    flavor: 'Writes only in past tense.',
-  },
-  {
-    id: 'mirage_veil', pool: 'DESERT', name: 'Mirage Veil',
-    stats: { dodge: 20, maxHP: -5 }, tags: ['glass'],
+    flavor: 'Writes only in past tense.' }),
+  I('mirage_veil', 'DESERT', 'u', 'Mirage Veil', {
+    core: true, stats: { dodge: 20, maxHP: -5 }, tags: ['glass'],
     desc: '+20% dodge, −5 max HP. You are slightly less real now.',
-    flavor: 'Wear it and stand somewhere you are not.',
-  },
-  {
-    id: 'sunbrand', pool: 'DESERT', name: 'Sunbrand',
-    stats: {}, tags: ['sun'],
-    flags: { fullHPAtk: 3 },
+    flavor: 'Wear it and stand somewhere you are not.' }),
+  I('sunbrand', 'DESERT', 'u', 'Sunbrand', {
+    core: true, stats: {}, tags: ['sun'], flags: { fullHPAtk: 3 },
     desc: '+3 ATK while at full HP.',
-    flavor: 'The mark of noon, which forgives nothing.',
-  },
-  // ------------------------------------------------------------- TUNDRA ---
-  {
-    id: 'frostmarrow_ring', pool: 'TUNDRA', name: 'Frostmarrow Ring',
-    stats: {}, tags: ['moon'],
-    flags: { chillOnHit: 1 },
+    flavor: 'The mark of noon, which forgives nothing.' }),
+  I('dune_compass', 'DESERT', 'c', 'Dune-Swimmer’s Compass', {
+    core: true, stats: { spd: 2, luck: 3 }, tags: [],
+    desc: '+2 SPD, +3% crit.',
+    flavor: 'Points to the nearest exit from any conversation.' }),
+  I('bleached_dice', 'DESERT', 'u', 'Sun-Bleached Dice', {
+    stats: { luck: 8 }, tags: [],
+    ability: { id: 'gamble', name: 'Revenant’s Gamble', cd: 3, kind: 'gamble', desc: 'Strike for anywhere between nothing and 300% ATK.' },
+    desc: '+8% crit. Grants ability: Revenant’s Gamble (0–300% ATK, 3-turn cooldown).',
+    flavor: 'Carved from something that also gambled.' }),
+  I('glasscoil_fang', 'DESERT', 'u', 'Glasscoil Fang', {
+    stats: { atk: 2, luck: 6 }, tags: ['glass'],
+    desc: '+2 ATK, +6% crit.',
+    flavor: 'Transparent about its intentions.' }),
+  I('sirocco_skin', 'DESERT', 'c', 'Sirocco Waterskin', {
+    stats: { maxHP: 5 }, tags: [], flags: { dewPotency: 5 },
+    desc: '+5 max HP. Star-dew restores +5 more.',
+    flavor: 'Holds water, wind, and grudges.' }),
+  I('tomb_key', 'DESERT', 'r', 'Sun-Tomb Skeleton Key', {
+    stats: { shardGain: 20 }, tags: ['sun'], flags: { crackSense: true },
+    desc: 'Shard finds +20%. Cracks near sealed hexes glow from memory\'s distance.',
+    flavor: 'Fits every lock that has already given up.' }),
+  I('mirror_shard_pauldron', 'DESERT', 'r', 'Mirror-Shard Pauldron', {
+    stats: { dodge: 10 }, tags: ['glass'], flags: { thorns: 3 },
+    desc: '+10% dodge. Foes that strike you take 3 back.',
+    flavor: 'They mostly hurt themselves, seeing what they are.' }),
+  I('noon_anvil', 'DESERT', 'a', 'The Anvil of Noon', {
+    stats: { atk: 5, spd: -2 }, tags: ['sun', 'glass'], flags: { fullHPAtk: 3 },
+    desc: '+5 ATK, −2 SPD, +3 more ATK at full HP.',
+    flavor: 'Whatever is hammered here keeps its shadow forever.' }),
+
+  // ════════════════════════════════════════════════════════ TUNDRA (10) ═══
+  I('frostmarrow_ring', 'TUNDRA', 'u', 'Frostmarrow Ring', {
+    core: true, stats: {}, tags: ['moon'], flags: { chillOnHit: 1 },
     desc: 'Your strikes Chill, stacking −1 to the foe’s ATK.',
-    flavor: 'Cold enough to slow an argument.',
-  },
-  {
-    id: 'pale_hound_card', pool: 'TUNDRA', name: 'Pale Card: “The Hound”',
-    stats: {}, tags: ['card', 'moon'],
-    flags: { houndStrike: 6 },
+    flavor: 'Cold enough to slow an argument.' }),
+  I('pale_hound_card', 'TUNDRA', 'r', 'Pale Card: “The Hound”', {
+    core: true, stats: {}, tags: ['card', 'moon'], flags: { houndStrike: 6 },
     desc: 'As each battle begins, the Hound is dealt: 6 damage to a random foe.',
-    flavor: 'It is drawn. It was always going to be drawn.',
-  },
-  {
-    id: 'sleet_mantle', pool: 'TUNDRA', name: 'Sleet Mantle',
-    stats: { blockBonus: 1 }, tags: ['moon'],
+    flavor: 'It is drawn. It was always going to be drawn.' }),
+  I('sleet_mantle', 'TUNDRA', 'c', 'Sleet Mantle', {
+    core: true, stats: { blockBonus: 1 }, tags: ['moon'],
     desc: 'Your Block window is 50% wider.',
-    flavor: 'The storm signs its work; this is a forgery good enough to fool it.',
-  },
-  // ---------------------------------------------------------------- SEA ---
-  {
-    id: 'siren_scale', pool: 'SEA', name: 'Siren Scale',
-    stats: {}, tags: ['water'],
-    flags: { perfectHeal: 3 },
+    flavor: 'The storm signs its work; this is a forgery good enough to fool it.' }),
+  I('auroral_thread', 'TUNDRA', 'c', 'Auroral Thread', {
+    core: true, stats: { maxHP: 5, dodge: 5 }, tags: ['moon'],
+    desc: '+5 max HP, +5% dodge.',
+    flavor: 'Sewn into your hem, the sky keeps half an eye on you.' }),
+  I('pale_tower_card', 'TUNDRA', 'u', 'Pale Card: “The Tower”', {
+    stats: { atk: 3, maxHP: -3 }, tags: ['card'],
+    desc: '+3 ATK, −3 max HP. Something always falls.',
+    flavor: 'Reversed, it means the same thing, faster.' }),
+  I('hibernal_fat', 'TUNDRA', 'u', 'Hibernal Reserve', {
+    stats: { maxHP: 14, spd: -2 }, tags: [],
+    desc: '+14 max HP, −2 SPD.',
+    flavor: 'The mammoths’ secret is that winter is a meal.' }),
+  I('stag_antler_tip', 'TUNDRA', 'u', 'Frostmarrow Antler-Tip', {
+    stats: { atk: 2 }, tags: ['moon'], flags: { chillOnHit: 1 },
+    desc: '+2 ATK. Your strikes Chill (stacking −1 foe ATK).',
+    flavor: 'Shed in courtship, gathered in war.' }),
+  I('pale_moon_card', 'TUNDRA', 'r', 'Pale Card: “The Moon”', {
+    stats: { luck: 8, dodge: 8 }, tags: ['card', 'moon'],
+    desc: '+8% crit, +8% dodge.',
+    flavor: 'The deck’s favorite. The deck denies having favorites.' }),
+  I('white_silence', 'TUNDRA', 'r', 'A White Silence', {
+    stats: {}, tags: ['moon'],
+    ability: { id: 'hush', name: 'Hush', cd: 5, kind: 'stun', desc: 'A foe forgets its next turn in perfect quiet.' },
+    desc: 'Grants ability: Hush (stun one foe, 5-turn cooldown).',
+    flavor: 'Carried in a locket. Opened only outdoors, only once, only ever.' }),
+  I('glacier_heart', 'TUNDRA', 'a', 'Heart of the Long White', {
+    stats: { maxHP: 20 }, tags: ['moon'], flags: { firstHitHalved: true },
+    desc: '+20 max HP. The first blow you take each battle is halved.',
+    flavor: 'It beats once per season. That is enough.' }),
+
+  // ═══════════════════════════════════════════════════════════ SEA (10) ═══
+  I('siren_scale', 'SEA', 'u', 'Siren Scale', {
+    core: true, stats: {}, tags: ['water'], flags: { perfectHeal: 3 },
     desc: 'Perfect strikes restore 3 HP.',
-    flavor: 'Still singing, very quietly, about you.',
-  },
-  {
-    id: 'fathom_pearl', pool: 'SEA', name: 'Fathom Pearl',
-    stats: { maxHP: 5, atk: 1, spd: 1, luck: 5, shardGain: -33 }, tags: ['water'],
+    flavor: 'Still singing, very quietly, about you.' }),
+  I('fathom_pearl', 'SEA', 'r', 'Fathom Pearl', {
+    core: true, stats: { maxHP: 5, atk: 1, spd: 1, luck: 5, shardGain: -33 }, tags: ['water'],
     desc: '+5 HP, +1 ATK, +1 SPD, +5% crit — but shard finds −33%.',
-    flavor: 'Everything the deep owns, it lends at interest.',
-  },
-  {
-    id: 'anglers_lure', pool: 'SEA', name: 'Void Angler’s Lure',
-    stats: {}, tags: ['water'],
-    flags: { fewerFoes: true },
+    flavor: 'Everything the deep owns, it lends at interest.' }),
+  I('anglers_lure', 'SEA', 'u', 'Void Angler’s Lure', {
+    core: true, stats: {}, tags: ['water'], flags: { fewerFoes: true },
     desc: 'Wild battles muster one fewer foe (minimum 1).',
-    flavor: 'Whatever it is fishing for, it is not you. Probably.',
-  },
-  // ------------------------------------------------------------ CRYSTAL ---
-  {
-    id: 'prism_core', pool: 'CRYSTAL', name: 'Prism Core',
-    stats: { timingBonus: 1 }, tags: ['glass'],
+    flavor: 'Whatever it is fishing for, it is not you. Probably.' }),
+  I('brine_censer', 'SEA', 'c', 'Brine Censer', {
+    core: true, stats: { maxHP: 6, dodge: 4 }, tags: ['water'],
+    desc: '+6 max HP, +4% dodge.',
+    flavor: 'Smells like a storm deciding against it.' }),
+  I('undertow_bottle', 'SEA', 'u', 'The Undertow, Bottled', {
+    stats: {}, tags: ['water'],
+    ability: { id: 'undertow', name: 'Undertow', cd: 4, kind: 'leech', mult: 0.9, desc: 'Strike for 90% ATK and drink the damage as HP.' },
+    desc: 'Grants ability: Undertow (90% ATK, heal for damage dealt, 4-turn cooldown).',
+    flavor: 'Uncork away from anything you plan to keep.' }),
+  I('tide_ledger', 'SEA', 'c', 'Tide Ledger', {
+    stats: { shardGain: 20 }, tags: ['water'],
+    desc: 'Shard finds +20%.',
+    flavor: 'What goes out comes back with arithmetic.' }),
+  I('reflection_locket', 'SEA', 'u', 'Locket of Your Reflection', {
+    stats: { dodge: 12 }, tags: ['water', 'glass'],
+    desc: '+12% dodge.',
+    flavor: 'It ducks a half-second before you need to.' }),
+  I('drowned_star_chart', 'SEA', 'r', 'Drowned Star-Chart', {
+    stats: { spd: 2 }, tags: ['water'], flags: { visionPlus: 1, fastTravel: true },
+    desc: '+2 SPD, +1 vision, and you hop the world map much faster.',
+    flavor: 'Maps the sky as the sea remembers it: upside down and grieving.' }),
+  I('leviathan_tooth', 'SEA', 'r', 'Leviathan Milk-Tooth', {
+    stats: { atk: 4 }, tags: ['water'], flags: { executeBonus: true },
+    desc: '+4 ATK. Deal +50% damage to foes below 30% health.',
+    flavor: 'From when it was small. It is not small.' }),
+  I('abyssal_bell', 'SEA', 'a', 'The Abyssal Bell', {
+    stats: { maxHP: 10, atk: 2 }, tags: ['water', 'moon'], flags: { houndStrike: 8 },
+    desc: '+10 max HP, +2 ATK. Each battle opens with the Bell tolling 8 damage.',
+    flavor: 'Rung at the bottom, heard at the top, answered in between.' }),
+
+  // ═══════════════════════════════════════════════════════ CRYSTAL (10) ═══
+  I('prism_core', 'CRYSTAL', 'r', 'Prism Core', {
+    core: true, stats: { timingBonus: 1 }, tags: ['glass'],
     desc: 'All your timing multipliers are raised by +0.15.',
-    flavor: 'Light enters confused and leaves determined.',
-  },
-  {
-    id: 'chime_shard', pool: 'CRYSTAL', name: 'Chime Shard',
-    stats: {}, tags: ['glass'],
+    flavor: 'Light enters confused and leaves determined.' }),
+  I('chime_shard', 'CRYSTAL', 'u', 'Chime Shard', {
+    core: true, stats: {}, tags: ['glass'],
     ability: { id: 'resonance', name: 'Resonance', cd: 4, kind: 'stun', desc: 'Ring a foe’s bones: it loses its next turn.' },
     desc: 'Grants ability: Resonance (stun one foe, 4-turn cooldown).',
-    flavor: 'Struck once, it rings forever; the trick is aiming the forever.',
-  },
-  {
-    id: 'facet_eye', pool: 'CRYSTAL', name: 'Facet Eye',
-    stats: { luck: 10 }, tags: ['glass'],
-    flags: { seeIntent: true },
+    flavor: 'Struck once, it rings forever; the trick is aiming the forever.' }),
+  I('facet_eye', 'CRYSTAL', 'r', 'Facet Eye', {
+    core: true, stats: { luck: 10 }, tags: ['glass'], flags: { seeIntent: true },
     desc: '+10% crit. You see what each foe intends to do next.',
-    flavor: 'Blink schedule: never.',
-  },
-  // ---------------------------------------------------------------- ANY ---
-  {
-    id: 'shard_purse', pool: 'ANY', name: 'Star-Shard Purse',
-    stats: { shardGain: 50 }, tags: [],
-    flags: { extraFoeChance: 0.25 },
+    flavor: 'Blink schedule: never.' }),
+  I('tuning_spar', 'CRYSTAL', 'c', 'Tuning Spar', {
+    core: true, stats: { timingBonus: 1 }, tags: ['glass'],
+    desc: 'All your timing multipliers are raised by +0.15.',
+    flavor: 'Hum first. It corrects you kindly.' }),
+  I('refracted_coin', 'CRYSTAL', 'c', 'Refracted Coin', {
+    stats: { luck: 6, shardGain: 10 }, tags: ['glass'],
+    desc: '+6% crit, +10% shard finds.',
+    flavor: 'Lands on all its edges at once.' }),
+  I('widow_chime', 'CRYSTAL', 'u', 'The Widow’s Smallest Chime', {
+    stats: { atk: 2 }, tags: ['glass'], flags: { stunOnPerfect: 20 },
+    desc: '+2 ATK. Perfect strikes have a 20% chance to stun.',
+    flavor: 'She has larger ones. Pray she keeps to the small.' }),
+  I('lattice_veins', 'CRYSTAL', 'r', 'Lattice Veins', {
+    stats: { maxHP: 8 }, tags: ['glass'], flags: { perfectHeal: 2 },
+    desc: '+8 max HP. Perfect strikes restore 2 HP.',
+    flavor: 'Your blood learns symmetry. Your heart keeps 4/4 anyway.' }),
+  I('golem_kernel', 'CRYSTAL', 'u', 'Shard-Golem Kernel', {
+    stats: { maxHP: 10, spd: -1 }, tags: ['glass'], flags: { thorns: 2 },
+    desc: '+10 max HP, −1 SPD. Foes that strike you take 2 back.',
+    flavor: 'It wants to be a golem again. For now, be its golem.' }),
+  I('prophecy_prism', 'CRYSTAL', 'r', 'Prism of Mild Prophecy', {
+    stats: { luck: 6, dodge: 6 }, tags: ['glass'], flags: { seeIntent: true, crackSense: true },
+    desc: '+6% crit, +6% dodge, see foe intents, and sense sealed hexes further.',
+    flavor: 'Foretells the next four seconds with total accuracy and no context.' }),
+  I('facet_crown', 'CRYSTAL', 'a', 'The Facet Crown', {
+    stats: { timingBonus: 2, luck: 8 }, tags: ['glass', 'card'],
+    desc: 'Timing multipliers +0.30, +8% crit.',
+    flavor: 'Refracts intention into execution. Kings wept for less.' }),
+
+  // ═══════════════════════════════════════════════════════════ ANY (43) ═══
+  I('shard_purse', 'ANY', 'u', 'Star-Shard Purse', {
+    core: true, stats: { shardGain: 50 }, tags: [], flags: { extraFoeChance: 0.25 },
     desc: 'Shard finds +50%. Trouble finds you too: +25% chance of an extra foe.',
-    flavor: 'It jingles. Everything within a mile knows it jingles.',
-  },
-  {
-    id: 'boots_remember', pool: 'ANY', name: 'Boots That Remember',
-    stats: { spd: 2 }, tags: [],
-    flags: { fastTravel: true },
+    flavor: 'It jingles. Everything within a mile knows it jingles.' }),
+  I('boots_remember', 'ANY', 'c', 'Boots That Remember', {
+    core: true, stats: { spd: 2 }, tags: [], flags: { fastTravel: true },
     desc: '+2 SPD. You hop the world map much faster.',
-    flavor: 'They know the way home. They are simply not telling.',
-  },
-  {
-    id: 'patient_comet', pool: 'ANY', name: 'The Patient Comet',
-    stats: {}, tags: ['sun'],
-    flags: { extraActionEvery: 4 },
+    flavor: 'They know the way home. They are simply not telling.' }),
+  I('patient_comet', 'ANY', 'r', 'The Patient Comet', {
+    core: true, stats: {}, tags: ['sun'], flags: { extraActionEvery: 4 },
     desc: 'Every 4th turn, take a second action.',
-    flavor: 'It has waited nine thousand years. It can wait for your turn.',
-  },
-  {
-    id: 'reassuring_pebble', pool: 'ANY', name: 'A Very Reassuring Pebble',
-    stats: { maxHP: 5 }, tags: [],
+    flavor: 'It has waited nine thousand years. It can wait for your turn.' }),
+  I('reassuring_pebble', 'ANY', 'c', 'A Very Reassuring Pebble', {
+    core: true, stats: { maxHP: 5 }, tags: [],
     desc: '+5 max HP. It’s going to be okay.',
-    flavor: 'Smooth. Round. Unshakeably on your side.',
-  },
-  // --------------------------------------------------------------- BOSS ---
-  {
-    id: 'wardens_sigil', pool: 'BOSS', name: 'Warden’s Sigil',
-    stats: { atk: 3, maxHP: 10 }, tags: [],
+    flavor: 'Smooth. Round. Unshakeably on your side.' }),
+  I('travel_kettle', 'ANY', 'c', 'Traveller’s Kettle', {
+    core: true, stats: { maxHP: 4 }, tags: [], flags: { afterBattleHeal: 2 },
+    desc: '+4 max HP. Heal 2 after each battle.',
+    flavor: 'Boils on spite alone.' }),
+  I('spare_string', 'ANY', 'c', 'A Spare String', {
+    core: true, stats: { timingBonus: 1 }, tags: [],
+    desc: 'Timing multipliers +0.15.',
+    flavor: 'For the instrument you are, apparently.' }),
+  I('left_glove', 'ANY', 'c', 'The Left Glove', {
+    core: true, stats: { atk: 1, luck: 4 }, tags: [],
+    desc: '+1 ATK, +4% crit.',
+    flavor: 'Its partner is out there, being right about everything.' }),
+  I('rune_eraser', 'ANY', 'u', 'Rune Eraser', {
+    core: true, stats: {}, tags: [], flags: { fleeSure: true },
+    desc: 'Fleeing always succeeds. You un-write yourself from the fight.',
+    flavor: 'Controversial among historians.' }),
+  I('folded_map', 'ANY', 'c', 'A Map, Badly Folded', {
+    core: true, stats: { spd: 1 }, tags: [], flags: { visionPlus: 1 },
+    desc: '+1 SPD, +1 vision range.',
+    flavor: 'The creases have become roads. Some of the roads work.' }),
+  I('humble_knife', 'ANY', 'c', 'Humble Paring Knife', {
+    core: true, stats: { atk: 2 }, tags: [],
+    desc: '+2 ATK.',
+    flavor: 'Peels apples, pretensions, and — at need — fates.' }),
+  I('wax_seal', 'ANY', 'c', 'Unbroken Wax Seal', {
+    core: true, stats: { maxHP: 3, dodge: 3 }, tags: [],
+    desc: '+3 max HP, +3% dodge.',
+    flavor: 'Whatever letter it kept shut, keep it shut.' }),
+  I('chalk_stub', 'ANY', 'c', 'Surveyor’s Chalk Stub', {
+    core: true, stats: { shardGain: 15 }, tags: [],
+    desc: 'Shard finds +15%.',
+    flavor: 'Marks what is owed. The world squares up eventually.' }),
+  I('tin_soldier', 'ANY', 'u', 'Tin Soldier, Retired', {
+    core: true, stats: { maxHP: 6, atk: 1 }, tags: [], flags: { shieldHits: 1 },
+    desc: '+6 max HP, +1 ATK. One extra halved hit each battle.',
+    flavor: 'Stands where you tell it. Falls where it chooses.' }),
+  I('moth_lantern', 'ANY', 'u', 'Moth-Tender’s Lantern', {
+    core: true, stats: { luck: 6 }, tags: ['moon'],
+    desc: '+6% crit.',
+    flavor: 'The moths do the aiming.' }),
+  I('borrowed_time', 'ANY', 'r', 'Borrowed Time (Overdue)', {
+    stats: { spd: 4 }, tags: [], flags: { extraFoeChance: 0.15 },
+    desc: '+4 SPD, but trouble collects: +15% chance of an extra foe.',
+    flavor: 'The interest compounds hourly, somewhere.' }),
+  I('second_shadow', 'ANY', 'r', 'A Second Shadow', {
+    stats: { dodge: 10 }, tags: ['moon'], flags: { doubleStrike: 20 },
+    desc: '+10% dodge. 20% chance your strikes land twice (half damage echo).',
+    flavor: 'It copies you a half-beat late, and better.' }),
+  I('pocket_eclipse', 'ANY', 'r', 'Pocket Eclipse', {
+    stats: { atk: 2, luck: 6 }, tags: ['sun', 'moon'],
+    desc: '+2 ATK, +6% crit. Counts as both sun and moon.',
+    flavor: 'Do not open both hands at once.' }),
+  I('marching_drum', 'ANY', 'u', 'Ghost Marching-Drum', {
+    stats: { atk: 1, spd: 2 }, tags: [],
+    desc: '+1 ATK, +2 SPD.',
+    flavor: 'Its regiment still keeps step, thinly.' }),
+  I('glutton_tankard', 'ANY', 'u', 'Glutton’s Tankard', {
+    stats: { maxHP: 8 }, tags: [], flags: { dewPotency: 8 },
+    desc: '+8 max HP. Star-dew restores +8 more.',
+    flavor: 'Bottomless is a strong word. Thorough, though.' }),
+  I('bandolier', 'ANY', 'u', 'Firework Bandolier', {
+    stats: {}, tags: ['ember'], flags: { chargeDropBonus: 0.2, chargeDmg: 4 },
+    desc: 'Foes drop star-charges more often; charges deal +4 in battle.',
+    flavor: 'Festive is a defensible legal category.' }),
+  I('grave_bell_clapper', 'ANY', 'u', 'Grave-Bell Clapper', {
+    stats: { atk: 2 }, tags: [], flags: { killHeal: 2 },
+    desc: '+2 ATK. Heal 2 whenever a foe falls.',
+    flavor: 'It rings inward now.' }),
+  I('star_atlas_torn', 'ANY', 'c', 'Torn Page of a Star-Atlas', {
+    stats: { luck: 5, spd: 1 }, tags: [],
+    desc: '+5% crit, +1 SPD.',
+    flavor: 'The missing half maps the mistakes.' }),
+  I('vagrant_ring', 'ANY', 'c', 'Vagrant’s Iron Ring', {
+    stats: { maxHP: 4, atk: 1 }, tags: [],
+    desc: '+4 max HP, +1 ATK.',
+    flavor: 'Passed hand to hand until hands improved.' }),
+  I('lucky_bones', 'ANY', 'u', 'Lucky Knucklebones', {
+    stats: { luck: 10, atk: -1 }, tags: [],
+    desc: '+10% crit, −1 ATK. Fortune favors the light-fisted.',
+    flavor: 'Whose? Theirs, once. Yours, now. Luck moves.' }),
+  I('hourglass_cracked', 'ANY', 'r', 'Cracked Hourglass', {
+    stats: {}, tags: [], flags: { extraActionEvery: 5 },
+    desc: 'Every 5th turn, take a second action. Sand leaks sideways into now.',
+    flavor: 'Time noticed the crack and politely says nothing.' }),
+  I('debt_collector_badge', 'ANY', 'u', 'Debt-Collector’s Badge', {
+    stats: { shardGain: 30 }, tags: [], flags: { killShard: 1 },
+    desc: 'Shard finds +30%, +1 shard per felled foe.',
+    flavor: 'The Meridian owes. You collect.' }),
+  I('paper_armor', 'ANY', 'u', 'Folded Paper Armor', {
+    stats: { maxHP: 9, dodge: -5 }, tags: [],
+    desc: '+9 max HP, −5% dodge. Crinkles heroically.',
+    flavor: 'Surprisingly effective, insultingly loud.' }),
+  I('whetstone_quiet', 'ANY', 'c', 'Whetstone Made of Quiet', {
+    stats: { atk: 2, spd: -1 }, tags: [],
+    desc: '+2 ATK, −1 SPD.',
+    flavor: 'Sharpens blades and attention spans.' }),
+  I('third_lung', 'ANY', 'u', 'A Third Lung', {
+    stats: { maxHP: 7, spd: 1 }, tags: [],
+    desc: '+7 max HP, +1 SPD.',
+    flavor: 'Where do you keep it? Wrong question. Where does it keep you?' }),
+  I('nettle_wine', 'ANY', 'u', 'Nettle Wine, Vintage Rift', {
+    stats: { atk: 2, maxHP: 4, dodge: -4 }, tags: ['bloom'],
+    desc: '+2 ATK, +4 max HP, −4% dodge.',
+    flavor: 'Bold, punishing, notes of regret and juniper.' }),
+  I('clockwork_tick', 'ANY', 'r', 'Clockwork Cricket', {
+    stats: { timingBonus: 1, spd: 1 }, tags: [],
+    desc: 'Timing multipliers +0.15, +1 SPD. It chirps exactly on the beat.',
+    flavor: 'Wind it and the whole world keeps better time.' }),
+  I('gamblers_iou', 'ANY', 'r', 'A Gambler’s IOU', {
+    stats: { luck: 14, shardGain: -20 }, tags: [],
+    desc: '+14% crit, −20% shard finds.',
+    flavor: 'Signed in someone else’s hand. Cash it carefully.' }),
+  I('candle_endless', 'ANY', 'r', 'The Unlit Candle’s Twin', {
+    stats: { maxHP: 10 }, tags: ['card'], flags: { blockHeal: 2 },
+    desc: '+10 max HP. Successful Blocks restore 2 HP.',
+    flavor: 'It burns exactly when its sibling does not. So: now.' }),
+  I('rumor_earring', 'ANY', 'c', 'Rumor-Catcher Earring', {
+    stats: { luck: 4, shardGain: 8 }, tags: [],
+    desc: '+4% crit, +8% shard finds.',
+    flavor: 'Hears where the shards fell and what they said on the way down.' }),
+  I('practice_sword', 'ANY', 'c', 'Practice Sword (Graduated)', {
+    stats: { atk: 1, timingBonus: 1 }, tags: [],
+    desc: '+1 ATK, timing multipliers +0.15.',
+    flavor: 'Wood that studied. Wood that passed.' }),
+  I('shoulder_gargoyle', 'ANY', 'u', 'Pocket Gargoyle', {
+    stats: { maxHP: 5 }, tags: [], flags: { thorns: 2 },
+    desc: '+5 max HP. Foes that strike you take 2 back.',
+    flavor: 'Perches, glowers, bites precisely once per grievance.' }),
+  I('festival_mask', 'ANY', 'u', 'Festival Mask of the Meridian', {
+    stats: { dodge: 8, luck: 4 }, tags: [],
+    desc: '+8% dodge, +4% crit.',
+    flavor: 'Worn on the night the world broke. It remembers the dance steps.' }),
+  I('needle_compass', 'ANY', 'r', 'Needle That Points at Trouble', {
+    stats: { atk: 3 }, tags: [], flags: { seeIntent: true },
+    desc: '+3 ATK. You see what each foe intends.',
+    flavor: 'Never lost, frequently alarmed.' }),
+  I('rust_locket', 'ANY', 'c', 'Rusted Locket (Stuck)', {
+    stats: { maxHP: 6, luck: -3 }, tags: [],
+    desc: '+6 max HP, −3% crit. Whatever is inside is staying inside.',
+    flavor: 'Shake it and something inside shakes back, half a beat late.' }),
+  I('star_snuffbox', 'ANY', 'r', 'Star-Snuff Box', {
+    stats: { atk: 2 }, tags: ['sun'], flags: { perfectShard: 1 },
+    desc: '+2 ATK. Perfect strikes shake loose 1 star-shard.',
+    flavor: 'Sneezing constellations is considered good manners here.' }),
+  I('hollow_die', 'ANY', 'u', 'Hollow Die', {
+    stats: {}, tags: [],
+    ability: { id: 'hollow_roll', name: 'Hollow Roll', cd: 4, kind: 'gamble', desc: 'Strike for 0–300% ATK. The die is honest about nothing.' },
+    desc: 'Grants ability: Hollow Roll (0–300% ATK, 4-turn cooldown).',
+    flavor: 'Six faces, no numbers, total conviction.' }),
+  I('midnight_office', 'ANY', 'r', 'Seal of the Midnight Office', {
+    stats: { atk: 2, maxHP: 6 }, tags: ['moon', 'card'],
+    desc: '+2 ATK, +6 max HP. Counts as moon and card.',
+    flavor: 'The bureaucracy that files eclipses. Terrifyingly punctual.' }),
+  I('one_good_deed', 'ANY', 'a', 'One Good Deed (Unspent)', {
+    stats: {}, tags: [], flags: { reviveOnce: true },
+    desc: 'Once per run, death declines you: revive at half HP.',
+    flavor: 'You did it long ago. The world has been carrying the change.' }),
+
+  // ═════════════════════════════════════════════════════════ BOSS (12) ═══
+  I('wardens_sigil', 'BOSS', 'u', 'Warden’s Sigil', {
+    core: true, stats: { atk: 3, maxHP: 10 }, tags: [],
     desc: '+3 ATK, +10 max HP.',
-    flavor: 'Authority, transferable upon defeat. See reverse for terms.',
-  },
-  {
-    id: 'sundered_crown', pool: 'BOSS', name: 'The Sundered Crown',
-    stats: { maxHP: -5 }, tags: ['card'],
-    flags: { cooldownMinus: 1 },
+    flavor: 'Authority, transferable upon defeat. See reverse for terms.' }),
+  I('sundered_crown', 'BOSS', 'r', 'The Sundered Crown', {
+    core: true, stats: { maxHP: -5 }, tags: ['card'], flags: { cooldownMinus: 1 },
     desc: 'Ability cooldowns −1 turn. −5 max HP: crowns are heavy, even broken.',
-    flavor: 'Its former head insists this is all part of the plan.',
-  },
-  {
-    id: 'meridian_compass', pool: 'BOSS', name: 'Meridian Compass',
-    stats: { spd: 1 }, tags: [],
-    flags: { revealRegion: true },
+    flavor: 'Its former head insists this is all part of the plan.' }),
+  I('meridian_compass', 'BOSS', 'r', 'Meridian Compass', {
+    core: true, stats: { spd: 1 }, tags: [], flags: { revealRegion: true },
     desc: '+1 SPD. Entering a region charts it all into hazy memory.',
-    flavor: 'It points to where you will eventually have been.',
-  },
-  // -------------------------------------------------------------- ASTRAL ---
-  {
-    id: 'lunar_grace', pool: 'ASTRAL', name: 'Lunar Grace',
-    stats: {}, tags: ['moon'],
-    flags: { reviveOnce: true },
+    flavor: 'It points to where you will eventually have been.' }),
+  I('gate_splinter', 'BOSS', 'u', 'Splinter of a Broken Ward', {
+    core: true, stats: { maxHP: 8, blockBonus: 1 }, tags: [],
+    desc: '+8 max HP. Your Block window is 50% wider.',
+    flavor: 'The ward remembers holding. Now it holds for you.' }),
+  I('wardens_gavel', 'BOSS', 'r', 'The Warden’s Gavel', {
+    stats: { atk: 4 }, tags: [], flags: { stunOnPerfect: 20 },
+    desc: '+4 ATK. Perfect strikes have a 20% chance to stun.',
+    flavor: 'Order! Order is what it hits you with.' }),
+  I('toll_takers_till', 'BOSS', 'u', 'Toll-Taker’s Till', {
+    stats: { shardGain: 40 }, tags: [], flags: { killShard: 1 },
+    desc: 'Shard finds +40%, +1 shard per felled foe.',
+    flavor: 'The causeway toll, redirected. The causeway does not miss it.' }),
+  I('oath_unbroken', 'BOSS', 'r', 'An Oath, Unbroken', {
+    stats: { maxHP: 12, atk: 2 }, tags: [], flags: { shieldHits: 1 },
+    desc: '+12 max HP, +2 ATK. One extra halved hit each battle.',
+    flavor: 'Sworn by someone stronger. Kept, now, by you.' }),
+  I('keepers_ledger', 'BOSS', 'r', 'The Keeper’s Ledger', {
+    stats: { luck: 8, shardGain: 20 }, tags: ['card'], flags: { crackSense: true },
+    desc: '+8% crit, +20% shard finds, and sealed hexes whisper louder.',
+    flavor: 'Every hoard it ever guarded, itemized. Yours are page one now.' }),
+  I('champions_belt', 'BOSS', 'u', 'The Proving-Ring Belt', {
+    stats: { atk: 2, maxHP: 6, spd: 1 }, tags: [],
+    desc: '+2 ATK, +6 max HP, +1 SPD.',
+    flavor: 'Undefeated, twice-defeated, thrice-reigning. The belt keeps its own count.' }),
+  I('warden_last_word', 'BOSS', 'a', 'The Warden’s Last Word', {
+    stats: { atk: 3 }, tags: [],
+    ability: { id: 'last_word', name: 'The Last Word', cd: 5, kind: 'smite', mult: 2.6, desc: 'Say it. 260% ATK, once per argument.' },
+    desc: '+3 ATK. Grants ability: The Last Word (260% ATK, 5-turn cooldown).',
+    flavor: 'It was “no.” It is always “no.” Now it is your “no.”' }),
+  I('tier_stone', 'BOSS', 'r', 'Tierstone', {
+    stats: { maxHP: 5 }, tags: [], flags: { deepPower: true },
+    desc: '+5 max HP, +1 ATK per region tier you stand in.',
+    flavor: 'Heavier near home, lighter in the deep. It wants you out there.' }),
+  I('frenzy_drum', 'BOSS', 'r', 'War-Drum of the Choir', {
+    stats: {}, tags: ['ember'],
+    ability: { id: 'frenzy', name: 'Crescendo', cd: 3, kind: 'frenzy', atkUp: 2, selfDmg: 3, desc: '+2 ATK for this battle; the drum takes 3 HP as payment.' },
+    desc: 'Grants ability: Crescendo (+2 ATK stacking per use, costs 3 HP, 3-turn cooldown).',
+    flavor: 'It only knows one direction.' }),
+
+  // ═══════════════════════════════════════════════════════ ASTRAL (15) ═══
+  I('lunar_grace', 'ASTRAL', 'a', 'Lunar Grace', {
+    core: true, stats: {}, tags: ['moon'], flags: { reviveOnce: true },
     desc: 'Once per run, death becomes moonlight: revive at half HP.',
-    flavor: 'The Pale Daughter keeps one promise per pilgrim.',
-  },
-  {
-    id: 'crimson_mote', pool: 'ASTRAL', name: 'Crimson Mote',
-    stats: { atk: 2 }, tags: ['ember'],
-    flags: { burnDouble: true },
+    flavor: 'The Pale Daughter keeps one promise per pilgrim.' }),
+  I('crimson_mote', 'ASTRAL', 'r', 'Crimson Mote', {
+    core: true, stats: { atk: 2 }, tags: ['ember'], flags: { burnDouble: true },
     desc: '+2 ATK. All Burn damage you inflict is doubled.',
-    flavor: 'A spark from Rubidus, still furious about the rain.',
-  },
-  {
-    id: 'cometborne_sail', pool: 'ASTRAL', name: 'Cometborne Sail',
-    stats: { spd: 3, dodge: 10 }, tags: ['sun'],
-    flags: { fastTravel: true },
+    flavor: 'A spark from Rubidus, still furious about the rain.' }),
+  I('cometborne_sail', 'ASTRAL', 'r', 'Cometborne Sail', {
+    core: true, stats: { spd: 3, dodge: 10 }, tags: ['sun'], flags: { fastTravel: true },
     desc: '+3 SPD, +10% dodge, and you hop the world map much faster.',
-    flavor: 'Catches a wind that blows only between worlds.',
-  },
+    flavor: 'Catches a wind that blows only between worlds.' }),
+  I('moon_moth_dust', 'ASTRAL', 'r', 'Moon-Moth Dust', {
+    stats: { dodge: 14, luck: 6 }, tags: ['moon'],
+    desc: '+14% dodge, +6% crit.',
+    flavor: 'Shaken from wings that have never once been caught.' }),
+  I('rust_engine_piston', 'ASTRAL', 'r', 'Piston of the Oxidized King', {
+    stats: { atk: 4, spd: -1 }, tags: ['ember'], flags: { doubleStrike: 15 },
+    desc: '+4 ATK, −1 SPD. 15% chance your strikes land twice.',
+    flavor: 'Still cycling. Machines this angry do not idle.' }),
+  I('rootmother_seed', 'ASTRAL', 'r', 'The Rootmother’s Spare Seed', {
+    stats: { maxHP: 15 }, tags: ['bloom'], flags: { afterBattleHeal: 4 },
+    desc: '+15 max HP. Heal 4 after each battle.',
+    flavor: 'Plant it nowhere. It grows in you regardless.' }),
+  I('errand_fragment', 'ASTRAL', 'r', 'A Fragment of the Errand', {
+    stats: { spd: 4 }, tags: ['sun'], flags: { fleeSure: true },
+    desc: '+4 SPD. Fleeing always succeeds — always going, never arriving.',
+    flavor: 'It is late for something and takes you along.' }),
+  I('sundial_night', 'ASTRAL', 'a', 'Sundial That Works at Night', {
+    stats: { timingBonus: 2 }, tags: ['sun', 'moon'],
+    desc: 'Timing multipliers +0.30. Counts as sun and moon.',
+    flavor: 'It casts a shadow of light. Noon answers to it now.' }),
+  I('giant_dream', 'ASTRAL', 'a', 'A Dream of Thal-Vaur', {
+    stats: { maxHP: 25, spd: -2 }, tags: [], flags: { firstHitHalved: true },
+    desc: '+25 max HP, −2 SPD. The first blow each battle is halved.',
+    flavor: 'Sleep like something too large to be woken by history.' }),
+  I('constellation_thread', 'ASTRAL', 'r', 'Constellation Thread', {
+    stats: { luck: 10 }, tags: ['moon', 'glass'], flags: { perfectShard: 1 },
+    desc: '+10% crit. Perfect strikes shake loose 1 star-shard.',
+    flavor: 'Unpicked from the Spilled Cup. The sky has not noticed. Sew quickly.' }),
+  I('void_anchor', 'ASTRAL', 'a', 'Void Anchor', {
+    stats: { maxHP: 10, atk: 3, spd: -3 }, tags: [], flags: { thorns: 4 },
+    desc: '+10 max HP, +3 ATK, −3 SPD. Foes that strike you take 4 back.',
+    flavor: 'Holds you to a world that is mostly gaps. Holds hard.' }),
+  I('hollow_sun_ember', 'ASTRAL', 'a', 'Ember of the Undying Sun', {
+    stats: { atk: 5 }, tags: ['sun', 'ember'], flags: { burnOnHit: 2, fullHPAtk: 2 },
+    desc: '+5 ATK, strikes Burn (2/turn), +2 more ATK at full HP.',
+    flavor: 'Vael does not miss it. Vael is politely certain you will return it.' }),
+  I('starlight_suture', 'ASTRAL', 'r', 'Starlight Suture', {
+    stats: { maxHP: 8 }, tags: ['moon'], flags: { blockHeal: 3, perfectHeal: 2 },
+    desc: '+8 max HP. Blocks restore 3 HP; Perfects restore 2.',
+    flavor: 'Stitches wounds with light that remembers being whole.' }),
+  I('pale_daughter_tear', 'ASTRAL', 'a', 'The Pale Daughter’s Tear', {
+    stats: { maxHP: 12, luck: 8 }, tags: ['moon', 'water'], flags: { dewPotency: 15 },
+    desc: '+12 max HP, +8% crit. Star-dew restores +15 more.',
+    flavor: 'She wept once, for the sea she was made to keep. It keeps you now.' }),
+  I('zodiac_die', 'ASTRAL', 'a', 'The Bone Zodiac’s Die', {
+    stats: { luck: 15 }, tags: ['card'],
+    ability: { id: 'zodiac', name: 'Cast the Zodiac', cd: 4, kind: 'gamble', desc: '0–300% ATK, judged by beasts of bone.' },
+    desc: '+15% crit. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
+    flavor: 'Twelve faces, each a hungry constellation. All of them owe you one.' }),
 ];
 
-// Synergies: both tags present → the effect ignites. Checked by the battle
-// engine via run.hasSynergy(id).
+// Synergies: both tags present → the effect ignites.
 export const SYNERGIES = [
-  {
-    id: 'fulgurite', tags: ['ember', 'glass'], name: 'FULGURITE',
-    desc: 'Fire through glass: your crits also Burn (3/turn, 3 turns).',
-  },
-  {
-    id: 'pale_hand', tags: ['moon', 'card'], name: 'THE PALE HAND',
-    desc: 'The Hound hunts in moonlight: its opening strike also Chills (−2 ATK).',
-  },
-  {
-    id: 'steamveil', tags: ['ember', 'water'], name: 'STEAMVEIL',
-    desc: 'Fire meets sea: your water weakness is annulled and steam grants +10% dodge.',
-  },
-  {
-    id: 'eclipse', tags: ['sun', 'moon'], name: 'ECLIPSE',
-    desc: 'Sun and moon align: +2 ATK, and Perfect windows widen.',
-  },
+  { id: 'fulgurite', tags: ['ember', 'glass'], name: 'FULGURITE',
+    desc: 'Fire through glass: your crits also Burn (3/turn, 3 turns).' },
+  { id: 'pale_hand', tags: ['moon', 'card'], name: 'THE PALE HAND',
+    desc: 'The Hound hunts in moonlight: its opening strike also Chills (−2 ATK).' },
+  { id: 'steamveil', tags: ['ember', 'water'], name: 'STEAMVEIL',
+    desc: 'Fire meets sea: your water weakness is annulled and steam grants +10% dodge.' },
+  { id: 'eclipse', tags: ['sun', 'moon'], name: 'ECLIPSE',
+    desc: 'Sun and moon align: +2 ATK, and Perfect windows widen.' },
+  { id: 'verdance', tags: ['bloom', 'water'], name: 'VERDANCE',
+    desc: 'Rain on green: heal 2 at the start of every one of your turns.' },
+  { id: 'stained_glass', tags: ['glass', 'card'], name: 'STAINED GLASS',
+    desc: 'Fate refracted: +10% crit, and crits grant +1 star-shard.' },
 ];
 
-// --------------------------------------------------------------- drawing ---
+// ------------------------------------------------------------ rarity draw ---
 
-const POOL_FALLBACK = ['ANY'];
+export const RARITY = {
+  c: { name: 'Common', color: '#9aa3cf' },
+  u: { name: 'Uncommon', color: '#6fe0c8' },
+  r: { name: 'Rare', color: '#b48aff' },
+  a: { name: 'Astral', color: '#f0c46a' },
+};
 
-export function drawItem(rng, pool, ownedIds) {
-  const tryPools = [pool, ...POOL_FALLBACK];
+const SOURCE_WEIGHTS = {
+  pedestal: { c: 0.56, u: 0.30, r: 0.12, a: 0.02 },
+  boss: { c: 0.08, u: 0.40, r: 0.38, a: 0.14 },
+  secret: { c: 0.16, u: 0.42, r: 0.34, a: 0.08 },
+  shop: { c: 0.45, u: 0.35, r: 0.18, a: 0.02 },
+  astral: { c: 0, u: 0.14, r: 0.44, a: 0.42 },
+};
+
+export function drawItem(rng, pool, ownedIds, opts = {}) {
+  const { source = 'pedestal', tier = 0, unlocked = null } = opts;
+  const w = { ...(SOURCE_WEIGHTS[source] || SOURCE_WEIGHTS.pedestal) };
+  const shift = Math.min(0.2, tier * 0.045);   // deep pockets skew rare
+  w.c = Math.max(0, w.c - shift);
+  w.r += shift;
+  let roll = rng(), rarity = 'c';
+  for (const k of ['c', 'u', 'r', 'a']) { if (roll < w[k]) { rarity = k; break; } roll -= w[k]; }
+
+  const ok = i => !ownedIds.has(i.id) && (!unlocked || unlocked.has(i.id));
+  const tryPools = [pool, 'ANY'];
+  const rarityOrder = [rarity, 'r', 'u', 'c', 'a'];
   for (const p of tryPools) {
-    const cands = ITEMS.filter(i => i.pool === p && !ownedIds.has(i.id));
-    if (cands.length) return pick(rng, cands);
+    for (const rr of rarityOrder) {
+      const cands = ITEMS.filter(i => i.pool === p && i.rarity === rr && ok(i));
+      if (cands.length) return pick(rng, cands);
+    }
   }
-  const any = ITEMS.filter(i => !ownedIds.has(i.id));
+  const any = ITEMS.filter(ok);
   return any.length ? pick(rng, any) : null;
 }
 

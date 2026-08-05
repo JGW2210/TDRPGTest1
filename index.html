@@ -36,8 +36,10 @@
 
   <div id="controls">
     <button id="btn-inventory" title="Your items, abilities and synergies (I)">🎒 Inventory</button>
+    <button id="btn-echoes" title="The Constellation of Echoes — feats and permanent unlocks">✴ Echoes</button>
     <button id="btn-detonate" title="Detonate a star-charge where you stand — sealed hexes crack open">✸ Detonate</button>
     <button id="btn-recenter" title="Return the camera to your token">◎ Recenter</button>
+    <button id="btn-audio" title="Toggle the music of the spheres">♪</button>
     <button id="btn-return" class="hidden" title="Rise back to the world map">↩ Return to World Map</button>
   </div>
 
@@ -73,6 +75,12 @@
     <div id="inv-stats"></div>
     <div id="inv-synergies"></div>
     <div id="inv-items"></div>
+  </aside>
+
+  <aside id="echoes" class="hidden">
+    <h3>CONSTELLATION OF ECHOES <button id="echo-close">✕</button></h3>
+    <div id="echo-summary"></div>
+    <div id="echo-list"></div>
   </aside>
 
   <div id="battle" class="hidden">
