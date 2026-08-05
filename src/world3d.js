@@ -8,6 +8,7 @@ import { CONFIG } from './config.js';
 import { hash2 } from './rng.js';
 import { keyOf, hexDist, neighborsOf } from './hex.js';
 import { BIOMES, CELESTIALS } from './names.js';
+import { run } from './run.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeMistTexture, makeStarTexture,
   makeGlowTexture, makeTraderTexture, makeLabelTexture,
@@ -928,7 +929,8 @@ export class WorldView {
 
   // ---------------------------------------------------------- fog of war ---
   updateFog(center, { animate = true } = {}) {
-    const V = CONFIG.visionRadius, RIM = CONFIG.rimRadius;
+    const bonus = run.flags?.visionPlus || 0;
+    const V = CONFIG.visionRadius + bonus, RIM = CONFIG.rimRadius + bonus;
     let colorDirty = false, matrixDirty = false, glintDirty = false;
 
     for (const tile of this.tileByIdx) {
@@ -992,7 +994,9 @@ export class WorldView {
       }
 
       if (tile.crackSprite) {
-        tile.crackSprite.material.opacity = tile.crackHint && state === 3 ? 0.35 : 0;
+        const sense = run.flags?.crackSense;
+        tile.crackSprite.material.opacity =
+          tile.crackHint && (state === 3 || (sense && state >= 1)) ? (sense ? 0.55 : 0.35) : 0;
       }
       this._applyGlint(tile);
     }

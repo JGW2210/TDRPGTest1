@@ -7,6 +7,7 @@ import { CONFIG } from './config.js';
 import { mulberry32, hash2, pick } from './rng.js';
 import { BIOMES, FOES } from './names.js';
 import { run } from './run.js';
+import { audio } from './audio.js';
 import {
   makeNebulaTexture, makePlayerTexture, makeEnemyTexture, makeGlowTexture, makeStarTexture,
 } from './textures.js';
@@ -51,8 +52,11 @@ export class BattleSystem {
     this.state = 'intro';
     this.playerGuardBonus = 0;
     this.usedFirstPerfect = false;
-    this.tookFirstHit = false;
+    this.firstDodgeUsed = false;
+    this.frenzyAtk = 0;
+    this.shieldLeft = (run.flags.firstHitHalved ? 1 : 0) + (run.flags.shieldHits || 0);
     this.rng = mulberry32((run.battlesWon * 7919 + team.tier * 131 + 17) >>> 0);
+    audio.battleStart({ boss: !!team.boss });
 
     this._buildScene(team);
     this._buildEnemies(team);
@@ -234,8 +238,9 @@ export class BattleSystem {
   }
 
   _playerAtk() {
-    let atk = run.stats.atk;
+    let atk = run.stats.atk + this.frenzyAtk;
     if (run.flags.fullHPAtk && run.hp >= run.stats.maxHP) atk += run.flags.fullHPAtk;
+    if (run.flags.deepPower) atk += this.team.tier || 0;
     return atk;
   }
 
@@ -352,8 +357,11 @@ export class BattleSystem {
   async _strike(target, timing, baseMult, silent = false) {
     let dmg = this._playerAtk() * timing.mult * baseMult * (0.92 + this.rng() * 0.16);
     let crit = false;
-    if (this.rng() * 100 < (run.stats.luck || 0)) { crit = true; dmg *= 2; }
+    let luck = run.stats.luck || 0;
+    if (run.hasSynergy('stained_glass')) luck += 10;
+    if (this.rng() * 100 < luck) { crit = true; dmg *= 2; }
     if (run.flags.critShatter && this.shatterNext) { dmg += this.shatterNext; this.shatterNext = 0; }
+    if (run.flags.executeBonus && target.hp / target.maxHP < 0.3) dmg *= 1.5;
     if (target.role === 'guard') dmg *= 0.75;
     dmg = Math.max(1, Math.round(dmg));
 
@@ -362,9 +370,28 @@ export class BattleSystem {
     this._hurtEnemy(target, dmg, crit ? 'CRIT!' : timing.grade === 'perfect' ? 'Perfect!' : timing.grade === 'echo' ? 'Echo!' : '');
     if (!silent) this._log(crit ? `Critical strike — ${dmg}!` : `You strike for ${dmg}.`);
 
+    if (timing.grade === 'perfect') audio.sfxPerfect();
+    else if (timing.grade === 'good') audio.sfxGood();
     if (crit && run.flags.critShatter) this.shatterNext = run.flags.critShatter;
+    if (crit && run.hasSynergy('stained_glass')) run.gainShards(1);
     if (timing.grade === 'perfect' && run.flags.perfectHeal) {
       run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.perfectHeal);
+    }
+    if (timing.grade === 'perfect' && run.flags.perfectShard) run.gainShards(run.flags.perfectShard);
+    if (timing.grade === 'perfect' && run.flags.stunOnPerfect && !target.dead
+      && this.rng() * 100 < run.flags.stunOnPerfect) {
+      target.stun = 1;
+      this._log(`${target.name} reels, stunned!`);
+    }
+    if (target.dead) {
+      audio.sfxEnemyDie();
+      if (run.flags.killHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.killHeal);
+      if (run.flags.killShard) run.gainShards(run.flags.killShard);
+    }
+    if (!silent && run.flags.doubleStrike && !target.dead && this.rng() * 100 < run.flags.doubleStrike) {
+      await wait(180);
+      this._log('Your second shadow strikes!');
+      await this._strike(target, { grade: 'echo', mult: timing.mult * 0.5 }, baseMult, true);
     }
     if (run.flags.burnOnHit && !target.dead) {
       target.burn = Math.max(target.burn, run.flags.burnOnHit * (run.flags.burnDouble ? 2 : 1));
@@ -404,6 +431,39 @@ export class BattleSystem {
         this._float(target.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)), '✶', 'stun');
         this._log(`${target.name} rings like a bell and forgets its turn.`);
       }
+    } else if (ab.kind === 'heal_self') {
+      run.hp = Math.min(run.stats.maxHP, run.hp + ab.amount);
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${ab.amount}`, 'heal');
+      audio.sfxHeal();
+    } else if (ab.kind === 'weaken_all') {
+      for (const e of alive) e.chill = (e.chill || 0) + ab.atkDown;
+      this._log('The foes sag, weakened.');
+    } else if (ab.kind === 'smite') {
+      const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
+      if (target) {
+        const timing = await this._startTiming('strike');
+        await this._strike(target, timing, ab.mult, false);
+      }
+    } else if (ab.kind === 'gamble') {
+      const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
+      if (target) {
+        const mult = this.rng() * 3;
+        if (mult < 0.25) this._log('The die comes up hollow — nothing!');
+        else await this._strike(target, { grade: mult > 2.2 ? 'perfect' : 'good', mult }, 1, true);
+      }
+    } else if (ab.kind === 'leech') {
+      const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
+      if (target) {
+        const before = target.hp;
+        await this._strike(target, { grade: 'good', mult: ab.mult }, 1, true);
+        const dealt = before - Math.max(0, target.hp);
+        run.hp = Math.min(run.stats.maxHP, run.hp + dealt);
+        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${dealt}`, 'heal');
+      }
+    } else if (ab.kind === 'frenzy') {
+      this.frenzyAtk += ab.atkUp;
+      run.hp = Math.max(1, run.hp - ab.selfDmg);
+      this._log(`The drum takes its due — +${ab.atkUp} ATK for this battle.`);
     }
     this._refreshCards();
     await wait(650);
@@ -415,7 +475,8 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     run.consumables.charge--;
-    const dmg = 10 + (this.team.tier || 1) * 2;
+    audio.sfxDetonate();
+    const dmg = 10 + (this.team.tier || 1) * 2 + (run.flags.chargeDmg || 0);
     this._log(`✸ The star-charge detonates for ${dmg} to all foes!`);
     for (const e of this._aliveEnemies()) {
       this._burst(e.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)));
@@ -432,9 +493,11 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     run.consumables.dew--;
-    run.hp = Math.min(run.stats.maxHP, run.hp + 15);
-    this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), '+15', 'heal');
-    this._log('❋ The star-dew glows going down. +15 HP.');
+    audio.sfxHeal();
+    const amount = 15 + (run.flags.dewPotency || 0);
+    run.hp = Math.min(run.stats.maxHP, run.hp + amount);
+    this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${amount}`, 'heal');
+    this._log(`❋ The star-dew glows going down. +${amount} HP.`);
     this._refreshCards();
     await wait(650);
     this._afterPlayerAction();
@@ -445,7 +508,7 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     const maxSpd = Math.max(...this._aliveEnemies().map(e => e.spd));
-    const chance = Math.min(0.9, Math.max(0.3, 0.6 + (run.stats.spd - maxSpd) * 0.05));
+    const chance = run.flags.fleeSure ? 1 : Math.min(0.9, Math.max(0.3, 0.6 + (run.stats.spd - maxSpd) * 0.05));
     if (this.rng() < chance) {
       this._log('You fold sideways out of the fight.');
       await wait(700);
@@ -537,6 +600,10 @@ export class BattleSystem {
     this.turn++;
     for (const k of Object.keys(this.abilityCds)) this.abilityCds[k] = Math.max(0, this.abilityCds[k] - 1);
     if (this._aliveEnemies().length === 0) return this._victory();
+    if (run.hasSynergy('verdance') && run.hp < run.stats.maxHP) {
+      run.hp = Math.min(run.stats.maxHP, run.hp + 2);
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), '+2 ❀', 'heal');
+    }
     this.state = 'playerMenu';
     this._showMenu();
     this._refreshCards();
@@ -549,21 +616,31 @@ export class BattleSystem {
     const timing = await this._startTiming('block');
     let dmg = Math.max(1, e.atk - (e.chill || 0)) * mult * (0.9 + this.rng() * 0.2);
     // dodge check
-    if (this.rng() * 100 < (run.stats.dodge || 0)) {
+    const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
+    if (autoDodge || this.rng() * 100 < (run.stats.dodge || 0) + (run.hasSynergy('steamveil') ? 10 : 0)) {
+      this.firstDodgeUsed = true;
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'dodged!', 'heal');
       this._log('You flutter aside — dodged!');
       dmg = 0;
     } else {
-      if (timing.grade === 'perfect' || timing.grade === 'good') {
+      const blocked = timing.grade === 'perfect' || timing.grade === 'good';
+      if (blocked) {
         dmg *= CONFIG.battle.blockMult;
         this._log('Blocked!');
+        audio.sfxBlock();
+        if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
+      } else {
+        audio.sfxHurt();
       }
-      if (run.flags.firstHitHalved && !this.tookFirstHit) { dmg *= 0.5; this.tookFirstHit = true; }
+      if (this.shieldLeft > 0) { dmg *= 0.5; this.shieldLeft--; }
       if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) dmg += run.flags.waterWeak;
       dmg = Math.max(1, Math.round(dmg));
       run.hp -= dmg;
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${dmg}`, 'dmg');
       this._shake(this.playerMesh);
+      if (run.flags.thorns && !e.dead) {
+        this._hurtEnemy(e, run.flags.thorns, '⟁');
+      }
     }
     this._tween(e.mesh.position, { x: e.home.x, z: e.home.z }, 0.3);
     await wait(320);
@@ -609,6 +686,8 @@ export class BattleSystem {
 
   _end(result) {
     this.active = false;
+    audio.battleEnd(!!result.won);
+    if (result.lost) audio.sfxDefeat();
     document.body.classList.remove('in-battle');
     $('battle').classList.add('hidden');
     $('b-timing').classList.add('hidden');

@@ -17,6 +17,8 @@ python3 -m http.server 8080
 
 Then open <http://localhost:8080>. (ES modules can't load from `file://`.)
 `?seed=12345` regenerates the world; dying rolls a fresh seed automatically.
+A run survives page reloads (saved per-seed in localStorage) and dies with
+the wanderer.
 
 ## The run loop
 
@@ -35,10 +37,26 @@ the next pocket. Die anywhere and the world burns: new seed, nothing kept.
   swift, mystic, guard), burn/chill/stun statuses, telegraphed heavy blows,
   enraging bosses.
 - **Items** — Binding-of-Isaac-style blind draws from rune pedestals, boss
-  drops, and shops. ~30 relics in biome-linked pools, many with downsides
-  (+HP but slower, +dodge but less real, +shards but louder). Tag pairs
-  ignite **synergies** (ember+glass → burning crits; sun+moon → Eclipse…).
-  Your build *is* your level — there is no XP.
+  drops, and shops. **150 relics** in biome-linked pools across four
+  visible rarities (Common / Uncommon / Rare / Astral, power-budgeted by
+  tier), many with downsides (+HP but slower, +dodge but less real,
+  +shards but louder). Draw weights shift by source and region depth. Tag
+  pairs ignite **synergies** (ember+glass → burning crits; sun+moon →
+  Eclipse; bloom+water → Verdance…). Your build *is* your level — no XP.
+- **The Constellation of Echoes** — persistent, cross-run progression:
+  ~60 relics are in the pools from the start; the other 90 unlock forever
+  through 20 feats (fell a deep Warden, stand on all three wandering
+  worlds, die repeatedly, walk 600 hexes…). The ✴ Echoes panel tracks it.
+- **Procedural audio** — no assets, all WebAudio. An aetherial string
+  drone runs continuously, oscillating between two chords chosen for each
+  region's character: sus2add6/9 shimmer in the meadows, Lydian #11 in the
+  prism fields, Phrygian dominant over the glass dunes, pale maj7 air in
+  the tundra, minor-b6 into diminished dread in the ember wastes and all
+  tier-4+ pockets. Crossing a causeway morphs the voices over ~6 seconds.
+  Each region owns a quiet 4–6 note leitmotif on a biome-flavored chime
+  (glass bells, plucks, breath tones). Battles layer heartbeat drums —
+  taiko patterns for bosses — over the drone, and every action has a
+  synthesized sound. ♪ toggles it all.
 - **The farming ceiling** — sites are one-time per run, wilderness hexes
   are sparse (glimmers mark the ones that hold anything), and each pocket
   holds a bounded haul. When a region is picked clean, the only way up is
@@ -47,6 +65,13 @@ the next pocket. Die anywhere and the world burns: new seed, nothing kept.
   shimmer on adjacent tiles; stand there and **✸ Detonate** a star-charge
   (also a battle nuke — spend it wisely) to blast the hollow open for a
   pedestal, a shard cache, or a powder keg.
+- **Dungeon descents** — every dungeon gate opens onto a three-chamber
+  gauntlet: two escalating fights, then the Keeper, with only a breath of
+  healing between chambers. The Keeper hoards a guaranteed relic and a
+  heavy purse. Flee and you start the descent over.
+- **Consumables** — star-dew heals in or out of battle (drink it from the
+  inventory), star-charges detonate or nuke, and the homing feather whisks
+  you back to Starfall Vale from anywhere on the map.
 - **The astral layer** — **Vael, the Undying Sun** burns in a crater at the
   world's heart. Beyond the rim, three satellites orbit — the Pale
   Daughter, Rubidus, and the Viridian Comet — reached by star-bridges from

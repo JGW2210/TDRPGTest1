@@ -50,6 +50,7 @@ class Run {
     const has = id => this.synergies.some(sy => sy.id === id);
     if (has('eclipse')) s.atk += 2;
     if (has('steamveil')) { s.dodge += 10; delete flags.waterWeak; }
+    if (has('stained_glass')) s.luck += 10;
     if (flags.cooldownMinus) for (const a of abilities) a.cd = Math.max(1, a.cd - flags.cooldownMinus);
 
     s.maxHP = Math.max(10, s.maxHP);
