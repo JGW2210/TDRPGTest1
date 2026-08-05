@@ -17,6 +17,8 @@ python3 -m http.server 8080
 
 Then open <http://localhost:8080>. (ES modules can't load from `file://`.)
 `?seed=12345` regenerates the world; dying rolls a fresh seed automatically.
+A run survives page reloads (saved per-seed in localStorage) and dies with
+the wanderer.
 
 ## The run loop
 
@@ -47,6 +49,13 @@ the next pocket. Die anywhere and the world burns: new seed, nothing kept.
   shimmer on adjacent tiles; stand there and **✸ Detonate** a star-charge
   (also a battle nuke — spend it wisely) to blast the hollow open for a
   pedestal, a shard cache, or a powder keg.
+- **Dungeon descents** — every dungeon gate opens onto a three-chamber
+  gauntlet: two escalating fights, then the Keeper, with only a breath of
+  healing between chambers. The Keeper hoards a guaranteed relic and a
+  heavy purse. Flee and you start the descent over.
+- **Consumables** — star-dew heals in or out of battle (drink it from the
+  inventory), star-charges detonate or nuke, and the homing feather whisks
+  you back to Starfall Vale from anywhere on the map.
 - **The astral layer** — **Vael, the Undying Sun** burns in a crater at the
   world's heart. Beyond the rim, three satellites orbit — the Pale
   Daughter, Rubidus, and the Viridian Comet — reached by star-bridges from

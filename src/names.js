@@ -414,10 +414,10 @@ export function townSites(rng, townName) {
 export function dungeonSites(rng, dungeon) {
   return [
     {
-      type: 'side', subtype: 'gate',
+      type: 'battle', subtype: 'gate', gauntlet: true,
       name: `Gate of ${dungeon.name}`,
-      flavor: 'The threshold is carved with a warning in six languages and one apology. Cold air breathes outward on a slow count of four.',
-      actions: ['Descend (soon™)', 'Study the Warnings'],
+      flavor: 'The threshold is carved with a warning in six languages and one apology. Cold air breathes outward on a slow count of four. Three chambers wait below — and at the bottom, the Keeper, hoarding its gift.',
+      actions: ['⚔ Descend into the Dark', 'Study the Warnings'],
     },
     {
       type: 'battle', subtype: 'guardian',

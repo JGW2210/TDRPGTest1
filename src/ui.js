@@ -61,12 +61,27 @@ export const ui = {
     $('btn-detonate').textContent = `✸ Detonate (${run.consumables.charge})`;
   },
 
+  // set by main: { useDew: fn, useFeather: fn } — enables the Use buttons
+  inventoryHandlers: null,
+
   renderInventory(run) {
     const s = run.stats;
+    const h = this.inventoryHandlers;
+    const canDew = run.consumables.dew > 0 && run.hp < s.maxHP;
+    const canFeather = run.consumables.feather > 0;
     $('inv-stats').innerHTML =
       `❤ HP <b>${run.hp} / ${s.maxHP}</b> &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
       `✧ crit <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
-      `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>`;
+      `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>` +
+      `<div class="inv-consum">` +
+      `<span>✸ ×${run.consumables.charge} <i>(✸ Detonate on the map)</i></span>` +
+      `<span>❋ ×${run.consumables.dew} <button id="inv-use-dew" ${canDew ? '' : 'disabled'}>Drink</button></span>` +
+      `<span>➳ ×${run.consumables.feather} <button id="inv-use-feather" ${canFeather ? '' : 'disabled'}>Fly home</button></span>` +
+      `</div>`;
+    if (h) {
+      $('inv-use-dew')?.addEventListener('click', () => h.useDew());
+      $('inv-use-feather')?.addEventListener('click', () => h.useFeather());
+    }
     $('inv-synergies').innerHTML = run.synergies.length
       ? run.synergies.map(sy => `<div class="syn"><b>${sy.name}</b> — ${sy.desc}</div>`).join('')
       : '<div class="syn" style="opacity:0.6">No synergies yet — certain pairs of relics ignite when carried together…</div>';

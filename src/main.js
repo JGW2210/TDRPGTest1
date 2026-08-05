@@ -12,9 +12,10 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES } from './names.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES } from './names.js';
 import { drawItem, CONSUMABLES } from './items.js';
 import { run } from './run.js';
+import { saveRun, loadRun, clearSave, applySave } from './save.js';
 
 const WORLD_HINT = 'drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it · <b>I</b> inventory';
 const LOCAL_HINT = 'drag to orbit the diorama · click a site to visit it · <b>Esc</b> or ↩ to return';
@@ -61,16 +62,43 @@ localRig.enabled = false;
 const localView = new LocalView();
 const battle = new BattleSystem(renderer);
 
-let mode = 'world';          // 'world' | 'transition' | 'local' | 'battle'
+let mode = 'world';          // 'world' | 'transition' | 'local' | 'battle' | 'dead'
 let activeScene = 'world';   // 'world' | 'local' | 'battle'
 let followPlayer = true;
 let dive = null;
 let currentLocalTile = null;
 let battleReturn = null;     // { scene: 'world'|'local', tile }
 let exploreHintShown = false;
+let restoredRun = false;
+
+// ---- resume a saved run for this seed, if one survives -----------------
+{
+  const saved = loadRun(world);
+  if (saved) {
+    const tile = applySave(saved, world, worldView);
+    player.tile = tile;
+    player.group.position.set(tile.x, tile.topY, tile.z);
+    worldRig.panTo({ x: tile.x, z: tile.z }, { instant: true });
+    worldView.updateFog(tile, { animate: false });
+    for (const sid of run.clearedSites) {
+      const t = world.tiles.get(sid.split(':')[0]);
+      if (t) checkGlint(t);
+    }
+    restoredRun = true;
+    exploreHintShown = true;
+  }
+}
+
+let lastSave = 0;
+function saveNow(force = false) {
+  const now = performance.now();
+  if (!force && now - lastSave < 1200) return;
+  lastSave = now;
+  saveRun(world, player, worldView);
+}
 
 ui.init(world);
-refreshHud(world.start);
+refreshHud(player.tile);
 ui.setHint(WORLD_HINT);
 
 function refreshHud(tile) {
@@ -218,6 +246,7 @@ function travelTo(target, onArrive = null) {
         exploreHintShown = true;
         ui.toast('✦ Click the hex you stand on to explore it up close.', true);
       }
+      saveNow(true);
       if (onArrive) onArrive();
     });
 }
@@ -344,7 +373,7 @@ async function exitLocal() {
 
 // ---------------------------------------------------------------- battles ---
 
-async function startBattle({ team, title, onWin, siteId }) {
+async function startBattle({ team, title, onWin, siteId, waves = null }) {
   const from = mode; // 'world' or 'local'
   battleReturn = { scene: from === 'local' ? 'local' : 'world', tile: currentLocalTile };
   mode = 'transition';
@@ -355,53 +384,91 @@ async function startBattle({ team, title, onWin, siteId }) {
   if (ui.modalOpen) ui.closeModal();
   ui.fade(true);
   await delay(460);
+
+  const queue = waves ? waves.slice(1) : [];
+  const first = waves ? waves[0] : { team, title };
+
+  const handleEnd = async result => {
+    mode = 'transition';
+    ui.fade(true);
+    await delay(200);
+    if (result.lost) {
+      clearSave(world.seed);
+      activeScene = 'world';
+      mode = 'dead';
+      worldRig.enabled = false;
+      localRig.enabled = false;
+      ui.fade(false);
+      ui.showDeath(run, world);
+      return;
+    }
+    if (result.won && queue.length) {
+      // gauntlet continues: a breath, then the next chamber
+      const nxt = queue.shift();
+      run.hp = Math.min(run.stats.maxHP, run.hp + 4);
+      ui.toast(`A breath between chambers (+4 ❤) — deeper now.`, true);
+      activeScene = 'battle';
+      mode = 'battle';
+      battle.start({ team: nxt.team, title: nxt.title, onEnd: handleEnd });
+      ui.fade(false);
+      return;
+    }
+    if (result.won) {
+      if (siteId) {
+        run.clearedSites.add(siteId);
+        checkGlint(battleReturn.tile);
+      }
+      if (onWin) onWin();
+    }
+    // return to where we came from (a flee mid-gauntlet also lands here)
+    if (battleReturn.scene === 'local' && battleReturn.tile) {
+      const tile = battleReturn.tile;
+      localView.build(tile, world, sitesFor(tile));
+      localRig.enabled = true;
+      activeScene = 'local';
+      mode = 'local';
+      ui.setExploring(tile.name);
+      ui.setHint(LOCAL_HINT);
+      ui.showReturn(true);
+    } else {
+      activeScene = 'world';
+      worldRig.enabled = true;
+      mode = 'world';
+      ui.setHint(WORLD_HINT);
+      ui.showReturn(false);
+    }
+    refreshHud(player.tile);
+    saveNow(true);
+    ui.fade(false);
+  };
+
   activeScene = 'battle';
   mode = 'battle';
   ui.setHint('click or press <b>space</b> when the marker crosses the gold band');
-  battle.start({
-    team, title,
-    onEnd: async result => {
-      mode = 'transition';
-      ui.fade(true);
-      await delay(200);
-      if (result.lost) {
-        activeScene = 'world';
-        mode = 'dead';
-        worldRig.enabled = false;
-        localRig.enabled = false;
-        ui.fade(false);
-        ui.showDeath(run, world);
-        return;
-      }
-      if (result.won) {
-        if (siteId) {
-          run.clearedSites.add(siteId);
-          checkGlint(battleReturn.tile);
-        }
-        if (onWin) onWin();
-      }
-      // return to where we came from
-      if (battleReturn.scene === 'local' && battleReturn.tile) {
-        const tile = battleReturn.tile;
-        localView.build(tile, world, sitesFor(tile));
-        localRig.enabled = true;
-        activeScene = 'local';
-        mode = 'local';
-        ui.setExploring(tile.name);
-        ui.setHint(LOCAL_HINT);
-        ui.showReturn(true);
-      } else {
-        activeScene = 'world';
-        worldRig.enabled = true;
-        mode = 'world';
-        ui.setHint(WORLD_HINT);
-        ui.showReturn(false);
-      }
-      refreshHud(player.tile);
-      ui.fade(false);
-    },
-  });
+  battle.start({ team: first.team, title: first.title, onEnd: handleEnd });
   ui.fade(false);
+}
+
+// A dungeon descent: three chambers, then the Keeper hoarding its gift.
+function startGauntlet(site, tile) {
+  const biome = FOES[tile.biome] ? tile.biome : 'MEADOW';
+  const tier = world.regionOf(tile).tier;
+  const keeper = `Keeper of ${site.name.replace('Gate of ', '')}`;
+  startBattle({
+    siteId: site.id,
+    onWin: () => {
+      const got = run.gainShards(18 + tier * 8);
+      ui.toast(`⚑ The vault is broken open — ☆ ${got} and the Keeper's gift are yours.`, true);
+      const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 1234) * 0xffffffff));
+      const item = drawItem(rng, tile.biome, run.ownedIds);
+      if (item) grantItem(item);
+    },
+    waves: [
+      { team: { biome, tier, count: 2 }, title: `${site.name} · First Chamber` },
+      { team: { biome, tier: tier + 1, count: 2 }, title: `${site.name} · Second Chamber` },
+      { team: { biome, tier: tier + 1, count: 1, boss: true, bossName: keeper }, title: keeper },
+    ],
+  });
 }
 
 function checkGlint(tile) {
@@ -417,7 +484,7 @@ function grantItem(item) {
   const before = new Set(run.synergies.map(s => s.id));
   run.addItem(item);
   const fresh = run.synergies.filter(s => !before.has(s.id));
-  ui.showItemCard(item, fresh, () => refreshHud(player.tile));
+  ui.showItemCard(item, fresh, () => { refreshHud(player.tile); saveNow(true); });
 }
 
 function buildOffers(site, tile) {
@@ -456,6 +523,7 @@ function renderShop(site) {
         if (offer.kind === 'item') grantItem(offer.item);
         else { run.consumables[offer.id]++; ui.toast(`${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} acquired.`); }
         refreshHud(player.tile);
+        saveNow(true);
         renderShop(site);
       });
     }
@@ -478,6 +546,10 @@ const ACTION_LINES = {
 function handleAction(site, label, btn) {
   if (site.cleared && (site.type === 'battle' || site.type === 'pedestal' || site.subtype === 'cache' || site.subtype === 'mystery')) {
     ui.toast('That matter is already settled.');
+    return;
+  }
+  if (label.startsWith('⚔') && site.gauntlet) {
+    startGauntlet(site, currentLocalTile || player.tile);
     return;
   }
   if (label.startsWith('⚔') && site.team) {
@@ -513,6 +585,7 @@ function handleAction(site, label, btn) {
       for (const [k, v] of Object.entries(site.cacheConsumables)) run.consumables[k] += v;
       ui.toast('✸ The keg holds star-charges and one very nervous dew bottle.', true);
     }
+    saveNow(true);
     ui.closeModal();
     if (currentLocalTile) {
       localView.build(currentLocalTile, world, sitesFor(currentLocalTile));
@@ -535,6 +608,7 @@ function handleAction(site, label, btn) {
     run.shards = Math.max(0, run.shards + out.shards);
     run.clearedSites.add(site.id);
     refreshHud(player.tile);
+    saveNow(true);
     ui.modalOutcome(out.text + (out.shards ? `  (${out.shards > 0 ? '+' : ''}${out.shards} ☆)` : ''));
     btn.disabled = true;
     if (currentLocalTile) checkGlint(currentLocalTile);
@@ -587,13 +661,46 @@ function detonate() {
     world.revealSecret(secret);
     worldView.revealSecretTile(secret);
     worldView.updateFog(player.tile, { animate: false });
+    run.revealedSecrets.add(keyOf(secret.q, secret.r));
     ui.toast('✸ The blast peels the void back — a sealed hex stands revealed!', true);
   } else {
     ui.toast('✸ The blast echoes over nothing. The charge is spent; the void is unimpressed.');
   }
+  saveNow(true);
 }
 
 // ----------------------------------------------------------------- buttons ---
+
+ui.inventoryHandlers = {
+  useDew: () => {
+    if (run.consumables.dew <= 0 || run.hp >= run.stats.maxHP) return;
+    run.consumables.dew--;
+    run.hp = Math.min(run.stats.maxHP, run.hp + 15);
+    ui.toast('❋ The star-dew glows going down. +15 HP.');
+    refreshHud(player.tile);
+    ui.renderInventory(run);
+    saveNow(true);
+  },
+  useFeather: () => {
+    if (run.consumables.feather <= 0) return;
+    if (mode !== 'world' || player.isMoving) {
+      ui.toast('The feather needs open sky — return to the world map and stand still.');
+      return;
+    }
+    run.consumables.feather--;
+    player.tile = world.start;
+    player.path = [];
+    player.hop = null;
+    player.group.position.set(world.start.x, world.start.topY, world.start.z);
+    worldView.updateFog(world.start, { animate: false });
+    followPlayer = true;
+    worldRig.panTo({ x: world.start.x, z: world.start.z });
+    refreshHud(world.start);
+    ui.renderInventory(run);
+    ui.toast('➳ The feather remembers the way — you drift home to Starfall Vale.', true);
+    saveNow(true);
+  },
+};
 
 document.getElementById('btn-recenter').addEventListener('click', () => {
   if (mode !== 'world') return;
@@ -631,16 +738,38 @@ window.__vael = {
   get mode() { return mode; },
   get playerTile() { return player.tile; },
   get isMoving() { return player.isMoving; },
-  run, world, battle,
+  run, world, battle, view: worldView,
   pickAt: (x, y) => { const t = pickWorld(x, y); return t ? { q: t.q, r: t.r, name: t.name } : null; },
   travel: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t && !t.void) travelTo(t); },
+  warp: (q, r) => {
+    const t = world.tiles.get(q + ',' + r);
+    if (!t || t.void || mode !== 'world') return false;
+    player.path = []; player.hop = null;
+    player.tile = t;
+    player.group.position.set(t.x, t.topY, t.z);
+    run.hexesVisited.add(q + ',' + r);
+    worldView.updateFog(t, { animate: false });
+    worldRig.panTo({ x: t.x, z: t.z }, { instant: true });
+    refreshHud(t);
+    saveNow(true);
+    return true;
+  },
   testBattle: (tier = 1, biome = 'MEADOW', boss = false) =>
     startBattle({ team: { biome, tier, count: 2, boss }, title: 'Test Battle' }),
   openGateAt: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t?.gate) challengeGate(t); },
   detonate,
   lookAt: (x, z, dist) => { worldRig.panTo({ x, z }, { instant: true }); if (dist) { worldRig.dist = dist; worldRig.apply(); } },
+  localSites: () => currentLocalTile
+    ? sitesFor(currentLocalTile).map(s => ({ id: s.id, name: s.name, type: s.type, actions: s.actions, cleared: s.cleared }))
+    : [],
+  act: (id, label) => {
+    if (!currentLocalTile) return false;
+    const site = sitesFor(currentLocalTile).find(s => s.id === id);
+    if (site) handleAction(site, label, { disabled: false });
+    return !!site;
+  },
   smite: () => { for (const e of battle.enemies || []) if (!e.dead) e.hp = 1; },
-  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); refreshHud(player.tile); } }); },
+  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); refreshHud(player.tile); saveNow(true); } }); },
 };
 
 const clock = new THREE.Clock();
@@ -677,8 +806,12 @@ function loop() {
   if (firstFrame) {
     firstFrame = false;
     ui.loadingDone();
-    ui.toast(`You wake in <b>${world.start.name}</b>, beneath the light of ${world.sun.name}.`, true);
-    ui.toast('The rifts are sealed by warded causeways. Grow strong, then challenge the wardens.', true);
+    if (restoredRun) {
+      ui.toast(`The run continues — welcome back to <b>${player.tile.name}</b>.`, true);
+    } else {
+      ui.toast(`You wake in <b>${world.start.name}</b>, beneath the light of ${world.sun.name}.`, true);
+      ui.toast('The rifts are sealed by warded causeways. Grow strong, then challenge the wardens.', true);
+    }
   }
 }
 loop();
