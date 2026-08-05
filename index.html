@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vaeldrift — the Shattered Meridian</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="loading">
+    <div class="load-rune">ᛟ</div>
+    <div class="load-title">VAELDRIFT</div>
+    <div class="load-sub">the Shattered Meridian</div>
+    <div class="load-note">charting the starlit hexes…</div>
+  </div>
+
+  <div id="fade"></div>
+
+  <header id="hud">
+    <div class="hud-title">VAELDRIFT <span class="hud-runes">ᚨᛟᚱᚢᛗ</span></div>
+    <div class="hud-sub">the Shattered Meridian</div>
+    <div class="hud-loc" id="hud-loc">—</div>
+    <div class="hud-king" id="hud-king"></div>
+    <div class="hud-shards" id="hud-shards">☆ 10 star-shards</div>
+  </header>
+
+  <aside id="legend"></aside>
+
+  <div id="controls">
+    <button id="btn-recenter" title="Return the camera to your token">◎ Recenter</button>
+    <button id="btn-seed" title="Regenerate the world with a fresh seed">✦ New World</button>
+    <button id="btn-return" class="hidden" title="Rise back to the world map">↩ Return to World Map</button>
+  </div>
+
+  <footer id="hint">drag to pan · scroll to zoom · right-drag to orbit · click a hex to travel · click <b>your</b> hex to explore it</footer>
+
+  <div id="tooltip" class="hidden"></div>
+
+  <div id="modal-scrim" class="hidden">
+    <div id="modal">
+      <div id="modal-badge"></div>
+      <h2 id="modal-title"></h2>
+      <div id="modal-sub"></div>
+      <p id="modal-flavor"></p>
+      <div id="modal-extra"></div>
+      <div id="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
