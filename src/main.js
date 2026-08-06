@@ -15,6 +15,7 @@ import { ui } from './ui.js';
 import { makeTrader, mysteryOutcome, BIOMES, FOES } from './names.js';
 import { drawItem, CONSUMABLES } from './items.js';
 import { run } from './run.js';
+import { RoamerSystem } from './roamers.js';
 import { saveRun, loadRun, clearSave, applySave } from './save.js';
 import { audio } from './audio.js';
 import { meta } from './meta.js';
@@ -40,6 +41,8 @@ const worldCamera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.
 
 const worldView = new WorldView(world, worldScene);
 const player = new PlayerToken(worldScene, world.start);
+const roamers = new RoamerSystem(world);
+worldView.attachRoamers(roamers);
 worldView.updateFog(world.start, { animate: false });
 run.hexesVisited.add(keyOf(world.start.q, world.start.r));
 
@@ -77,7 +80,7 @@ let restoredRun = false;
 {
   const saved = loadRun(world);
   if (saved) {
-    const tile = applySave(saved, world, worldView);
+    const tile = applySave(saved, world, worldView, roamers);
     player.tile = tile;
     player.group.position.set(tile.x, tile.topY, tile.z);
     worldRig.panTo({ x: tile.x, z: tile.z }, { instant: true });
@@ -96,7 +99,7 @@ function saveNow(force = false) {
   const now = performance.now();
   if (!force && now - lastSave < 1200) return;
   lastSave = now;
-  saveRun(world, player, worldView);
+  saveRun(world, player, worldView, roamers);
 }
 
 ui.init(world);
@@ -106,7 +109,7 @@ ui.setHint(WORLD_HINT);
 function refreshHud(tile) {
   ui.setLocation(tile, kingdomOf(tile));
   const reg = world.regionOf(tile);
-  ui.setRegion(reg);
+  ui.setRegion(reg, threatFor(reg));
   ui.setShards(run.shards);
   ui.setStats(run);
   audio.setRegionMusic({
@@ -158,6 +161,21 @@ function biomeName(tile) { return (BIOMES[tile.biome] || {}).name || '—'; }
 
 function expectedPower(tier) { return 10 + tier * 13; }
 
+// The harsh floor: as the wanderer's power grows, every battle's effective
+// tier rises to meet it, so no region ever goes soft. (Base power is ~20.)
+function powerTier() { return Math.max(0, Math.floor((run.power - 18) / 12)); }
+
+function threatFor(region) {
+  const eff = Math.max(region.tier, powerTier());
+  const ratio = run.power / expectedPower(eff);
+  const t = ratio >= 1.35 ? { label: 'calm', color: '#7fd98a' }
+    : ratio >= 1.0 ? { label: 'even', color: '#ffd98a' }
+    : ratio >= 0.75 ? { label: 'dire', color: '#ff9a5a' }
+    : { label: 'deadly', color: '#ff5a7a' };
+  t.tier = eff;
+  return t;
+}
+
 dom.addEventListener('pointermove', e => {
   if (ui.modalOpen || mode === 'transition' || mode === 'battle') return;
   if (mode === 'world') {
@@ -197,6 +215,7 @@ dom.addEventListener('pointermove', e => {
         `<div class="tt-biome">${lm ? lm.type + ' · ' : ''}${biomeName(tile)} · ${reg.name}</div>` +
         `<div class="tt-king" style="color:${kHex}">${k ? k.name : 'The Driftlands'}</div>` +
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
+        (worldView.roamerOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#ff9a5a">⚔ a hunting pack prowls here</div>' : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
         extra,
         e.clientX, e.clientY
@@ -265,6 +284,14 @@ function travelTo(target, onArrive = null) {
       }));
       refreshHud(tile);
       if (followPlayer && !worldRig.dragMode) worldRig.panTo({ x: tile.x, z: tile.z });
+      // the world takes its turn: every roaming pack steps once per hop
+      const hunter = roamers.step(tile);
+      if (hunter) {
+        player.path = [];
+        player.onDone = null;
+        saveNow(true);
+        engageRoamer(hunter);
+      }
     },
     tile => {
       if (tile.landmark && tile.landmark.type !== 'gate') ui.toast(`You arrive at <b>${tile.name}</b>.`);
@@ -285,6 +312,18 @@ function revealRegionMemory(tile) {
   for (const t of reg.tiles || []) worldView.explored.add(keyOf(t.q, t.r));
   worldView.updateFog(tile, { animate: false });
   ui.toast(`The Meridian Compass charts ${reg.name} into memory.`, true);
+}
+
+function engageRoamer(pack) {
+  ui.toast(`⚔ ${pack.count > 1 ? 'A hunting pack falls' : 'A prowling foe falls'} upon you!`);
+  startBattle({
+    team: { biome: pack.biome, tier: pack.tier, count: pack.count, roamerId: pack.id },
+    title: pack.count > 1 ? 'The Hunting Pack' : 'The Prowler',
+    onWin: () => {
+      roamers.kill(pack.id);
+      announceFeats(meta.bump(s => { s.packs = (s.packs || 0) + 1; }));
+    },
+  });
 }
 
 // ----------------------------------------------------------------- gates ---
@@ -404,6 +443,11 @@ async function exitLocal() {
 // ---------------------------------------------------------------- battles ---
 
 async function startBattle({ team, title, onWin, siteId, waves = null }) {
+  // the harsh floor: authored tiers never lag the wanderer's power;
+  // bosses stand a step above it
+  const harden = t => t ? { ...t, tier: Math.max(t.tier ?? 0, powerTier() + (t.boss ? 1 : 0)) } : t;
+  team = harden(team);
+  if (waves) waves = waves.map(w => ({ ...w, team: harden(w.team) }));
   const from = mode; // 'world' or 'local'
   battleReturn = { scene: from === 'local' ? 'local' : 'world', tile: currentLocalTile };
   mode = 'transition';
@@ -452,6 +496,8 @@ async function startBattle({ team, title, onWin, siteId, waves = null }) {
       }
       if (onWin) onWin();
     }
+    // a fled-from pack loses your scent for a few hops
+    if (result.fled && battle.team?.roamerId != null) roamers.calm(battle.team.roamerId);
     // return to where we came from (a flee mid-gauntlet also lands here)
     if (battleReturn.scene === 'local' && battleReturn.tile) {
       const tile = battleReturn.tile;
@@ -526,10 +572,11 @@ function grantItem(item) {
   ui.showItemCard(item, fresh, () => { refreshHud(player.tile); saveNow(true); });
 }
 
-function buildOffers(site, tile) {
-  const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 553) * 0xffffffff));
+function buildOffers(site, tile, rngOverride = null) {
+  const rng = rngOverride || mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 553) * 0xffffffff));
   const tier = world.regionOf(tile).tier;
-  const markup = 1 + (run.flags.shopMarkup || 0);
+  // prices climb with the hoard: the more relics you carry, the dearer the world
+  const markup = (1 + (run.flags.shopMarkup || 0)) * (1 + run.items.length * 0.04);
   const offers = [
     { kind: 'consumable', id: 'charge', price: Math.round(6 * markup) },
     { kind: 'consumable', id: 'dew', price: Math.round(5 * markup) },
@@ -569,6 +616,22 @@ function renderShop(site) {
     }
     extra.appendChild(row);
   }
+  // a shard sink: gamble for fresh wares, dearer with every rummage
+  const tile = currentLocalTile || player.tile;
+  const cost = Math.round((8 + world.regionOf(tile).tier * 2) * (1 + (site.restocks || 0)));
+  const row = document.createElement('div');
+  row.className = 'ware';
+  row.innerHTML = `<span>↻ Fresh stock <span style="color:var(--ink-dim);font-size:12px">the trader rummages deeper into the cart</span></span><span class="price">☆ ${cost}</span>`;
+  row.style.cursor = 'pointer';
+  row.addEventListener('click', () => {
+    if (!run.spendShards(cost)) { ui.toast('Not enough star-shards for a rummage.'); return; }
+    site.restocks = (site.restocks || 0) + 1;
+    site.offers = buildOffers(site, tile, mulberry32((Math.random() * 2 ** 31) | 0));
+    refreshHud(player.tile);
+    saveNow(true);
+    renderShop(site);
+  });
+  extra.appendChild(row);
 }
 
 const ACTION_LINES = {
@@ -640,6 +703,18 @@ function handleAction(site, label, btn) {
       checkGlint(currentLocalTile);
     }
     refreshHud(player.tile);
+    return;
+  }
+  if (label === 'Offer Star-Shards') {
+    const cost = 10 + run.shrineHeals * 6;
+    if (run.hp >= run.stats.maxHP) { ui.toast('Your paper heart is already whole.'); return; }
+    if (!run.spendShards(cost)) { ui.toast(`The shrine asks ☆ ${cost} — more than you carry.`); return; }
+    run.shrineHeals++;
+    run.hp = run.stats.maxHP;
+    audio.sfxHeal();
+    ui.toast(`✚ The wayshrine drinks ☆ ${cost} of starlight and re-folds every crease. (next offering: ☆ ${10 + run.shrineHeals * 6})`, true);
+    refreshHud(player.tile);
+    saveNow(true);
     return;
   }
   if (label === 'Haggle') {
@@ -816,7 +891,7 @@ window.__vael = {
   get mode() { return mode; },
   get playerTile() { return player.tile; },
   get isMoving() { return player.isMoving; },
-  run, world, battle, view: worldView, meta, audio, announceFeats,
+  run, world, battle, view: worldView, meta, audio, announceFeats, roamers, powerTier,
   pickAt: (x, y) => { const t = pickWorld(x, y); return t ? { q: t.q, r: t.r, name: t.name } : null; },
   travel: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t && !t.void) travelTo(t); },
   warp: (q, r) => {

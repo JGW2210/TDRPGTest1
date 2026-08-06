@@ -11,7 +11,7 @@ import { BIOMES, CELESTIALS } from './names.js';
 import { run } from './run.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeMistTexture, makeStarTexture,
-  makeGlowTexture, makeTraderTexture, makeLabelTexture,
+  makeGlowTexture, makeTraderTexture, makeLabelTexture, makeEnemyTexture,
 } from './textures.js';
 
 const FOG_TINT = new THREE.Color(0x2c3564);
@@ -802,10 +802,8 @@ export class WorldView {
   // -------------------------------------------------- site glints & cracks ---
   _buildGlints() {
     const { world } = this;
-    // wilderness hexes that hold sites shimmer so the sparse map reads
-    const glintTiles = world.land.filter(t =>
-      !t.landmark && !t.gate && !['ROAD', 'BRIDGE', 'SEA'].includes(t.biome)
-      && hash2(t.q, t.r, world.seed + 92) < (t.region >= 100 ? 0.6 : 0.45));
+    // budgeted site hexes shimmer so the sparse map reads
+    const glintTiles = world.land.filter(t => t.hasSite && !t.landmark && !t.gate);
     // secrets get a slot too, for when they open
     const capacity = glintTiles.length + world.secrets.length;
     const geo = new THREE.OctahedronGeometry(0.11);
@@ -905,6 +903,49 @@ export class WorldView {
   }
 
   traderOnTile(tile) { return this.traders.some(t => t.tile === tile); }
+
+  // -------------------------------------------------------- roaming packs ---
+  // Sprites for the RoamerSystem: hop animation when a pack steps, fog-aware
+  // visibility, and a snap on respawn. Textures cached per biome+dread band.
+  attachRoamers(sys) {
+    this._roamerTex = {};
+    this.roamerSprites = sys.roamers.map(r => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._roamerTexture(r), transparent: true }));
+      const size = 1.0 + r.count * 0.18 + (r.tier >= 3 ? 0.15 : 0);
+      sp.scale.set(size, size, 1);
+      sp.center.set(0.5, 0.1);
+      sp.renderOrder = 4;
+      sp.position.set(r.tile.x, r.tile.topY + 0.04, r.tile.z);
+      this.layer.add(sp);
+      return { r, sprite: sp, hop: null };
+    });
+    sys.onMove = (r, from, to) => {
+      const rs = this.roamerSprites.find(x => x.r === r);
+      if (rs) rs.hop = { from, to, t: 0 };
+    };
+    sys.onRespawn = r => {
+      const rs = this.roamerSprites.find(x => x.r === r);
+      if (rs) {
+        rs.hop = null;
+        rs.sprite.position.set(r.tile.x, r.tile.topY + 0.04, r.tile.z);
+      }
+    };
+    this.roamerSystem = sys;
+  }
+
+  _roamerTexture(r) {
+    const dread = r.tier >= 3;
+    const key = r.biome + (dread ? ':d' : '');
+    if (!this._roamerTex[key]) {
+      const base = '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).color)
+        .offsetHSL(0, 0.1, dread ? -0.16 : -0.08).getHexString();
+      this._roamerTex[key] = makeEnemyTexture(base, dread ? '#ff5a7a' : '#ffd24a',
+        1 + (hash2(r.q, r.r, 55) * 3 | 0), hash2(r.r, r.q, 56));
+    }
+    return this._roamerTex[key];
+  }
+
+  roamerOnTile(tile) { return !!this.roamerSystem?.at(tile); }
 
   // ------------------------------------------------------- hover highlight ---
   _buildHighlight() {
@@ -1099,6 +1140,26 @@ export class WorldView {
         }
       }
       tr.sprite.visible = tr.tile.fogState >= 2;
+    }
+
+    for (const rs of this.roamerSprites || []) {
+      const r = rs.r;
+      if (rs.hop) {
+        rs.hop.t += dt / 0.4;
+        const p = Math.min(1, rs.hop.t);
+        const e = p * p * (3 - 2 * p);
+        const { from, to } = rs.hop;
+        rs.sprite.position.set(
+          from.x + (to.x - from.x) * e,
+          from.topY + (to.topY - from.topY) * e + Math.sin(p * Math.PI) * 0.55 + 0.04,
+          from.z + (to.z - from.z) * e
+        );
+        if (p >= 1) rs.hop = null;
+      } else {
+        rs.sprite.position.set(r.tile.x, r.tile.topY + 0.04 + Math.sin(t * 2.3 + r.id) * 0.05, r.tile.z);
+      }
+      const fogTile = rs.hop ? rs.hop.from : r.tile;
+      rs.sprite.visible = !r.dead && fogTile.fogState >= 2;
     }
   }
 }

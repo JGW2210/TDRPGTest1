@@ -20,7 +20,7 @@ export const ITEMS = [
     core: true, stats: { atk: 2 }, tags: [], flags: { chargeDropBonus: 0.15 },
     desc: '+2 ATK. Foes drop star-charges more often.',
     flavor: 'Still warm. Still stubborn.' }),
-  I('dawn_thimble', 'MEADOW', 'r', 'Dawn Thimble', {
+  I('dawn_thimble', 'MEADOW', 'a', 'Dawn Thimble', {
     core: true, stats: {}, tags: ['sun'], flags: { firstHitPerfect: true },
     desc: 'Your first strike each battle is automatically Perfect.',
     flavor: 'It fits the finger you point with.' }),
@@ -48,7 +48,7 @@ export const ITEMS = [
     stats: { luck: 8 }, tags: ['bloom', 'sun'], flags: { visionPlus: 1 },
     desc: '+8% crit. Your vision reaches one hex further.',
     flavor: 'It only pretends to be trapped.' }),
-  I('boar_saddle', 'MEADOW', 'r', 'Runeboar War-Saddle', {
+  I('boar_saddle', 'MEADOW', 'u', 'Runeboar War-Saddle', {
     stats: { atk: 3, maxHP: 6, spd: -1 }, tags: ['bloom'],
     desc: '+3 ATK, +6 max HP, −1 SPD.',
     flavor: 'The boar is invisible, absent, or hypothetical. The saddle works regardless.' }),
@@ -88,11 +88,11 @@ export const ITEMS = [
     stats: { maxHP: 8, spd: -1 }, tags: ['bloom'],
     desc: '+8 max HP, −1 SPD.',
     flavor: 'They anchor beautifully. That is the problem and the point.' }),
-  I('murmur_moth', 'FOREST', 'r', 'Murmuring Moth', {
+  I('murmur_moth', 'FOREST', 'a', 'Murmuring Moth', {
     stats: { dodge: 10 }, tags: ['moon', 'bloom'], flags: { firstStrikeDodge: true },
     desc: '+10% dodge. You always dodge the first blow of each battle.',
     flavor: 'It whispers incoming trajectories, slightly ahead of schedule.' }),
-  I('heartwood_flask', 'FOREST', 'r', 'Heartwood Flask', {
+  I('heartwood_flask', 'FOREST', 'u', 'Heartwood Flask', {
     stats: { maxHP: 12 }, tags: ['bloom'], flags: { killHeal: 3 },
     desc: '+12 max HP. Heal 3 whenever a foe falls.',
     flavor: 'Sap of a tree that outlived four empires and one very persistent beaver.' }),
@@ -127,7 +127,7 @@ export const ITEMS = [
     stats: { atk: 2 }, tags: [], flags: { stunOnPerfect: 25 },
     desc: '+2 ATK. Perfect strikes have a 25% chance to stun.',
     flavor: 'Rung once per winter, and never indoors.' }),
-  I('summit_sigil', 'MOUNTAIN', 'r', 'Sigil of the Hollow Summit', {
+  I('summit_sigil', 'MOUNTAIN', 'u', 'Sigil of the Hollow Summit', {
     stats: { atk: 2, maxHP: 8, spd: -2 }, tags: [], flags: { shieldHits: 1 },
     desc: '+2 ATK, +8 max HP, −2 SPD. One extra halved hit each battle.',
     flavor: 'The stair down still goes down. Bring the sigil, not the question.' }),
@@ -206,7 +206,7 @@ export const ITEMS = [
     ability: { id: 'gamble', name: 'Revenant’s Gamble', cd: 3, kind: 'gamble', desc: 'Strike for anywhere between nothing and 300% ATK.' },
     desc: '+8% crit. Grants ability: Revenant’s Gamble (0–300% ATK, 3-turn cooldown).',
     flavor: 'Carved from something that also gambled.' }),
-  I('glasscoil_fang', 'DESERT', 'u', 'Glasscoil Fang', {
+  I('glasscoil_fang', 'DESERT', 'c', 'Glasscoil Fang', {
     stats: { atk: 2, luck: 6 }, tags: ['glass'],
     desc: '+2 ATK, +6% crit.',
     flavor: 'Transparent about its intentions.' }),
@@ -248,7 +248,7 @@ export const ITEMS = [
     stats: { atk: 3, maxHP: -3 }, tags: ['card'],
     desc: '+3 ATK, −3 max HP. Something always falls.',
     flavor: 'Reversed, it means the same thing, faster.' }),
-  I('hibernal_fat', 'TUNDRA', 'u', 'Hibernal Reserve', {
+  I('hibernal_fat', 'TUNDRA', 'c', 'Hibernal Reserve', {
     stats: { maxHP: 14, spd: -2 }, tags: [],
     desc: '+14 max HP, −2 SPD.',
     flavor: 'The mammoths’ secret is that winter is a meal.' }),
@@ -256,7 +256,7 @@ export const ITEMS = [
     stats: { atk: 2 }, tags: ['moon'], flags: { chillOnHit: 1 },
     desc: '+2 ATK. Your strikes Chill (stacking −1 foe ATK).',
     flavor: 'Shed in courtship, gathered in war.' }),
-  I('pale_moon_card', 'TUNDRA', 'r', 'Pale Card: “The Moon”', {
+  I('pale_moon_card', 'TUNDRA', 'u', 'Pale Card: “The Moon”', {
     stats: { luck: 8, dodge: 8 }, tags: ['card', 'moon'],
     desc: '+8% crit, +8% dodge.',
     flavor: 'The deck’s favorite. The deck denies having favorites.' }),
@@ -275,7 +275,7 @@ export const ITEMS = [
     core: true, stats: {}, tags: ['water'], flags: { perfectHeal: 3 },
     desc: 'Perfect strikes restore 3 HP.',
     flavor: 'Still singing, very quietly, about you.' }),
-  I('fathom_pearl', 'SEA', 'r', 'Fathom Pearl', {
+  I('fathom_pearl', 'SEA', 'u', 'Fathom Pearl', {
     core: true, stats: { maxHP: 5, atk: 1, spd: 1, luck: 5, shardGain: -33 }, tags: ['water'],
     desc: '+5 HP, +1 ATK, +1 SPD, +5% crit — but shard finds −33%.',
     flavor: 'Everything the deep owns, it lends at interest.' }),
@@ -296,7 +296,7 @@ export const ITEMS = [
     stats: { shardGain: 20 }, tags: ['water'],
     desc: 'Shard finds +20%.',
     flavor: 'What goes out comes back with arithmetic.' }),
-  I('reflection_locket', 'SEA', 'u', 'Locket of Your Reflection', {
+  I('reflection_locket', 'SEA', 'c', 'Locket of Your Reflection', {
     stats: { dodge: 12 }, tags: ['water', 'glass'],
     desc: '+12% dodge.',
     flavor: 'It ducks a half-second before you need to.' }),
@@ -409,7 +409,7 @@ export const ITEMS = [
     core: true, stats: { maxHP: 6, atk: 1 }, tags: [], flags: { shieldHits: 1 },
     desc: '+6 max HP, +1 ATK. One extra halved hit each battle.',
     flavor: 'Stands where you tell it. Falls where it chooses.' }),
-  I('moth_lantern', 'ANY', 'u', 'Moth-Tender’s Lantern', {
+  I('moth_lantern', 'ANY', 'c', 'Moth-Tender’s Lantern', {
     core: true, stats: { luck: 6 }, tags: ['moon'],
     desc: '+6% crit.',
     flavor: 'The moths do the aiming.' }),
@@ -425,7 +425,7 @@ export const ITEMS = [
     stats: { atk: 2, luck: 6 }, tags: ['sun', 'moon'],
     desc: '+2 ATK, +6% crit. Counts as both sun and moon.',
     flavor: 'Do not open both hands at once.' }),
-  I('marching_drum', 'ANY', 'u', 'Ghost Marching-Drum', {
+  I('marching_drum', 'ANY', 'c', 'Ghost Marching-Drum', {
     stats: { atk: 1, spd: 2 }, tags: [],
     desc: '+1 ATK, +2 SPD.',
     flavor: 'Its regiment still keeps step, thinly.' }),
@@ -461,7 +461,7 @@ export const ITEMS = [
     stats: { shardGain: 30 }, tags: [], flags: { killShard: 1 },
     desc: 'Shard finds +30%, +1 shard per felled foe.',
     flavor: 'The Meridian owes. You collect.' }),
-  I('paper_armor', 'ANY', 'u', 'Folded Paper Armor', {
+  I('paper_armor', 'ANY', 'c', 'Folded Paper Armor', {
     stats: { maxHP: 9, dodge: -5 }, tags: [],
     desc: '+9 max HP, −5% dodge. Crinkles heroically.',
     flavor: 'Surprisingly effective, insultingly loud.' }),
@@ -469,11 +469,11 @@ export const ITEMS = [
     stats: { atk: 2, spd: -1 }, tags: [],
     desc: '+2 ATK, −1 SPD.',
     flavor: 'Sharpens blades and attention spans.' }),
-  I('third_lung', 'ANY', 'u', 'A Third Lung', {
+  I('third_lung', 'ANY', 'c', 'A Third Lung', {
     stats: { maxHP: 7, spd: 1 }, tags: [],
     desc: '+7 max HP, +1 SPD.',
     flavor: 'Where do you keep it? Wrong question. Where does it keep you?' }),
-  I('nettle_wine', 'ANY', 'u', 'Nettle Wine, Vintage Rift', {
+  I('nettle_wine', 'ANY', 'c', 'Nettle Wine, Vintage Rift', {
     stats: { atk: 2, maxHP: 4, dodge: -4 }, tags: ['bloom'],
     desc: '+2 ATK, +4 max HP, −4% dodge.',
     flavor: 'Bold, punishing, notes of regret and juniper.' }),
@@ -481,7 +481,7 @@ export const ITEMS = [
     stats: { timingBonus: 1, spd: 1 }, tags: [],
     desc: 'Timing multipliers +0.15, +1 SPD. It chirps exactly on the beat.',
     flavor: 'Wind it and the whole world keeps better time.' }),
-  I('gamblers_iou', 'ANY', 'r', 'A Gambler’s IOU', {
+  I('gamblers_iou', 'ANY', 'u', 'A Gambler’s IOU', {
     stats: { luck: 14, shardGain: -20 }, tags: [],
     desc: '+14% crit, −20% shard finds.',
     flavor: 'Signed in someone else’s hand. Cash it carefully.' }),
