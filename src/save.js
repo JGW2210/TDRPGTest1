@@ -6,9 +6,9 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 1;
+const VERSION = 2; // v2: roamer state + shrineHeals; v1 saves are discarded
 
-export function saveRun(world, player, worldView) {
+export function saveRun(world, player, worldView, roamers = null) {
   try {
     const data = {
       v: VERSION,
@@ -16,6 +16,8 @@ export function saveRun(world, player, worldView) {
       consumables: run.consumables,
       shards: run.shards,
       hp: run.hp,
+      shrineHeals: run.shrineHeals,
+      roamers: roamers ? roamers.serialize() : null,
       reviveUsed: run.reviveUsed,
       bossesDown: run.bossesDown,
       battlesWon: run.battlesWon,
@@ -48,7 +50,7 @@ export function clearSave(seed) {
 
 // Re-hydrate the run and world visuals from a saved snapshot.
 // Returns the tile the player should stand on.
-export function applySave(data, world, worldView) {
+export function applySave(data, world, worldView, roamers = null) {
   for (const id of data.items) {
     const item = ITEMS.find(i => i.id === id);
     if (item) run.items.push(item);
@@ -56,6 +58,8 @@ export function applySave(data, world, worldView) {
   run._recompute();
   run.consumables = { charge: 0, dew: 0, feather: 0, ...data.consumables };
   run.shards = data.shards;
+  run.shrineHeals = data.shrineHeals | 0;
+  if (roamers && data.roamers) roamers.restore(data.roamers);
   run.reviveUsed = !!data.reviveUsed;
   run.bossesDown = data.bossesDown | 0;
   run.battlesWon = data.battlesWon | 0;

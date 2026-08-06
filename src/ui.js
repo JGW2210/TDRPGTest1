@@ -46,9 +46,12 @@ export const ui = {
 
   setShards(n) { $('hud-shards').textContent = `☆ ${n} star-shards`; },
 
-  setRegion(region) {
+  setRegion(region, threat) {
     $('hud-region').innerHTML = region
       ? `◈ ${region.name} · <span style="color:#ffd98a">tier ${region.tier}</span>`
+        + (threat
+          ? ` · <span style="color:${threat.color}">☠ ${threat.label}${threat.tier > region.tier ? ` (scaled ${threat.tier})` : ''}</span>`
+          : '')
       : '';
   },
 

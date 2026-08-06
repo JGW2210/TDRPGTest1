@@ -16,6 +16,7 @@ class Run {
     this.battlesWon = 0;
     this.hexesVisited = new Set();
     this.reviveUsed = false;
+    this.shrineHeals = 0;          // wayshrine offerings this run (cost escalates)
     this._recompute();
   }
 

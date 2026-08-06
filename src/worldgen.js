@@ -449,6 +449,80 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 12: regional site budgets --------------------------------------
+  // The wilderness no longer sprouts sites on nearly every hex. Each region
+  // seeds a small fixed troupe of visitable places — traders, mysteries,
+  // caches, at most two item pedestals — and beyond them the horizon is
+  // honestly empty. Battles out here come from the packs that roam it.
+  {
+    const brng = mulberry32((seed ^ 0x5173) >>> 0);
+    for (const reg of regions) {
+      const cands = reg.tiles
+        .filter(t => placeable(t) && !t.crackHint
+          && !settlements.some(s => hexDist(t.q, t.r, s.q, s.r) < 2)
+          && hexDist(t.q, t.r, start.q, start.r) >= 2)
+        .sort((a, b) => hash2(b.q, b.r, seed + 93) - hash2(a.q, a.r, seed + 93));
+      const kinds = ['pedestal', 'trader', 'cache'];
+      if (brng() < 0.5) kinds.push('pedestal');
+      if (brng() < 0.6) kinds.push('cache');
+      const extras = 2 + Math.floor(brng() * 3); // 2-4 mysteries and small events
+      for (let i = 0; i < extras; i++) kinds.push('side');
+      const chosen = [];
+      for (const t of cands) {
+        if (!kinds.length) break;
+        if (chosen.some(c => hexDist(c.q, c.r, t.q, t.r) < 3)) continue;
+        t.siteKind = kinds.shift();
+        t.hasSite = true;
+        chosen.push(t);
+      }
+    }
+    for (const sat of satellites) {
+      const kinds = ['pedestal', 'cache', 'side'];
+      const cands = sat.tiles
+        .filter(t => !t.landmark)
+        .sort((a, b) => hash2(b.q, b.r, seed + 93) - hash2(a.q, a.r, seed + 93));
+      const chosen = [];
+      for (const t of cands) {
+        if (!kinds.length) break;
+        if (chosen.some(c => hexDist(c.q, c.r, t.q, t.r) < 2)) continue;
+        t.siteKind = kinds.shift();
+        t.hasSite = true;
+        chosen.push(t);
+      }
+    }
+  }
+
+  // ---- pass 13: roaming pack spawns ----------------------------------------
+  // a handful of visible hunters per region; they drift while the wanderer
+  // moves and give battle on contact (state lives in RoamerSystem)
+  const roamerSpawns = [];
+  {
+    const rrng = mulberry32((seed ^ 0x9e37) >>> 0);
+    let nextId = 0;
+    const spawnIn = (tilesArr, regId, tier, n) => {
+      const cands = tilesArr
+        .filter(t => !t.void && !t.landmark && !t.gate && t.biome !== 'BRIDGE' && !t.siteKind
+          && hexDist(t.q, t.r, start.q, start.r) >= 6
+          && !settlements.some(s => hexDist(t.q, t.r, s.q, s.r) < 3))
+        .sort((a, b) => hash2(b.q, b.r, seed + 94) - hash2(a.q, a.r, seed + 94));
+      const placed = [];
+      for (const t of cands) {
+        if (placed.length >= n) break;
+        if (placed.some(p => hexDist(p.q, p.r, t.q, t.r) < 4)) continue;
+        placed.push(t);
+        roamerSpawns.push({
+          id: nextId++, q: t.q, r: t.r, region: regId, tier,
+          biome: t.biome in BIOMES ? t.biome : 'MEADOW',
+          count: 1 + (rrng() < 0.45 ? 1 : 0) + (tier >= 3 && rrng() < 0.4 ? 1 : 0),
+        });
+      }
+    };
+    for (const reg of regions) {
+      spawnIn(reg.tiles, reg.id, reg.tier, 2 + Math.floor(rrng() * 2) + (reg.tier >= 3 ? 1 : 0));
+    }
+    satellites.forEach((sat, i) => spawnIn(sat.tiles, 100 + i, 4, 2));
+  }
+
   // ---- names ---------------------------------------------------------------
   for (const t of land) {
     if (t.landmark) t.name = t.landmark.name;
@@ -501,6 +575,7 @@ export function generateWorld(seed) {
     } else if (lm?.type === 'shrine') {
       sites = [makeSide(rng), battleSite()];
       sites[0].subtype = 'shrine';
+      sites[0].actions = [...sites[0].actions, 'Offer Star-Shards']; // paid full heal, dearer each time
     } else if (lm?.type === 'satboss') {
       const def = SATELLITES.find(s => s.id === lm.satellite);
       sites = [{
@@ -509,10 +584,6 @@ export function generateWorld(seed) {
         actions: ['⚔ Challenge'],
         team: { biome: tile.biome, tier: 4, count: 1, boss: true, satellite: def.id, bossName: def.boss.name },
       }, pedestalSite('ASTRAL')];
-    } else if (tile.biome === 'ROAD') {
-      sites = rng() < 0.3 ? [battleSite()] : [];
-    } else if (tile.biome === 'BRIDGE') {
-      sites = rng() < 0.35 ? [battleSite(1)] : [];
     } else if (tile.secretRevealed) {
       const roll = rng();
       if (roll < CONFIG.secrets.pedestalChance) sites = [pedestalSite(pickPoolFor(tile, regionOf(tile)))];
@@ -529,14 +600,31 @@ export function generateWorld(seed) {
           actions: ['Open the Cache'], cacheConsumables: { charge: 2, dew: 1 },
         }];
       }
-    } else {
-      // wilderness: sparse and purposeful — many hexes hold nothing at all
-      if (hash2(tile.q, tile.r, seed + 92) < (tile.region >= 100 ? 0.6 : 0.45)) {
-        sites.push(battleSite());
-        if (rng() < 0.18) sites.push(pedestalSite(pickPoolFor(tile, regionOf(tile))));
-        if (rng() < 0.3) sites.push(makeSide(rng));
-        if (rng() < 0.25) sites.push(makeSide(rng));
+    } else if (tile.siteKind) {
+      // the region's budgeted troupe: the only marks on an otherwise empty wild
+      const reg = regionOf(tile);
+      if (tile.siteKind === 'pedestal') {
+        sites = [pedestalSite(pickPoolFor(tile, reg))];
+      } else if (tile.siteKind === 'trader') {
+        sites = [makeTrader(rng, reg.tier >= 3 ? 3 : 2, null)];
+      } else if (tile.siteKind === 'cache') {
+        sites = [rng() < 0.65
+          ? {
+            type: 'side', subtype: 'cache', name: 'Buried Shard-Cache',
+            flavor: 'A hollow beneath a leaning stone, packed with shards someone meant to come back for. They will not be back.',
+            actions: ['Open the Cache'], cacheShards: 10 + Math.floor(rng() * 8) + reg.tier * 5,
+          }
+          : {
+            type: 'side', subtype: 'cache', name: 'Abandoned Supply Drop',
+            flavor: 'A crate on cracked runners, still lashed tight. The manifest lists three items and one apology.',
+            actions: ['Open the Cache'], cacheConsumables: rng() < 0.5 ? { charge: 2 } : { dew: 2 },
+          }];
+      } else {
+        sites = [makeSide(rng)];
+        if (rng() < 0.4) sites.push(makeSide(rng));
       }
+    } else {
+      sites = []; // empty horizon — what moves out here moves on its own
     }
     if (lm && sites.length < 5 && rng() < 0.5) sites.push(makeSide(rng));
     sites.forEach((s, i) => { s.id = k + ':' + i; });
@@ -553,7 +641,7 @@ export function generateWorld(seed) {
 
   return {
     seed, tiles, list, land, start, volcano,
-    kingdoms, kingdomById, dungeons, shrines, traders,
+    kingdoms, kingdomById, dungeons, shrines, traders, roamerSpawns,
     regions, regionOf, gates, satellites, secrets,
     sun: { name: 'Vael, the Undying Sun', flavor: 'The world’s heart, still burning in its crater of sky.' },
     getSites,

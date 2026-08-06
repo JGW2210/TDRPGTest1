@@ -55,6 +55,7 @@ export class BattleSystem {
     this.firstDodgeUsed = false;
     this.frenzyAtk = 0;
     this.shieldLeft = (run.flags.firstHitHalved ? 1 : 0) + (run.flags.shieldHits || 0);
+    this.hexTurns = 0;   // mystic hex: rounds of narrowed timing bands
     this.rng = mulberry32((run.battlesWon * 7919 + team.tier * 131 + 17) >>> 0);
     audio.battleStart({ boss: !!team.boss });
 
@@ -220,6 +221,7 @@ export class BattleSystem {
         e.stun ? `<span class="st stun">✶stun</span>` : '',
         e.charging ? `<span class="st charge">⚡charging</span>` : '',
         e.enraged ? `<span class="st charge">enraged</span>` : '',
+        e.warded ? `<span class="st chill">◈warded</span>` : '',
       ].join('');
       const intent = (run.flags.seeIntent && !e.dead)
         ? `<div class="b-intent">${e.charging ? '⚡ unleashing a heavy blow' : e.intent === 'special' ? '☄ gathering power' : '🗡 will attack'}</div>` : '';
@@ -234,7 +236,7 @@ export class BattleSystem {
     const pct = Math.max(0, run.hp / run.stats.maxHP * 100);
     $('b-player').innerHTML = `<div class="b-name">You, the Star-Wanderer</div>
       <div class="b-hpbar"><div class="b-hpfill player" style="width:${pct}%"></div></div>
-      <div class="b-sub">${run.hp} / ${run.stats.maxHP} HP · ATK ${this._playerAtk()} · SPD ${run.stats.spd}${this.playerGuardBonus ? ' · <span class="st chill">guarded</span>' : ''}</div>`;
+      <div class="b-sub">${run.hp} / ${run.stats.maxHP} HP · ATK ${this._playerAtk()} · SPD ${run.stats.spd}${this.playerGuardBonus ? ' · <span class="st chill">guarded</span>' : ''}${this.hexTurns > 0 ? ' · <span class="st burn">hexed</span>' : ''}</div>`;
   }
 
   _playerAtk() {
@@ -297,9 +299,10 @@ export class BattleSystem {
       el.classList.remove('hidden');
       $('b-timing-label').textContent = kind === 'strike' ? 'Strike! (click / space)' : 'Block!';
       const widen = kind === 'block' ? (run.stats.blockBonus ? 1.5 : 1) : 1;
+      const shrink = this.hexTurns > 0 ? 0.55 : 1; // mystic hex narrows the gold band
       let [p0, p1] = CONFIG.battle.timing.perfect;
       if (run.hasSynergy('eclipse')) { p0 -= 0.04; }
-      const mid = (p0 + p1) / 2, half = (p1 - p0) / 2 * widen;
+      const mid = (p0 + p1) / 2, half = (p1 - p0) / 2 * widen * shrink;
       this.zones = { p0: mid - half, p1: mid + half, g0: CONFIG.battle.timing.good[0], g1: CONFIG.battle.timing.good[1] };
       const zp = el.querySelector('.bt-zone.perfect');
       zp.style.left = (this.zones.p0 * 100) + '%';
@@ -363,6 +366,11 @@ export class BattleSystem {
     if (run.flags.critShatter && this.shatterNext) { dmg += this.shatterNext; this.shatterNext = 0; }
     if (run.flags.executeBonus && target.hp / target.maxHP < 0.3) dmg *= 1.5;
     if (target.role === 'guard') dmg *= 0.75;
+    if (target.warded) {
+      dmg *= 0.55;
+      target.warded = false;
+      this._log('The rune-wall takes the brunt and shatters.');
+    }
     dmg = Math.max(1, Math.round(dmg));
 
     this._burst(target.mesh.position.clone().add(new THREE.Vector3(0, 1, 0.3)));
@@ -533,6 +541,10 @@ export class BattleSystem {
       e.enraged = true;
       e.atk = Math.round(e.atk * 1.3 * 10) / 10;
       this._log(`${e.name} is ENRAGED!`);
+    } else if (!e.boss && e.role === 'brute' && !e.enraged && e.hp < e.maxHP * 0.4) {
+      e.enraged = true;
+      e.atk = Math.round(e.atk * 1.25 * 10) / 10;
+      this._log(`${e.name} bellows and ENRAGES!`);
     }
   }
 
@@ -579,9 +591,23 @@ export class BattleSystem {
         await this._enemyStrike(e, 2.0, true);
       } else if (e.role === 'mystic' && this.rng() < 0.3) {
         e.intent = 'special';
-        this._log(`${e.name} hexes you with cold starlight…`);
-        run.hp -= Math.max(1, Math.round(e.atk * 0.5));
-        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${Math.max(1, Math.round(e.atk * 0.5))}`, 'dmg');
+        if ((this.team.tier ?? 0) >= 2 && this.hexTurns === 0 && this.rng() < 0.5) {
+          this.hexTurns = 2;
+          this._log(`${e.name} knots the light around your hands — your timing bands narrow!`);
+        } else {
+          this._log(`${e.name} hexes you with cold starlight…`);
+          run.hp -= Math.max(1, Math.round(e.atk * 0.5));
+          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${Math.max(1, Math.round(e.atk * 0.5))}`, 'dmg');
+        }
+        this._refreshCards();
+        await wait(550);
+      } else if (e.role === 'guard' && (this.team.tier ?? 0) >= 2 && this.rng() < 0.3
+        && this._aliveEnemies().some(o => o !== e && !o.warded)) {
+        const ally = this._aliveEnemies().filter(o => o !== e && !o.warded)
+          .sort((a, b) => a.hp - b.hp)[0];
+        ally.warded = true;
+        e.intent = 'special';
+        this._log(`${e.name} raises a rune-wall around ${ally.name}.`);
         this._refreshCards();
         await wait(550);
       } else if (this.rng() < (e.boss ? 0.1 + 0.05 * (this.team.tier || 1) : 0.13)) {
@@ -592,12 +618,18 @@ export class BattleSystem {
         continue;
       } else {
         await this._enemyStrike(e, 1);
+        // swift foes dart in a second time, lighter but relentless
+        if (e.role === 'swift' && (this.team.tier ?? 0) >= 2 && !e.dead && run.hp > 0 && this.rng() < 0.35) {
+          this._log(`${e.name} darts in again!`);
+          await this._enemyStrike(e, 0.5);
+        }
       }
       if (run.hp <= 0) return this._defeat();
       this._refreshCards();
       await wait(280);
     }
     this.turn++;
+    if (this.hexTurns > 0) this.hexTurns--;
     for (const k of Object.keys(this.abilityCds)) this.abilityCds[k] = Math.max(0, this.abilityCds[k] - 1);
     if (this._aliveEnemies().length === 0) return this._victory();
     if (run.hasSynergy('verdance') && run.hp < run.stats.maxHP) {
