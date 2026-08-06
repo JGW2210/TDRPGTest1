@@ -24,9 +24,9 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    Constellation of Echoes meta-progression, run persistence, dungeon
    gauntlets, out-of-battle consumables.
 
-Branch workflow: develop on `claude/hex-map-rpg-game-9qu1nl`; after each PR
-merges, reset the branch from `origin/main` (`git checkout -B <branch>
-origin/main`) before new work. The user asks for PR + merge explicitly.
+Branch workflow: develop on the session's designated `claude/*` branch
+(it changes per session); reset it from `origin/main` (`git checkout -B
+<branch> origin/main`) before new work. The user asks for PR + merge explicitly.
 A stop-hook checks for unpushed commits — always push before ending a turn.
 
 ## User's locked design decisions (from poll rounds)
@@ -86,14 +86,24 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   loadRun/clearSave/applySave. Saved: items(ids), consumables, shards, hp,
   cleared/gates/secrets/visited, explored fog, player pos. Death clears.
 - `audio.js` — singleton `audio`. 5 drone voices (2 saws + triangle →
-  lowpass → gain), MUSIC table per biome: root midi + chord pair
-  (semitone arrays) + motif mode + chime timbre. Chords flip every ~14s
-  (5s morph); region change = 6s morph keyed `biome:lit|dark:regionId`
-  (tier ≥ 4 → DARK minor-b6/dim override). Leitmotifs: deterministic 4-6
-  notes from region id, chimes = additive-partial bells / filtered plucks
-  / vibrato breath through feedback delay. Battle: interval-driven kick
-  patterns (taiko for boss) on percBus. ~20 sfx methods. Init on first
-  gesture; `♪` toggle persisted (`vaeldrift_audio`).
+  lowpass → gain → stereo panner w/ slow drift), MUSIC table per biome:
+  root midi + chord trio a/b/c (cycle a→b→a→c every ~14s, 5s morph; c is
+  the passing chord) + motif mode + chime timbre + arp `pulse` (sec/note).
+  Region change = 6s morph keyed `biome:tier:regionId`. Gradual dread
+  from tier 2 (`currentDef.dread` 0–1): saw detune spread, filter
+  dimming, sub-root rumble osc; tier ≥ 4 still swaps the full DARK
+  palette (root −2). Harp-pulse arpeggio of current chord tones (biome
+  tempo, slowed/quieted by dread, ducked in battle); bass voice
+  occasionally walks two scale tones then settles home
+  (`cancelScheduledValues` in `_applyChord` clears pending walks).
+  Leitmotifs: deterministic 4-6 notes from region id, echoed once a
+  fifth up / quieter / opposite pan through the delay; towns+capitals
+  (`town` flag passed by main.js from `tile.landmark`) fade in a warm
+  triangle voice and speed the motif rate. Chimes = additive-partial
+  bells / filtered plucks / vibrato breath through feedback delay.
+  Battle: interval-driven kick patterns (taiko for boss) on percBus.
+  ~20 sfx methods. Init on first gesture; `♪` toggle persisted
+  (`vaeldrift_audio`).
 - `textures.js` — canvas art: player/trader/enemy(parametric)/mystery
   sprites, nebula, rune rings, mist, glow, labels (`userData.w/h`).
 - `world3d.js` — WorldView: `layer` group (breathes) holds instanced
@@ -166,9 +176,11 @@ give(itemId), openGateAt(q,r), detonate(), localSites(), act(siteId,label)`.
 ## Known caveats / open items
 
 - **Audio has never been heard** — verified structurally only (ctx state,
-  region-key morphs, layer attach/detach). Chord voicings follow the
-  intended theory; expect a by-ear tuning pass (mix levels, motif
-  frequency, morph time, dread intensity) once the user listens.
+  region-key morphs, layer attach/detach, chord-step/arp/dread state).
+  This includes the music-pass layer (passing chords, harp arp, bass
+  walks, stereo drift, gradual dread, town warmth, motif echo): the
+  authored `c` chords and all new mix levels follow intended theory but
+  await a by-ear tuning pass once the user listens.
 - Balance: tier curve beyond ~2 is untested by humans; boss ×2.6/×1.2 was
   softened once already. Item power at 12+ relics untested.
 - Rarity authoring skew: 51 rare vs 34 common authored; draw weights

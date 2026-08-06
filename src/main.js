@@ -111,6 +111,7 @@ function refreshHud(tile) {
   ui.setStats(run);
   audio.setRegionMusic({
     biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    town: tile.landmark?.type === 'town' || tile.landmark?.type === 'capital',
   });
   announceFeats(meta.bump(s => {
     s.maxItems = Math.max(s.maxItems, run.items.length);
@@ -756,7 +757,10 @@ ui.inventoryHandlers = {
 const bootAudio = () => {
   audio.init();
   const reg = world.regionOf(player.tile);
-  audio.setRegionMusic({ biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed });
+  audio.setRegionMusic({
+    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    town: player.tile.landmark?.type === 'town' || player.tile.landmark?.type === 'capital',
+  });
   updateAudioButton();
 };
 window.addEventListener('pointerdown', bootAudio, { once: true });
