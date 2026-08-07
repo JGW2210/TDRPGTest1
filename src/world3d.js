@@ -222,6 +222,9 @@ export class WorldView {
     const g = new THREE.Group();
     this.scene.add(g);
     this.celestialSpinners = [];
+    // where each speaking/gazeable body hangs, for the sky-event camera:
+    // { x, y, z, frame } — frame is how far back the camera stands
+    this.skyBodies = {};
     const R = this.worldRadius;
     const seed = this.world.seed;
     const rng = (a, b) => hash2(a | 0, b | 0, seed + 8888);
@@ -249,6 +252,7 @@ export class WorldView {
       const { x, z } = sat.center;
       const holder = new THREE.Group();
       holder.position.set(x, 7.2, z);
+      this.skyBodies[sat.def.id] = { x, y: 7.2, z, frame: 16 };
 
       if (sat.def.id === 'luna') {
         // the Pale Daughter: a cratered silver moon in a halo of dust
@@ -415,6 +419,7 @@ export class WorldView {
       const holder = new THREE.Group();
       const a = -1.0; // a gap between the satellites
       holder.position.set(Math.cos(a) * R * 1.6, 5, Math.sin(a) * R * 1.6);
+      this.skyBodies.giant = { x: holder.position.x, y: 6, z: holder.position.z, frame: 38 };
       const body = new THREE.Mesh(
         new THREE.IcosahedronGeometry(8.5, 1),
         new THREE.MeshStandardMaterial({
@@ -471,6 +476,7 @@ export class WorldView {
       if (anchor.id === 'giant') continue;   // built above
       const holder = new THREE.Group();
       holder.position.set(anchor.x, 6.5, anchor.z);
+      this.skyBodies[anchor.id] = { x: anchor.x, y: 6.5, z: anchor.z, frame: anchor.id === 'third_sister' ? 15 : 11 };
       if (anchor.id === 'third_sister') {
         // the unshattered moon, quietly whole
         const moon = new THREE.Mesh(

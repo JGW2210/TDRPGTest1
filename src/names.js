@@ -468,6 +468,38 @@ export const SKY_VOICES = [
   },
 ];
 
+// ---------------------------------------------------------- sky gazes ---
+// Standing on a wandering world, its body hangs close enough to study.
+// These are quieter than the SKY_VOICES — no gift, no summons; the view
+// waits to be chosen, and can be chosen again.
+
+export const SKY_GAZES = [
+  {
+    id: 'luna', name: 'The Pale Daughter',
+    lines: [
+      'She hangs close enough to touch — a silver daughter, her craters like thumbprints in unfired clay.',
+      'The tide she keeps has no sea left to pull. She pulls anyway. Somewhere beneath your feet, the dust obeys.',
+      'Her light settles on your shoulders like a hand that has decided not to weigh anything.',
+    ],
+  },
+  {
+    id: 'rubidus', name: 'Rubidus, the Rust Wanderer',
+    lines: [
+      'The red wanderer turns overhead, wearing its two rings like argument and rebuttal.',
+      'Flakes of oxidized sky drift down so slowly they may never land. The ground here is the color of patience.',
+      'Something inside it still cycles — one great piston-beat, once an age. You feel it in your teeth.',
+    ],
+  },
+  {
+    id: 'viridian', name: 'The Viridian Comet',
+    lines: [
+      'A garden falls forever above you, its frozen tail streaming like a hedge that lost an argument with the wind.',
+      'Seeds ride the tail. Some have waited ten thousand years for soil. One of them has noticed yours.',
+      'The green head flares gently as it turns — a lighthouse for things that grow.',
+    ],
+  },
+];
+
 // ------------------------------------------------------ nebula sites ---
 
 export const NEBULA_NAMES = ['The Cradle Nebula', 'The Widow’s Veil'];

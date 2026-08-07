@@ -8,7 +8,7 @@
     // Cache-buster: bump BUILD each release and every module re-fetches
     // fresh — the import map below rewrites all internal imports to
     // versioned URLs, so stale browser caches can never mix old and new.
-    window.BUILD = '13';
+    window.BUILD = '14';
     (() => {
       const mods = [
         'audio', 'battle', 'cameraRig', 'config', 'hex', 'items', 'localview',
@@ -23,7 +23,7 @@
       document.currentScript.after(im);
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=13" />
+  <link rel="stylesheet" href="css/style.css?v=14" />
 </head>
 <body>
   <div id="app"></div>
@@ -52,6 +52,7 @@
   <button id="btn-menu" title="The wanderer's menu (Esc)">ᛟ menu</button>
 
   <div id="controls">
+    <button id="btn-skyview" class="hidden" title="The sky leans close here — look up"></button>
     <button id="btn-inventory" title="Your items, abilities and synergies (I)">🎒 inventory</button>
     <button id="btn-detonate" title="Detonate a star-charge where you stand — sealed hexes crack open">✸ detonate</button>
     <button id="btn-recenter" title="Return the camera to your token">◎ recenter</button>
@@ -61,6 +62,12 @@
   <footer id="hint">drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it</footer>
 
   <div id="tooltip" class="hidden"></div>
+
+  <div id="skyevent" class="hidden">
+    <div class="se-name" id="se-name"></div>
+    <div class="se-line" id="se-line"></div>
+    <div class="se-hint" id="se-hint">click to continue ▸</div>
+  </div>
 
   <div id="modal-scrim" class="hidden">
     <div id="modal">
