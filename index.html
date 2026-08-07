@@ -8,7 +8,7 @@
     // Cache-buster: bump BUILD each release and every module re-fetches
     // fresh — the import map below rewrites all internal imports to
     // versioned URLs, so stale browser caches can never mix old and new.
-    window.BUILD = '11';
+    window.BUILD = '12';
     (() => {
       const mods = [
         'audio', 'battle', 'cameraRig', 'config', 'hex', 'items', 'localview',
@@ -23,7 +23,7 @@
       document.currentScript.after(im);
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
 </head>
 <body>
   <div id="app"></div>
@@ -79,6 +79,7 @@
     <div id="itemcard">
       <div class="ic-glow"></div>
       <div class="ic-kicker" id="ic-kicker">A GIFT, FACE-DOWN</div>
+      <img id="ic-icon" alt="" />
       <h2 id="ic-name"></h2>
       <div id="ic-desc"></div>
       <p id="ic-flavor"></p>
@@ -127,7 +128,18 @@
         <div class="bt-zone perfect"></div>
         <div class="bt-marker"></div>
       </div>
+      <div class="bt-gather"></div>
       <div class="bt-label" id="b-timing-label">Strike!</div>
+    </div>
+    <div id="b-lanes" class="hidden">
+      <div class="bl-window">
+        <div class="bl-lanebg l0"></div>
+        <div class="bl-lanebg l1"></div>
+        <div class="bl-lanebg l2"></div>
+        <div class="bl-hitline"></div>
+      </div>
+      <div class="bl-keys"><span>A</span><span>S</span><span>D</span></div>
+      <div class="bl-label" id="b-lanes-label">Block!</div>
     </div>
     <div id="b-float"></div>
   </div>

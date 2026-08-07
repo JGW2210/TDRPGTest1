@@ -228,11 +228,29 @@ button {
 }
 #inv-items .inv-item {
   margin: 0; padding: 9px 0; font-size: 12.5px; line-height: 1.5;
+  display: flex; gap: 12px; align-items: flex-start;
 }
 #inv-items .inv-item + .inv-item { border-top: 1px solid rgba(126, 140, 255, 0.1); }
 #inv-items .inv-item b { color: #fff; }
 #inv-items .inv-item .pool { font-size: 10px; letter-spacing: 0.18em; color: var(--ink-dim); }
 #inv-items .inv-item .fx { color: #a8bfff; }
+.inv-icon {
+  width: 44px; height: 44px; flex: none; margin-top: 2px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+/* the wanderer, as the hoard has re-inked them */
+#inv-portrait {
+  float: right; width: 84px; height: 105px; margin: -6px 0 6px 12px;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.7));
+}
+.ware-icon {
+  width: 30px; height: 30px; vertical-align: middle; margin-right: 8px;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
+}
+#ic-icon {
+  width: 86px; height: 86px; margin: 4px auto 10px; display: block;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.7));
+}
 
 #echo-summary { font-size: 13px; color: #c6ccf2; padding-bottom: 10px; margin-bottom: 8px; line-height: 1.6; }
 #echo-summary b { color: var(--gold); }
@@ -353,6 +371,8 @@ body.in-battle #btn-menu { display: none; }
 #b-menu button.ability { color: #c9b4ff; }
 #b-menu button.ability:hover:not(:disabled) { color: #e2d4ff; text-shadow: var(--tsh), 0 0 16px rgba(190, 150, 255, 0.6); }
 #b-menu button.item { color: #ffd98a; }
+#b-menu button.guard { color: #9fd4e8; }
+#b-menu button.guard:hover:not(:disabled) { color: #d0f0ff; text-shadow: var(--tsh), 0 0 16px rgba(140, 210, 240, 0.6); }
 #b-menu button.ghost { color: var(--ink-faint); font-size: 13.5px; }
 #b-menu button.ghost:hover { color: var(--ink-dim); }
 #b-timing {
@@ -366,6 +386,8 @@ body.in-battle #btn-menu { display: none; }
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(126, 140, 255, 0.14) inset;
   overflow: hidden;
 }
+/* while the energy coalesces, the whole track breathes in from the dark */
+#b-timing.gathering .bt-track { opacity: calc(0.15 + 0.85 * var(--gather, 0)); }
 .bt-zone { position: absolute; top: 0; bottom: 0; }
 .bt-zone.good { background: rgba(130, 180, 255, 0.3); box-shadow: 0 0 12px rgba(130, 180, 255, 0.4); }
 .bt-zone.perfect { background: rgba(240, 196, 106, 0.65); box-shadow: 0 0 14px rgba(240, 196, 106, 0.7); }
@@ -373,9 +395,84 @@ body.in-battle #btn-menu { display: none; }
   position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px;
   background: #fff; box-shadow: 0 0 12px #fff; border-radius: 2px;
 }
+.bt-gather {
+  position: absolute; top: 6px; width: 30px; height: 30px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 240, 200, 0.95), rgba(240, 196, 106, 0.5) 45%, transparent 70%);
+  box-shadow: 0 0 20px rgba(240, 196, 106, 0.8);
+  opacity: 0; pointer-events: none;
+}
 .bt-label {
   text-align: center; font-size: 13.5px; color: #ffe2a8; margin-top: 8px;
   letter-spacing: 0.22em; text-shadow: var(--tsh);
+}
+
+/* ---------- block lanes — a falling rhythm of shapes (A / S / D) ---------- */
+#b-lanes {
+  position: absolute; bottom: 196px; left: 50%; transform: translateX(-50%);
+  width: 240px; pointer-events: none;
+}
+#b-lanes.hidden { display: none; }
+#b-lanes.coalesce { animation: lanesin 0.4s ease; }
+@keyframes lanesin {
+  from { opacity: 0; transform: translateX(-50%) scale(0.94); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+.bl-window {
+  position: relative; height: 216px; overflow: hidden; border-radius: 10px;
+  background: linear-gradient(to bottom, rgba(8, 10, 26, 0.05), rgba(8, 10, 26, 0.55) 35%, rgba(16, 20, 44, 0.8));
+  box-shadow: 0 0 0 1px rgba(126, 140, 255, 0.14) inset, 0 2px 18px rgba(0, 0, 0, 0.5);
+}
+.bl-lanebg { position: absolute; top: 0; bottom: 0; width: 33.33%; }
+.bl-lanebg.l0 { left: 0; }
+.bl-lanebg.l1 { left: 33.33%; border-left: 1px solid rgba(126, 140, 255, 0.12); }
+.bl-lanebg.l2 { left: 66.66%; border-left: 1px solid rgba(126, 140, 255, 0.12); }
+.bl-hitline {
+  position: absolute; left: 5px; right: 5px; bottom: 27px; height: 3px; border-radius: 2px;
+  background: linear-gradient(90deg, rgba(240, 196, 106, 0.15), rgba(240, 196, 106, 0.9), rgba(240, 196, 106, 0.15));
+  box-shadow: 0 0 14px rgba(240, 196, 106, 0.55);
+}
+.bl-note {
+  position: absolute; width: 46px; height: 20px; margin-left: -23px;
+  border-radius: 6px; opacity: 0;
+}
+.bl-note.l0 { left: 16.66%; background: rgba(130, 190, 255, 0.9); box-shadow: 0 0 10px rgba(130, 190, 255, 0.7); }
+.bl-note.l1 { left: 50%; background: rgba(240, 196, 106, 0.9); box-shadow: 0 0 10px rgba(240, 196, 106, 0.7); }
+.bl-note.l2 { left: 83.33%; background: rgba(196, 150, 255, 0.9); box-shadow: 0 0 10px rgba(196, 150, 255, 0.7); }
+.bl-note.wide {
+  left: 50%; width: 212px; margin-left: -106px; height: 24px; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 110, 80, 0.75), rgba(255, 150, 90, 0.95), rgba(255, 110, 80, 0.75));
+  box-shadow: 0 0 18px rgba(255, 110, 80, 0.8);
+}
+.bl-note.trap {
+  width: 34px; height: 24px; margin-left: -17px; border-radius: 0;
+  background: rgba(255, 70, 90, 0.8); box-shadow: 0 0 10px rgba(255, 70, 90, 0.6);
+  clip-path: polygon(50% 0, 65% 30%, 100% 30%, 78% 55%, 90% 100%, 50% 75%, 10% 100%, 22% 55%, 0 30%, 35% 30%);
+}
+.bl-note.struck { animation: notehit 0.28s ease forwards; }
+@keyframes notehit { to { transform: scale(1.8); opacity: 0; } }
+.bl-note.missed { opacity: 0.3 !important; filter: grayscale(0.7); }
+.bl-note.sprung { animation: trapspring 0.35s ease forwards; }
+@keyframes trapspring { 30% { transform: scale(2); } to { transform: scale(0.3); opacity: 0; } }
+.bl-note.passed { opacity: 0.15 !important; }
+.bl-judge {
+  position: absolute; bottom: 46px; transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 0.16em; color: #fff; text-shadow: var(--tsh);
+  animation: floatup 0.7s ease-out forwards; white-space: nowrap;
+}
+.bl-judge.perfect { color: var(--gold); font-weight: bold; }
+.bl-judge.good { color: #9fb4ff; }
+.bl-judge.miss { color: #ff8a7a; }
+.bl-judge.trap { color: #ff5a7a; font-weight: bold; }
+.bl-judge.warded { color: #9fe8c8; }
+.bl-keys { display: flex; margin-top: 6px; }
+.bl-keys span {
+  flex: 1; text-align: center; font-size: 12px; letter-spacing: 0.2em;
+  color: var(--ink-dim); text-shadow: var(--tsh);
+}
+.bl-label {
+  text-align: center; font-size: 13px; color: #ffe2a8; margin-top: 6px;
+  letter-spacing: 0.18em; text-shadow: var(--tsh);
 }
 #b-float { position: absolute; inset: 0; overflow: hidden; }
 .b-num {

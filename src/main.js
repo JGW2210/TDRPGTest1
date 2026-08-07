@@ -14,6 +14,7 @@ import { BattleSystem } from './battle.js';
 import { ui } from './ui.js';
 import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES } from './names.js';
 import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
+import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
 import { RoamerSystem } from './roamers.js';
 import { saveRun, loadRun, clearSave, applySave } from './save.js';
@@ -161,7 +162,10 @@ const gateLocked = t => t.gate && !run.openedGates.has(keyOf(t.q, t.r));
 
 function biomeName(tile) { return (BIOMES[tile.biome] || {}).name || '—'; }
 
-function expectedPower(tier) { return 10 + tier * 13; }
+// What the land expects of you at each depth — fitted to the measured power
+// of a wanderer who gathered ~70% of the previous areas' relics. At that
+// pace every tier reads "even"; underfarm and the threat turns dire.
+function expectedPower(tier) { return 14 + tier * 8; }
 
 // The harsh floor: as the wanderer's power grows, every battle's effective
 // tier rises to meet it, so no region ever goes soft. (Base power is ~20.)
@@ -568,7 +572,7 @@ async function startBattle({ team, title, onWin, siteId, waves = null }) {
 
   activeScene = 'battle';
   mode = 'battle';
-  ui.setHint('click or press <b>space</b> when the marker crosses the gold band');
+  ui.setHint('strike: <b>click / space</b> on the gold band · block: <b>A S D</b> as the shapes reach the line');
   battle.start({ team: first.team, title: first.title, onEnd: handleEnd });
   ui.fade(false);
 }
@@ -755,7 +759,7 @@ function renderShop(site) {
     const row = document.createElement('div');
     row.className = 'ware';
     const label = offer.kind === 'item'
-      ? `<b>${offer.item.name}</b> <span style="color:var(--ink-dim);font-size:12px">${offer.item.desc}</span>`
+      ? `<img class="ware-icon" alt="" src="${makeItemIconURL(offer.item)}" /><b>${offer.item.name}</b> <span style="color:var(--ink-dim);font-size:12px">${offer.item.desc}</span>`
       : `${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name}${offer.stock > 1 ? ` ×${offer.stock}` : ''} <span style="color:var(--ink-dim);font-size:12px">${CONSUMABLES[offer.id].desc}</span>`;
     row.innerHTML = `<span>${label}</span><span class="price">${sold ? 'sold out' : '☆ ' + offer.price}</span>`;
     if (!sold) {

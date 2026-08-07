@@ -1,17 +1,23 @@
-// The roguelike layer: ~150 relics in biome-linked pools, rarity-tiered
+// The roguelike layer: ~190 relics in biome-linked pools, rarity-tiered
 // (c common / u uncommon / r rare / a astral), drawn blind. `core` items are
 // in the pools from the first run; the rest join via Echo feats (meta.js).
 //
 // stat keys: maxHP, atk, spd, luck (crit %), dodge (%), shardGain (%),
 //            timingBonus, blockBonus
-// flag keys are read by the battle engine / world systems.
+// flag keys are read by the battle engine / world systems. Combat-rhythm
+// flags (round 12): noteSlow (block-shapes fall slower), riposte (perfect
+// blocks strike back), trapWard (traps forgiven per battle), chainKeeper
+// (chain-saves per battle), heavyPlus (Meteor Edge perfect bonus),
+// gatherCalm (energy coalesces longer — easier reads), dodgePlus (wider
+// crush leap-window), poiseful (good Swift Cuts grant poise), interruptGood
+// (good Meteors interrupt), veilSight (the sand-veil cannot hide timing).
 
 import { pick } from './rng.js';
 
 const I = (id, pool, rarity, name, def) => ({ id, pool, rarity, name, ...def });
 
 export const ITEMS = [
-  // ════════════════════════════════════════════════════════ MEADOW (10) ═══
+  // ════════════════════════════════════════════════════════ MEADOW (14) ═══
   I('clover_locket', 'MEADOW', 'u', 'Cloverheart Locket', {
     core: true, stats: { maxHP: 10, atk: -1 }, tags: ['bloom'], flags: { afterBattleHeal: 3 },
     desc: '+10 max HP, −1 ATK. Heal 3 after each battle.',
@@ -52,8 +58,24 @@ export const ITEMS = [
     stats: { atk: 3, maxHP: 6, spd: -1 }, tags: ['bloom'],
     desc: '+3 ATK, +6 max HP, −1 SPD.',
     flavor: 'The boar is invisible, absent, or hypothetical. The saddle works regardless.' }),
+  I('steady_teapot', 'MEADOW', 'c', 'The Unhurried Teapot', {
+    core: true, stats: { maxHP: 4 }, tags: ['bloom'], flags: { noteSlow: 0.1 },
+    desc: '+4 max HP. Falling block-shapes descend 10% slower.',
+    flavor: 'It has never once boiled early. It will not start for a war.' }),
+  I('scarecrow_glove', 'MEADOW', 'u', 'Scarecrow’s Spare Glove', {
+    stats: { maxHP: 3 }, tags: ['bloom'], flags: { riposte: 2 },
+    desc: '+3 max HP. Perfect blocks answer for 2 damage.',
+    flavor: 'It held a pole for forty years. Your wrist is a promotion.' }),
+  I('bee_metronome', 'MEADOW', 'r', 'Beekeeper’s Metronome', {
+    stats: { timingBonus: 1 }, tags: ['bloom'], flags: { noteSlow: 0.08 },
+    desc: 'Timing multipliers +0.15; block-shapes fall 8% slower.',
+    flavor: 'The hive keeps 4/4. The honey keeps the metronome.' }),
+  I('harvest_bell', 'MEADOW', 'u', 'Harvest Bell', {
+    stats: { atk: 1 }, tags: ['sun'], flags: { heavyPlus: 0.3 },
+    desc: '+1 ATK. A perfect Meteor Edge lands +0.3× harder.',
+    flavor: 'Rung once at cutting time. Everything that stands, falls.' }),
 
-  // ════════════════════════════════════════════════════════ FOREST (10) ═══
+  // ════════════════════════════════════════════════════════ FOREST (14) ═══
   I('owlbat_whistle', 'FOREST', 'u', 'Owlbat Whistle', {
     core: true, stats: {}, tags: [],
     ability: { id: 'echo_shriek', name: 'Echo Shriek', cd: 3, kind: 'aoe', mult: 0.7, desc: 'Strike every foe for 70% ATK.' },
@@ -96,8 +118,24 @@ export const ITEMS = [
     stats: { maxHP: 12 }, tags: ['bloom'], flags: { killHeal: 3 },
     desc: '+12 max HP. Heal 3 whenever a foe falls.',
     flavor: 'Sap of a tree that outlived four empires and one very persistent beaver.' }),
+  I('patient_stump', 'FOREST', 'c', 'The Patient Stump', {
+    core: true, stats: { maxHP: 5, spd: -1 }, tags: ['bloom'], flags: { noteSlow: 0.12 },
+    desc: '+5 max HP, −1 SPD. Block-shapes fall 12% slower.',
+    flavor: 'Sit. Watch. The forest has seen every trick fall twice.' }),
+  I('trapwise_fern', 'FOREST', 'u', 'Trap-Wise Fern', {
+    stats: { dodge: 5 }, tags: ['bloom'], flags: { trapWard: 1 },
+    desc: '+5% dodge. The first trap-shape you spring each battle fizzles.',
+    flavor: 'It grew back after every deadfall. It knows the click by heart.' }),
+  I('woodpecker_tempo', 'FOREST', 'u', 'Woodpecker’s Tempo', {
+    stats: { spd: 1 }, tags: ['bloom'], flags: { poiseful: true },
+    desc: '+1 SPD. A good Swift Cut settles your stance as surely as a perfect (poise).',
+    flavor: 'Four beats to the bark, none of them wasted.' }),
+  I('deadfall_lesson', 'FOREST', 'r', 'The Deadfall’s Lesson', {
+    stats: {}, tags: ['bloom'], flags: { trapWard: 1, riposte: 3 },
+    desc: 'Your first sprung trap each battle fizzles; Perfect blocks answer for 3.',
+    flavor: 'Taught once, to whatever walked away.' }),
 
-  // ══════════════════════════════════════════════════════ MOUNTAIN (10) ═══
+  // ══════════════════════════════════════════════════════ MOUNTAIN (14) ═══
   I('echo_hammer', 'MOUNTAIN', 'r', 'Echo Hammer', {
     core: true, stats: {}, tags: [], flags: { perfectEcho: 0.5 },
     desc: 'Perfect strikes echo, repeating for 50% damage.',
@@ -139,8 +177,24 @@ export const ITEMS = [
     stats: { dodge: 15, spd: 2, atk: 2 }, tags: [],
     desc: '+15% dodge, +2 SPD, +2 ATK.',
     flavor: 'Shed mid-shriek, caught mid-fall, worn mid-legend.' }),
+  I('ram_gauntlet', 'MOUNTAIN', 'u', 'Ram-Horn Gauntlet', {
+    stats: { atk: 1, spd: -1 }, tags: [], flags: { heavyPlus: 0.4 },
+    desc: '+1 ATK, −1 SPD. A perfect Meteor Edge lands +0.4× harder.',
+    flavor: 'The ram apologizes to nothing below the treeline.' }),
+  I('ledge_chalk', 'MOUNTAIN', 'c', 'Ledge-Walker’s Chalk', {
+    core: true, stats: { spd: 1 }, tags: [], flags: { dodgePlus: 1 },
+    desc: '+1 SPD. The leap-window on crushing blows is 25% wider.',
+    flavor: 'Marks the spot your feet will need before your eyes agree.' }),
+  I('stone_metronome', 'MOUNTAIN', 'r', 'Metronome of Standing Stone', {
+    stats: { timingBonus: 1 }, tags: [], flags: { gatherCalm: 0.35 },
+    desc: 'Timing multipliers +0.15; your energy gathers 35% longer — more time to read each bar.',
+    flavor: 'It ticks in geologic time, rounded down for you.' }),
+  I('oxbell', 'MOUNTAIN', 'u', 'Ox-Bell of the High Pass', {
+    stats: { atk: 2 }, tags: [], flags: { interruptGood: true },
+    desc: '+2 ATK. A good Meteor Edge also knocks apart a gathering blow.',
+    flavor: 'The avalanche hears it and, out of respect, waits.' }),
 
-  // ═══════════════════════════════════════════════════════ VOLCANO (10) ═══
+  // ═══════════════════════════════════════════════════════ VOLCANO (14) ═══
   I('emberheart', 'VOLCANO', 'r', 'Emberheart', {
     core: true, stats: {}, tags: ['ember'], flags: { burnOnHit: 2, waterWeak: 2 },
     desc: 'Your strikes Burn (2/turn, 2 turns). Take +2 damage from water foes.',
@@ -183,8 +237,24 @@ export const ITEMS = [
     stats: { atk: 4, maxHP: 8 }, tags: ['ember', 'card'], flags: { burnOnHit: 2 },
     desc: '+4 ATK, +8 max HP. Your strikes Burn (2/turn, 2 turns).',
     flavor: 'The Choir’s final chord, cast in cooling stone. Wear the crescendo.' }),
+  I('quench_hiss', 'VOLCANO', 'c', 'Quench-Hiss Rhythm', {
+    core: true, stats: { maxHP: 4 }, tags: ['ember'], flags: { noteSlow: 0.08 },
+    desc: '+4 max HP. Block-shapes fall 8% slower.',
+    flavor: 'The forge breathes in. The steel remembers the beat.' }),
+  I('brand_iron', 'VOLCANO', 'u', 'Smith’s Branding Iron', {
+    stats: { atk: 1 }, tags: ['ember'], flags: { heavyPlus: 0.35 },
+    desc: '+1 ATK. A perfect Meteor Edge lands +0.35× harder.',
+    flavor: 'It leaves the same mark on iron, oak and reputations.' }),
+  I('slag_counter', 'VOLCANO', 'r', 'Counterweight of Slag', {
+    stats: { spd: -1 }, tags: ['ember'], flags: { riposte: 4 },
+    desc: '−1 SPD. Perfect blocks answer for 4 damage.',
+    flavor: 'What the volcano discards still weighs an argument’s worth.' }),
+  I('ash_bead', 'VOLCANO', 'u', 'Ashen Focus-Bead', {
+    stats: { luck: 4 }, tags: ['ember'], flags: { gatherCalm: 0.3 },
+    desc: '+4% crit. Your energy gathers 30% longer before every bar.',
+    flavor: 'Worry it clockwise. The eruption postpones.' }),
 
-  // ════════════════════════════════════════════════════════ DESERT (10) ═══
+  // ════════════════════════════════════════════════════════ DESERT (14) ═══
   I('glass_quill', 'DESERT', 'r', 'Glass Quill', {
     core: true, stats: { luck: 12 }, tags: ['glass'], flags: { critShatter: 2 },
     desc: '+12% crit. Crits shatter: your next strike gains +2 damage.',
@@ -226,8 +296,24 @@ export const ITEMS = [
     stats: { atk: 5, spd: -2 }, tags: ['sun', 'glass'], flags: { fullHPAtk: 3 },
     desc: '+5 ATK, −2 SPD, +3 more ATK at full HP.',
     flavor: 'Whatever is hammered here keeps its shadow forever.' }),
+  I('still_air_lens', 'DESERT', 'r', 'Lens of Still Air', {
+    stats: { luck: 4 }, tags: ['glass'], flags: { veilSight: true },
+    desc: '+4% crit. The sand-veil can no longer hide your timing.',
+    flavor: 'Ground from a noon with no wind in it.' }),
+  I('scorpion_hilt', 'DESERT', 'u', 'Scorpion-Hilt Dagger', {
+    stats: { luck: 4 }, tags: [], flags: { riposte: 3 },
+    desc: '+4% crit. Perfect blocks answer for 3 damage.',
+    flavor: 'Strikes back on principle. The principle is spite.' }),
+  I('dune_drum', 'DESERT', 'c', 'Dune-Skin Drum', {
+    core: true, stats: { spd: 1 }, tags: [], flags: { noteSlow: 0.08 },
+    desc: '+1 SPD. Block-shapes fall 8% slower.',
+    flavor: 'The dunes march to it, a grain at a time.' }),
+  I('viper_patience', 'DESERT', 'r', 'The Viper’s Patience', {
+    stats: { spd: -1 }, tags: [], flags: { heavyPlus: 0.5 },
+    desc: '−1 SPD. A perfect Meteor Edge lands +0.5× harder.',
+    flavor: 'Hours of stillness, priced into one motion.' }),
 
-  // ════════════════════════════════════════════════════════ TUNDRA (10) ═══
+  // ════════════════════════════════════════════════════════ TUNDRA (14) ═══
   I('frostmarrow_ring', 'TUNDRA', 'u', 'Frostmarrow Ring', {
     core: true, stats: {}, tags: ['moon'], flags: { chillOnHit: 1 },
     desc: 'Your strikes Chill, stacking −1 to the foe’s ATK.',
@@ -269,8 +355,24 @@ export const ITEMS = [
     stats: { maxHP: 20 }, tags: ['moon'], flags: { firstHitHalved: true },
     desc: '+20 max HP. The first blow you take each battle is halved.',
     flavor: 'It beats once per season. That is enough.' }),
+  I('icicle_chimes', 'TUNDRA', 'u', 'Icicle Chime-Row', {
+    stats: {}, tags: ['moon'], flags: { noteSlow: 0.1 },
+    desc: 'Block-shapes fall 10% slower.',
+    flavor: 'Winter’s glockenspiel. Play gently or wear it.' }),
+  I('long_white_stance', 'TUNDRA', 'r', 'Stance of the Long White', {
+    stats: { blockBonus: 1 }, tags: ['moon'], flags: { poiseful: true },
+    desc: 'Block windows 30% wider; a good Swift Cut grants poise.',
+    flavor: 'The stillness between snowfalls, taught as footwork.' }),
+  I('sleet_visor', 'TUNDRA', 'c', 'Sleet Visor', {
+    core: true, stats: { maxHP: 3 }, tags: ['moon'], flags: { dodgePlus: 1 },
+    desc: '+3 max HP. The leap-window on crushing blows is 25% wider.',
+    flavor: 'See the storm the way the storm sees you: briefly.' }),
+  I('held_breath', 'TUNDRA', 'u', 'A Breath, Held', {
+    stats: { maxHP: 5 }, tags: ['moon'], flags: { gatherCalm: 0.3 },
+    desc: '+5 max HP. Your energy gathers 30% longer before every bar.',
+    flavor: 'Let out in spring, it will have opinions.' }),
 
-  // ═══════════════════════════════════════════════════════════ SEA (10) ═══
+  // ═══════════════════════════════════════════════════════════ SEA (14) ═══
   I('siren_scale', 'SEA', 'u', 'Siren Scale', {
     core: true, stats: {}, tags: ['water'], flags: { perfectHeal: 3 },
     desc: 'Perfect strikes restore 3 HP.',
@@ -312,8 +414,24 @@ export const ITEMS = [
     stats: { maxHP: 10, atk: 2 }, tags: ['water', 'moon'], flags: { houndStrike: 8 },
     desc: '+10 max HP, +2 ATK. Each battle opens with the Bell tolling 8 damage.',
     flavor: 'Rung at the bottom, heard at the top, answered in between.' }),
+  I('tide_metronome', 'SEA', 'u', 'Metronome of the Tides', {
+    stats: {}, tags: ['water'], flags: { noteSlow: 0.12 },
+    desc: 'Block-shapes fall 12% slower.',
+    flavor: 'Two beats a day, but such beats.' }),
+  I('coral_comb', 'SEA', 'u', 'Coral Parrying-Comb', {
+    stats: {}, tags: ['water'], flags: { riposte: 3 },
+    desc: 'Perfect blocks answer for 3 damage.',
+    flavor: 'The reef’s whole strategy: be sharp, be patient, be many.' }),
+  I('divers_breath', 'SEA', 'c', 'Pearl-Diver’s Breath', {
+    core: true, stats: { maxHP: 4 }, tags: ['water'], flags: { gatherCalm: 0.25 },
+    desc: '+4 max HP. Your energy gathers 25% longer before every bar.',
+    flavor: 'Measured in heartbeats you agreed not to spend.' }),
+  I('undertow_answer', 'SEA', 'r', 'The Undertow’s Answer', {
+    stats: { spd: -1 }, tags: ['water'], flags: { riposte: 5 },
+    desc: '−1 SPD. Perfect blocks answer for 5 damage.',
+    flavor: 'Pull it, and be pulled. Everyone signs the same wave.' }),
 
-  // ═══════════════════════════════════════════════════════ CRYSTAL (10) ═══
+  // ═══════════════════════════════════════════════════════ CRYSTAL (14) ═══
   I('prism_core', 'CRYSTAL', 'r', 'Prism Core', {
     core: true, stats: { timingBonus: 1 }, tags: ['glass'],
     desc: 'All your timing multipliers are raised by +0.15.',
@@ -355,8 +473,24 @@ export const ITEMS = [
     stats: { timingBonus: 2, luck: 8 }, tags: ['glass', 'card'],
     desc: 'Timing multipliers +0.30, +8% crit.',
     flavor: 'Refracts intention into execution. Kings wept for less.' }),
+  I('facet_pendulum', 'CRYSTAL', 'r', 'Facet Pendulum', {
+    stats: { timingBonus: 1 }, tags: ['glass'], flags: { noteSlow: 0.1 },
+    desc: 'Timing multipliers +0.15; block-shapes fall 10% slower.',
+    flavor: 'Swings forever; forgives once per swing.' }),
+  I('chime_of_keys', 'CRYSTAL', 'u', 'Chime of Three Keys', {
+    core: true, stats: { luck: 4 }, tags: ['glass'], flags: { trapWard: 1 },
+    desc: '+4% crit. The first trap you spring each battle rings harmless.',
+    flavor: 'A, S and D, tuned a hair apart, agreeing about you.' }),
+  I('prism_edge', 'CRYSTAL', 'u', 'Prism Counter-Edge', {
+    stats: {}, tags: ['glass'], flags: { riposte: 3 },
+    desc: 'Perfect blocks answer for 3 damage.',
+    flavor: 'Light enters an argument and leaves a verdict.' }),
+  I('resonant_core', 'CRYSTAL', 'r', 'The Resonant Core', {
+    stats: { timingBonus: 1 }, tags: ['glass'], flags: { gatherCalm: 0.3 },
+    desc: 'Timing multipliers +0.15; your energy gathers 30% longer.',
+    flavor: 'It hums the note before the note. Follow it in.' }),
 
-  // ═══════════════════════════════════════════════════════════ ANY (43) ═══
+  // ═══════════════════════════════════════════════════════════ ANY (49) ═══
   I('shard_purse', 'ANY', 'u', 'Star-Shard Purse', {
     core: true, stats: { shardGain: 50 }, tags: [], flags: { extraFoeChance: 0.25 },
     desc: 'Shard finds +50%. Trouble finds you too: +25% chance of an extra foe.',
@@ -530,8 +664,32 @@ export const ITEMS = [
     stats: {}, tags: [], flags: { reviveOnce: true },
     desc: 'Once per run, death declines you: revive at half HP.',
     flavor: 'You did it long ago. The world has been carrying the change.' }),
+  I('drummers_creed', 'ANY', 'u', 'Drummer’s Creed', {
+    core: true, stats: { spd: 1 }, tags: [], flags: { chainKeeper: 1 },
+    desc: '+1 SPD. Once per battle, a slipped Star Strike chain holds anyway.',
+    flavor: 'The beat goes on. That is the entire creed.' }),
+  I('metronome_heart', 'ANY', 'r', 'A Metronome Heart', {
+    stats: { timingBonus: 1 }, tags: [], flags: { noteSlow: 0.1 },
+    desc: 'Timing multipliers +0.15; block-shapes fall 10% slower.',
+    flavor: 'It does not skip. It has never once skipped.' }),
+  I('sparring_shadow', 'ANY', 'c', 'Invisible Sparring Partner', {
+    core: true, stats: {}, tags: [], flags: { riposte: 2 },
+    desc: 'Perfect blocks answer for 2 damage.',
+    flavor: 'Twenty years of practice, none of it visible, all of it yours.' }),
+  I('duellist_primer', 'ANY', 'c', 'Old Duellist’s Primer', {
+    core: true, stats: { luck: 3 }, tags: [], flags: { dodgePlus: 1 },
+    desc: '+3% crit. The leap-window on crushing blows is 25% wider.',
+    flavor: 'Chapter one: be elsewhere. There is no chapter two.' }),
+  I('juggler_gloves', 'ANY', 'u', 'Juggler’s Soft Gloves', {
+    stats: { spd: 1 }, tags: [], flags: { trapWard: 1 },
+    desc: '+1 SPD. The first trap you spring each battle fizzles.',
+    flavor: 'They have caught worse than knives. They have caught opinions.' }),
+  I('held_warhorn', 'ANY', 'r', 'Warhorn of the Held Breath', {
+    stats: {}, tags: [], flags: { interruptGood: true, heavyPlus: 0.25 },
+    desc: 'A good Meteor Edge interrupts a gathering blow; perfect Meteors land +0.25× harder.',
+    flavor: 'Blown at the top of the charge, or never.' }),
 
-  // ═════════════════════════════════════════════════════════ BOSS (12) ═══
+  // ═════════════════════════════════════════════════════════ BOSS (14) ═══
   I('wardens_sigil', 'BOSS', 'u', 'Warden’s Sigil', {
     core: true, stats: { atk: 3, maxHP: 10 }, tags: [],
     desc: '+3 ATK, +10 max HP.',
@@ -582,8 +740,16 @@ export const ITEMS = [
     ability: { id: 'frenzy', name: 'Crescendo', cd: 3, kind: 'frenzy', atkUp: 2, selfDmg: 3, desc: '+2 ATK for this battle; the drum takes 3 HP as payment.' },
     desc: 'Grants ability: Crescendo (+2 ATK stacking per use, costs 3 HP, 3-turn cooldown).',
     flavor: 'It only knows one direction.' }),
+  I('wardens_tempo', 'BOSS', 'r', 'The Warden’s Tempo', {
+    core: true, stats: { blockBonus: 1 }, tags: [], flags: { noteSlow: 0.15 },
+    desc: 'Block windows 30% wider; block-shapes fall 15% slower.',
+    flavor: 'A thousand years at one gate teaches you every rhythm that can approach it.' }),
+  I('gatecrusher', 'BOSS', 'r', 'The Gatecrusher’s Memory', {
+    stats: { atk: 1, spd: -1 }, tags: [], flags: { heavyPlus: 0.6 },
+    desc: '+1 ATK, −1 SPD. A perfect Meteor Edge lands +0.6× harder.',
+    flavor: 'Somewhere, a door is still falling.' }),
 
-  // ═══════════════════════════════════════════════════════ ASTRAL (15) ═══
+  // ═══════════════════════════════════════════════════════ ASTRAL (17) ═══
   I('lunar_grace', 'ASTRAL', 'a', 'Lunar Grace', {
     core: true, stats: {}, tags: ['moon'], flags: { reviveOnce: true },
     desc: 'Once per run, death becomes moonlight: revive at half HP.',
@@ -645,6 +811,14 @@ export const ITEMS = [
     ability: { id: 'zodiac', name: 'Cast the Zodiac', cd: 4, kind: 'gamble', desc: '0–300% ATK, judged by beasts of bone.' },
     desc: '+15% crit. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
     flavor: 'Twelve faces, each a hungry constellation. All of them owe you one.' }),
+  I('stilled_second', 'ASTRAL', 'a', 'A Second, Stilled', {
+    stats: { timingBonus: 1 }, tags: ['moon'], flags: { noteSlow: 0.2, gatherCalm: 0.5 },
+    desc: 'Timing +0.15, block-shapes fall 20% slower, and your energy gathers 50% longer.',
+    flavor: 'Between one tick and the next, room was made. You keep what fits.' }),
+  I('comet_hammer', 'ASTRAL', 'a', 'Hammerfall of the Comet', {
+    stats: { atk: 2 }, tags: ['sun'], flags: { heavyPlus: 0.8 },
+    desc: '+2 ATK. A perfect Meteor Edge lands +0.8× harder.',
+    flavor: 'Aim like a millennium. Land like the end of one.' }),
 
   // ═════════════════════════════════════════════════════ MUTATIONS (8) ═══
   // Cosmic mutations never appear in ordinary draws — they come only from

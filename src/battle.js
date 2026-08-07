@@ -35,8 +35,13 @@ export class BattleSystem {
 
     window.addEventListener('keydown', e => {
       if (e.code === 'Space' && this.timingActive) { e.preventDefault(); this._resolveTiming(); }
+      const lane = { KeyA: 0, KeyS: 1, KeyD: 2 }[e.code];
+      if (lane != null && this.laneActive) this._lanePress(lane);
     });
-    window.addEventListener('pointerdown', () => { if (this.timingActive) this._resolveTiming(); });
+    window.addEventListener('pointerdown', () => {
+      if (this.timingActive) this._resolveTiming();
+      else if (this.laneActive) this._lanePointer();
+    });
   }
 
   _shared(name, maker) { return this._tex[name] ??= maker(); }
@@ -58,6 +63,12 @@ export class BattleSystem {
     this.hexTurns = 0;   // mystic hex: rounds of narrowed timing bands
     this.playerBurn = null;   // { dmg, turns } — cinders in your folds
     this.playerChill = 0;     // frost stacks: the marker runs faster
+    this.poise = 0;           // a swift perfect settles your stance for the next blocks
+    this.braced = false;      // Brace: slower notes, wider windows, a riposte
+    this.laneActive = false;  // the falling-note block minigame is live
+    this.lane = null;
+    this.trapWardLeft = run.flags.trapWard || 0;      // traps forgiven per battle
+    this.chainKeptLeft = run.flags.chainKeeper || 0;  // chain-saves per battle
     this.rng = mulberry32((run.battlesWon * 7919 + team.tier * 131 + 17) >>> 0);
     audio.battleStart({ boss: !!team.boss });
 
@@ -197,8 +208,9 @@ export class BattleSystem {
           : pick(this.rng, roster);
       const mods = ROLE_MODS[spec.r] || ROLE_MODS.brute;
       const varr = 0.9 + this.rng() * 0.2;
-      let hp = Math.round((13 + 8 * tier) * mods.hp * varr);
-      let atk = Math.round((2.5 + 1.8 * tier) * mods.atk * 10) / 10;
+      const E = CONFIG.battle.enemy;
+      let hp = Math.round((E.hp0 + E.hpT * tier + E.hpQ * tier * tier) * mods.hp * varr);
+      let atk = Math.round((E.atk0 + E.atkT * tier + E.atkQ * tier * tier) * mods.atk * 10) / 10;
       let spd = Math.round((4 + tier) * mods.spd);
       if (team.boss) { hp = Math.round(hp * 2.6); atk = Math.round(atk * 1.2 * 10) / 10; }
       if (team.deity) { hp = Math.round(hp * 1.6); atk = Math.round(atk * 1.15 * 10) / 10; }
@@ -278,6 +290,8 @@ export class BattleSystem {
     const pct = Math.max(0, run.hp / run.stats.maxHP * 100);
     const pStatus = [
       this.playerGuardBonus ? '<span class="st chill">guarded</span>' : '',
+      this.braced ? '<span class="st chill">⛨ braced</span>' : '',
+      this.poise ? '<span class="st chill">✦ poised</span>' : '',
       this.hexTurns > 0 ? '<span class="st burn">hexed</span>' : '',
       this.playerBurn?.turns > 0 ? `<span class="st burn">🔥${this.playerBurn.dmg}</span>` : '',
       this.playerChill > 0 ? `<span class="st chill">❄×${this.playerChill}</span>` : '',
@@ -307,7 +321,10 @@ export class BattleSystem {
       menu.appendChild(b);
       return b;
     };
-    addBtn('⚔ Star Strike', () => this._playerAttack());
+    addBtn('⚡ Swift Cut', () => this._playerAttack('swift'));
+    addBtn('⚔ Star Strike', () => this._playerAttack('star'));
+    addBtn('☄ Meteor Edge', () => this._playerAttack('heavy'));
+    addBtn('⛨ Brace', () => this._brace(), 'guard');
     for (const a of run.abilities) {
       const cd = this.abilityCds[a.id] || 0;
       addBtn(`✧ ${a.name}${cd > 0 ? ` (${cd})` : ''}`, () => this._playerAbility(a), 'ability', cd > 0);
@@ -335,12 +352,14 @@ export class BattleSystem {
   }
 
   // --------------------------------------------------------- timing minigame ---
-  // Every bar is different: the gold band lands somewhere new, the marker's
-  // speed varies with the attack, and some sweeps run right-to-left. Dodge
-  // bars (crush attacks) have no good band at all — leap true or take it.
+  // Strike bars: the gold band lands somewhere new every swing, the marker's
+  // speed varies with the stance, and some sweeps run right-to-left. Every
+  // bar COALESCES first — a mote of energy gathers where the band will be,
+  // the track fades in around it, and only then does the marker fly.
+  // Stronger stances gather faster and read harder.
 
   _startTiming(kind, opts = {}) {
-    // kind: 'strike' | 'block' | 'dodge'
+    // kind: 'strike' | 'dodge'  (blocking is the falling-lane minigame now)
     return new Promise(resolve => {
       const T = CONFIG.battle.timing;
       this.timingActive = true;
@@ -348,17 +367,21 @@ export class BattleSystem {
       this.timingT = 0;
       this.timingSpeed = opts.speed || 1;
       this.timingReverse = this.rng() < T.reverseChance;
-      this.timingVeil = !!opts.veil;
+      this.timingVeil = !!opts.veil && !run.flags.veilSight;
       this.timingResolve = resolve;
+      this.timingPhase = 'gather';
+      this.gatherT = 0;
+      this.gatherDur = Math.max(0.12, opts.gather ?? T.gather);
+      this._strikeTarget = null;
       const el = $('b-timing');
       el.classList.remove('hidden');
+      el.classList.add('gathering');
+      el.style.setProperty('--gather', 0);
       $('b-timing-label').textContent = opts.label
-        || (kind === 'strike' ? 'Strike! (click / space)' : kind === 'dodge' ? '☄ DODGE!' : 'Block!');
+        || (kind === 'strike' ? 'Strike! (click / space)' : '☄ DODGE!');
 
-      const widen = kind === 'block' ? 1 + 0.3 * (run.stats.blockBonus || 0) : 1;
       const shrink = (this.hexTurns > 0 ? 0.55 : 1) * (opts.shrink || 1);
-      let half = (kind === 'strike' ? T.perfectHalf : kind === 'dodge' ? T.dodgeHalf : T.blockHalf)
-        * widen * shrink;
+      let half = (kind === 'dodge' ? T.dodgeHalf : T.perfectHalf) * shrink;
       if (run.hasSynergy('eclipse')) half += 0.015;
       const mid = 0.28 + this.rng() * 0.5;   // the band wanders every swing
       const pad = kind === 'dodge' ? 0 : T.goodPad;
@@ -371,20 +394,30 @@ export class BattleSystem {
         const [s0, s1] = this.timingReverse ? [1 - b, 1 - a] : [a, b];
         zEl.style.left = (s0 * 100) + '%';
         zEl.style.width = ((s1 - s0) * 100) + '%';
-        zEl.style.opacity = 1;
+        zEl.style.opacity = 0;
         zEl.style.transition = 'none';
       };
       show(el.querySelector('.bt-zone.perfect'), this.zones.p0, this.zones.p1);
       const zg = el.querySelector('.bt-zone.good');
       if (pad > 0) { show(zg, this.zones.g0, this.zones.g1); }
       else { zg.style.width = '0%'; }
+      // the marker waits at the gate; the mote settles over the band's heart
+      const marker = el.querySelector('.bt-marker');
+      if (marker) { marker.style.opacity = 0; marker.style.left = (this.timingReverse ? 100 : 0) + '%'; }
+      const orb = el.querySelector('.bt-gather');
+      if (orb) {
+        orb.style.left = ((this.timingReverse ? 1 - mid : mid) * 100) + '%';
+        orb.style.opacity = 0;
+      }
     });
   }
 
   _resolveTiming() {
-    if (!this.timingActive) return;
+    if (!this.timingActive || this.timingPhase !== 'live') return;
     this.timingActive = false;
-    $('b-timing').classList.add('hidden');
+    const el = $('b-timing');
+    el.classList.add('hidden');
+    el.classList.remove('gathering');
     const t = this.timingT;
     const bonus = (run.stats.timingBonus || 0) * 0.15;
     let grade, mult;
@@ -395,55 +428,114 @@ export class BattleSystem {
     this.timingResolve({ grade, mult });
   }
 
+  // how long your energy takes to coalesce — some relics grant a longer read
+  _gatherCalm() { return 1 + Math.min(0.6, run.flags.gatherCalm || 0); }
+
   // ----------------------------------------------------------- player turn ---
 
-  // Star Strike is a combo now: up to three bars, each faster and tighter
-  // than the last. Land perfect or good to keep the chain; a miss drops it.
-  async _playerAttack() {
+  // Three stances, and the stronger the blow the harder it reads:
+  //   Swift Cut  — one generous bar; a perfect settles you into POISE
+  //                (slower, wider blocks next enemy phase).
+  //   Star Strike — the 3-bar chain, each faster and tighter than the last.
+  //   Meteor Edge — one brutal bar, knife-thin and fast: a perfect hits for
+  //                2.6×, pierces guard-plates and wards, and knocks a
+  //                gathering (charging) blow apart. A miss barely grazes.
+  async _playerAttack(kind = 'star') {
     if (this.state !== 'playerMenu') return;
     this.state = 'playerActing';
     this._hideMenu();
     const target = this.enemies[this.targetId]?.dead ? this._aliveEnemies()[0] : this.enemies[this.targetId];
     if (!target) return;
+    const A = CONFIG.battle.attacks;
 
     // lunge toward the foe
     this._tween(this.playerMesh.position, { x: target.home.x - 1.6, z: target.home.z + 1.2 }, 0.32);
     await wait(300);
 
-    const maxHits = CONFIG.battle.comboHits;
-    let bestPerfect = null;
-    for (let h = 0; h < maxHits && !target.dead; h++) {
-      let timing;
-      if (h === 0 && run.flags.firstHitPerfect && !this.usedFirstPerfect) {
-        this.usedFirstPerfect = true;
-        timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult + (run.stats.timingBonus || 0) * 0.15 };
-        this._log('The Dawn Thimble guides your hand — Perfect!');
-      } else {
-        timing = await this._startTiming('strike', {
-          speed: 1 + h * 0.22,
-          shrink: Math.pow(0.88, h),
-          label: h === 0 ? 'Strike! (click / space)' : `Strike ${h + 1} — keep the chain!`,
-        });
+    if (kind === 'swift') {
+      const timing = await this._startTiming('strike', {
+        speed: A.swift.speed, shrink: A.swift.band, gather: A.swift.gather * this._gatherCalm(),
+        label: '⚡ Swift Cut — an easy read',
+      });
+      await this._strike(target, timing, A.swift.mult);
+      if (timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.poiseful)) {
+        this.poise = 1;
+        this._log('You land light and settle into stance — POISED for what answers.');
       }
-      await this._strike(target, timing, CONFIG.battle.comboMult, h > 0);
-      if (timing.grade === 'perfect') bestPerfect = timing;
-      if (timing.grade === 'miss') {
-        if (h < maxHits - 1) this._log('The chain slips from your hands…');
-        break;
+    } else if (kind === 'heavy') {
+      const timing = await this._startTiming('strike', {
+        speed: A.heavy.speed, shrink: A.heavy.band, gather: A.heavy.gather * this._gatherCalm(),
+        label: '☄ METEOR EDGE — the window is a knife-slit',
+      });
+      const bonus = (run.stats.timingBonus || 0) * 0.15;
+      const mult = timing.grade === 'perfect' ? A.heavy.mult + (run.flags.heavyPlus || 0) + bonus
+        : timing.grade === 'good' ? A.heavy.good + bonus : A.heavy.miss;
+      const interrupts = timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.interruptGood);
+      if (interrupts && target.charging) {
+        target.charging = false;
+        this._log(`The meteor lands mid-wind-up — ${target.name}'s gathered blow is KNOCKED APART!`);
       }
-      if (h < maxHits - 1 && !target.dead) await wait(170);
-    }
-    if (bestPerfect && run.flags.perfectEcho && !target.dead) {
-      await wait(220);
-      this._log('The Echo Hammer rings!');
-      await this._strike(target, { grade: 'echo', mult: bestPerfect.mult * run.flags.perfectEcho }, CONFIG.battle.comboMult, true);
+      await this._strike(target, { grade: timing.grade, mult }, 1, false,
+        { pierce: timing.grade === 'perfect' });
+      if (timing.grade === 'miss') this._log('The meteor grazes wide — too much weight, too little window.');
+    } else {
+      const maxHits = CONFIG.battle.comboHits;
+      let bestPerfect = null;
+      for (let h = 0; h < maxHits && !target.dead; h++) {
+        let timing;
+        if (h === 0 && run.flags.firstHitPerfect && !this.usedFirstPerfect) {
+          this.usedFirstPerfect = true;
+          timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult + (run.stats.timingBonus || 0) * 0.15 };
+          this._log('The Dawn Thimble guides your hand — Perfect!');
+        } else {
+          timing = await this._startTiming('strike', {
+            speed: A.star.speed * (1 + h * 0.22),
+            shrink: A.star.band * Math.pow(0.88, h),
+            gather: (h === 0 ? A.star.gather : 0.22) * this._gatherCalm(),
+            label: h === 0 ? 'Strike! (click / space)' : `Strike ${h + 1} — keep the chain!`,
+          });
+        }
+        await this._strike(target, timing, CONFIG.battle.comboMult, h > 0);
+        if (timing.grade === 'perfect') bestPerfect = timing;
+        if (timing.grade === 'miss') {
+          if (this.chainKeptLeft > 0 && h < maxHits - 1 && !target.dead) {
+            this.chainKeptLeft--;
+            this._log('The chain slips — and the spare cord HOLDS it!');
+          } else {
+            if (h < maxHits - 1) this._log('The chain slips from your hands…');
+            break;
+          }
+        }
+        if (h < maxHits - 1 && !target.dead) await wait(170);
+      }
+      if (bestPerfect && run.flags.perfectEcho && !target.dead) {
+        await wait(220);
+        this._log('The Echo Hammer rings!');
+        await this._strike(target, { grade: 'echo', mult: bestPerfect.mult * run.flags.perfectEcho }, CONFIG.battle.comboMult, true);
+      }
     }
     this._tween(this.playerMesh.position, { x: this.playerHome.x, z: this.playerHome.z }, 0.3);
     await wait(330);
     this._afterPlayerAction();
   }
 
-  async _strike(target, timing, baseMult, silent = false) {
+  // Brace: forgo the strike to read the incoming storm. Until your next
+  // turn the falling shapes drop slower, every window widens, and a
+  // PERFECT block answers with your blade.
+  async _brace() {
+    if (this.state !== 'playerMenu') return;
+    this.state = 'playerActing';
+    this._hideMenu();
+    this.braced = true;
+    this._burst(this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0x9fb4ff);
+    this._log('⛨ You plant your feet and watch the rhythm of the fight — braced.');
+    audio.sfxBlock();
+    await wait(600);
+    this._afterPlayerAction();
+  }
+
+  async _strike(target, timing, baseMult, silent = false, opts = {}) {
+    const { pierce = false } = opts;
     let dmg = this._playerAtk() * timing.mult * baseMult * (0.92 + this.rng() * 0.16);
     if (timing.grade === 'perfect' && run.hasSynergy('high_noon')) dmg *= 1.2;
     let crit = false;
@@ -452,11 +544,11 @@ export class BattleSystem {
     if (this.rng() * 100 < luck) { crit = true; dmg *= run.hasSynergy('glassworks') ? 2.5 : 2; }
     if (run.flags.critShatter && this.shatterNext) { dmg += this.shatterNext; this.shatterNext = 0; }
     if (run.flags.executeBonus && target.hp / target.maxHP < 0.3) dmg *= 1.5;
-    if (target.role === 'guard') dmg *= 0.75;
+    if (target.role === 'guard' && !pierce) dmg *= 0.75;
     if (target.warded) {
-      dmg *= 0.55;
+      if (!pierce) dmg *= 0.55;
       target.warded = false;
-      this._log('The rune-wall takes the brunt and shatters.');
+      this._log(pierce ? 'The meteor bursts the rune-wall outright!' : 'The rune-wall takes the brunt and shatters.');
     }
     dmg = Math.max(1, Math.round(dmg));
 
@@ -817,22 +909,25 @@ export class BattleSystem {
       run.hp = Math.min(run.stats.maxHP, run.hp + regen);
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${regen} ❀`, 'heal');
     }
+    this.braced = false;   // the stance and the poise are spent with the storm
+    this.poise = 0;
     this.state = 'playerMenu';
     this._showMenu();
     this._refreshCards();
   }
 
   // One enemy attack action. opts.heavy: a wound-up blow. opts.crush: an
-  // unblockable heavy — only a narrow dodge timing (or passive dodge) saves
-  // you. opts.hits > 1: a flurry, each swing with its own accelerating bar.
+  // unblockable heavy — one wide shape falls and only a knife-thin leap (or
+  // a passive dodge) saves you. opts.hits > 1: a flurry — one falling note
+  // per swing, graded shape by shape.
   async _enemyStrike(e, mult, opts = {}) {
     const { heavy = false, crush = false, hits = 1 } = opts;
     const tier = this.team.tier || 1;
-    const veil = ['DESERT', 'CRIMSON'].includes(this.team.biome);   // sand hides the bands
+    const veil = ['DESERT', 'CRIMSON'].includes(this.team.biome);   // sand hides the shapes
     // mystics cast from where they stand; heavy and crushing blows are
     // bodily things and always close the distance
     const ranged = e.ranged && !crush && !heavy;
-    this._log(`${e.name}${crush ? '’s CRUSHING blow falls — dodge!'
+    this._log(`${e.name}${crush ? '’s CRUSHING blow falls — leap on the beat!'
       : heavy ? ' unleashes the heavy blow!'
       : hits > 1 ? (ranged ? ` looses a volley of ${hits}!` : ` strikes in a flurry of ${hits}!`)
       : ranged ? ' takes aim…' : ' attacks!'}`);
@@ -845,15 +940,23 @@ export class BattleSystem {
       await wait(300);
     }
 
+    const speed = 1 + tier * 0.04 + (crush ? 0.3 : heavy ? 0.2 : 0) + (this.playerChill || 0) * 0.08;
+    const res = await this._blockRun({ swings: hits, tier, crush, speed, veil });
+
+    // sprung traps bite before the blows land
+    if (res.trapsHit > 0) {
+      const chip = Math.max(1, Math.round(e.atk * 0.5)) * res.trapsHit;
+      run.hp -= chip;
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${chip} ⚠`, 'dmg');
+      this._log('The feint bites — you moved to block a lie.');
+      this._shake(this.playerMesh);
+      audio.sfxHurt();
+    }
+
     for (let h = 0; h < hits; h++) {
       if (run.hp <= 0) break;
       const perHit = hits > 1 ? mult * 0.55 : mult;
-      const speed = 1 + tier * 0.04 + (crush ? 0.3 : heavy ? 0.2 : 0) + h * 0.15
-        + (this.playerChill || 0) * 0.08;
-      const timing = await this._startTiming(crush ? 'dodge' : 'block', {
-        speed, veil,
-        label: crush ? '☄ DODGE!' : hits > 1 ? `Block! (${h + 1}/${hits})` : 'Block!',
-      });
+      const grade = res.grades[h] || 'miss';
       if (ranged) {
         await this._projectile(
           e.mesh.position.clone().add(new THREE.Vector3(0, 1.3, 0)),
@@ -866,7 +969,7 @@ export class BattleSystem {
       const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
       const passiveDodge = this.rng() * 100 < (run.stats.dodge || 0);
       const playerPos = () => this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-      if (crush && timing.grade === 'perfect') {
+      if (crush && grade === 'perfect') {
         this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'leapt clear!', 'heal');
         this._log('You fold sideways — the blow shatters empty ground!');
         audio.sfxBlock();
@@ -881,13 +984,20 @@ export class BattleSystem {
           dmg *= 1.2;   // caught flat-footed under the full weight
           audio.sfxHurt();
           this._burst(playerPos(), 0xff6a4a);
-        } else if (timing.grade === 'perfect') {
+        } else if (grade === 'perfect') {
           dmg *= CONFIG.battle.blockPerfect;
-          this._log('PERFECT block!');
           audio.sfxBlock();
           this._burst(playerPos(), 0x9fe8ff);
           if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
-        } else if (timing.grade === 'good') {
+          // the braced blade (or a parrying relic) answers
+          const riposte = (this.braced ? Math.round(this._playerAtk() * 0.6) : 0) + (run.flags.riposte || 0);
+          if (riposte > 0 && !e.dead) {
+            this._hurtEnemy(e, riposte, '⛨');
+            this._log(this.braced ? 'PERFECT block — and your braced blade answers!' : 'PERFECT block — the parry bites back!');
+          } else {
+            this._log('PERFECT block!');
+          }
+        } else if (grade === 'good') {
           dmg *= CONFIG.battle.blockGood;
           this._log('Blocked — most of it.');
           audio.sfxBlock();
@@ -916,6 +1026,165 @@ export class BattleSystem {
       this._tween(e.mesh.position, { x: e.home.x, z: e.home.z }, 0.3);
       await wait(320);
     }
+  }
+
+  // ---------------------------------------------------- block lanes (A/S/D) ---
+  // Blocking is a falling rhythm now: shapes descend three lanes and you
+  // press A, S or D as each crosses the hit-line. Notes coalesce out of the
+  // dark as they fall. Traps thread between them in the deep — spring one
+  // and the feint bites. Crushing blows fall as one wide shape: leap (any
+  // key) inside a knife-thin window or take the blow whole.
+
+  _blockRun({ swings = 1, tier = 1, crush = false, speed = 1, veil = false }) {
+    return new Promise(resolve => {
+      const L = CONFIG.battle.lanes;
+      const el = $('b-lanes');
+      const windowEl = el.querySelector('.bl-window');
+      for (const n of windowEl.querySelectorAll('.bl-note, .bl-judge')) n.remove();
+      el.classList.remove('hidden');
+      el.classList.remove('coalesce');
+      void el.offsetWidth;            // restart the coalesce animation
+      el.classList.add('coalesce');
+
+      const widen = (1 + 0.3 * (run.stats.blockBonus || 0))
+        * (this.hexTurns > 0 ? 0.55 : 1)
+        * (this.braced ? 1.5 : 1)
+        * (this.poise ? 1.25 : 1)
+        + (run.hasSynergy('eclipse') ? 0.15 : 0);
+      const slow = (1 + Math.min(0.4, run.flags.noteSlow || 0))
+        * (this.braced ? 1.28 : 1) * (this.poise ? 1.15 : 1);
+      const fall = L.fall * slow / Math.max(0.6, speed);
+      // pattern shape: flurries ride one note per swing; a single blow
+      // falls as 1–3 notes with the depth of the region
+      const perSwing = crush || swings > 1 ? 1 : 1 + (tier >= 2 ? 1 : 0) + (tier >= 4 ? 1 : 0);
+      const spacing = (L.spacing / Math.max(0.7, speed)) * (swings > 1 ? 0.78 : 1) * slow;
+      const notes = [];
+      let prevLane = Math.floor(this.rng() * 3);
+      let t = L.lead + fall;
+      for (let s = 0; s < swings; s++) {
+        for (let k = 0; k < perSwing; k++) {
+          let lane = Math.floor(this.rng() * 3);
+          if (tier >= 3 && this.rng() < 0.4) lane = (prevLane + 1) % 3;   // little runs
+          prevLane = lane;
+          notes.push({ swing: s, lane, hit: t, crush, trap: false, resolved: false, el: null });
+          t += spacing;
+        }
+      }
+      // traps thread between the true notes at depth
+      const traps = [];
+      if (!crush && tier >= 2) {
+        let nTraps = this.rng() < Math.min(0.65, 0.18 + 0.09 * tier) ? 1 : 0;
+        if (tier >= 5 && this.rng() < 0.35) nTraps++;
+        for (let i = 0; i < nTraps && notes.length; i++) {
+          const anchor = notes[Math.floor(this.rng() * notes.length)];
+          let lane = Math.floor(this.rng() * 3);
+          if (lane === anchor.lane) lane = (lane + 1 + Math.floor(this.rng() * 2)) % 3;
+          traps.push({
+            lane, hit: anchor.hit + spacing * (this.rng() < 0.5 ? 0.5 : -0.5),
+            trap: true, crush: false, sprung: false, resolved: false, el: null,
+          });
+        }
+      }
+      this.lane = {
+        notes, traps, t: 0, fall, veil: veil && !run.flags.veilSight,
+        winP: (crush ? L.dodgeWin : L.perfectWin) * widen
+          * (crush ? 1 + 0.25 * (run.flags.dodgePlus || 0) : 1),
+        winG: crush ? 0 : L.goodWin * widen,
+        winT: L.trapWin,
+        end: t + fall * 0.35 + 0.3,
+        grades: Array.from({ length: swings }, () => []),
+        trapsHit: 0,
+        resolve,
+      };
+      this.laneActive = true;
+      $('b-lanes-label').textContent = crush
+        ? '☄ CRUSHING BLOW — leap on the beat! (any key)'
+        : swings > 1 ? 'Block the flurry — A · S · D' : 'Block! — A · S · D';
+    });
+  }
+
+  _lanePress(lane) {
+    const K = this.lane;
+    if (!K) return;
+    // nearest unresolved true note in this lane (a crush shape takes any lane)
+    let best = null, bestD = Infinity;
+    for (const n of K.notes) {
+      if (n.resolved) continue;
+      if (!n.crush && n.lane !== lane) continue;
+      const d = Math.abs(K.t - n.hit);
+      if (d < bestD) { best = n; bestD = d; }
+    }
+    if (best && bestD <= (best.crush ? K.winP : K.winG)) {
+      best.resolved = true;
+      const grade = bestD <= K.winP ? 'perfect' : 'good';
+      K.grades[best.swing].push(grade === 'perfect' ? 1 : 0.55);
+      this._laneJudge(best, grade);
+      if (grade === 'perfect') audio.sfxPerfect(); else audio.sfxGood();
+      return;
+    }
+    // a trap in reach? springing it is the mistake it was shaped to be
+    let trap = null, trapD = Infinity;
+    for (const tr of K.traps) {
+      if (tr.resolved || tr.lane !== lane) continue;
+      const d = Math.abs(K.t - tr.hit);
+      if (d < trapD) { trap = tr; trapD = d; }
+    }
+    if (trap && trapD <= K.winT) {
+      trap.resolved = true;
+      trap.sprung = true;
+      if (this.trapWardLeft > 0) {
+        this.trapWardLeft--;
+        this._laneJudge(trap, 'warded');
+      } else {
+        K.trapsHit++;
+        this._laneJudge(trap, 'trap');
+        audio.sfxHurt();
+      }
+    }
+    // a stray press otherwise: nothing bites, nothing blocks
+  }
+
+  _lanePointer() {
+    // mouse/touch fallback: press the lane of whichever shape is nearest
+    const K = this.lane;
+    if (!K) return;
+    let best = null, bestD = Infinity;
+    for (const n of [...K.notes, ...K.traps]) {
+      if (n.resolved) continue;
+      const d = Math.abs(K.t - n.hit);
+      if (d < bestD) { best = n; bestD = d; }
+    }
+    if (best) this._lanePress(best.crush ? 0 : best.lane);
+  }
+
+  _laneJudge(n, grade) {
+    if (n.el) {
+      n.el.classList.add(grade === 'trap' ? 'sprung' : grade === 'warded' ? 'sprung'
+        : grade === 'miss' ? 'missed' : 'struck');
+    }
+    const windowEl = document.querySelector('#b-lanes .bl-window');
+    if (!windowEl) return;
+    const j = document.createElement('div');
+    j.className = 'bl-judge ' + grade;
+    j.textContent = grade === 'perfect' ? 'PERFECT' : grade === 'good' ? 'good'
+      : grade === 'warded' ? 'warded!' : grade === 'trap' ? 'TRAP!' : 'miss';
+    j.style.left = n.crush ? '50%' : (n.lane * 33.3 + 16.6) + '%';
+    windowEl.appendChild(j);
+    setTimeout(() => j.remove(), 700);
+  }
+
+  _laneFinish() {
+    const K = this.lane;
+    if (!K) return;
+    this.laneActive = false;
+    this.lane = null;
+    $('b-lanes').classList.add('hidden');
+    const grades = K.grades.map(list => {
+      if (!list.length) return 'miss';
+      const avg = list.reduce((a, b) => a + b, 0) / list.length;
+      return avg >= 0.85 ? 'perfect' : avg >= 0.45 ? 'good' : 'miss';
+    });
+    K.resolve({ grades, trapsHit: K.trapsHit });
   }
 
   _applyBiomeAffliction(e, dmg) {
@@ -987,7 +1256,10 @@ export class BattleSystem {
     document.body.classList.remove('in-battle');
     $('battle').classList.add('hidden');
     $('b-timing').classList.add('hidden');
+    $('b-lanes').classList.add('hidden');
     this.timingActive = false;
+    this.laneActive = false;
+    this.lane = null;
     const cb = this.onEnd;
     this.onEnd = null;
     this._disposeScene();
@@ -1053,22 +1325,109 @@ export class BattleSystem {
     if (!this.active || !this.scene) return;
     this.time += dt;
 
-    // timing marker
+    // strike bar: the energy coalesces first, then the marker flies
     if (this.timingActive) {
-      this.timingT += dt * this.timingSpeed / CONFIG.battle.timing.travel;
-      if (this.timingT >= 1) { this.timingT = 1; this._resolveTiming(); }
-      const marker = document.querySelector('#b-timing .bt-marker');
-      if (marker) {
-        const shown = this.timingReverse ? 1 - this.timingT : this.timingT;
-        marker.style.left = (shown * 100) + '%';
-      }
-      // desert sand-veil: the zones fade from sight partway across
-      if (this.timingVeil && this.timingT > 0.4) {
-        for (const z of document.querySelectorAll('#b-timing .bt-zone')) {
-          z.style.transition = 'opacity 0.25s';
-          z.style.opacity = 0;
+      const el = $('b-timing');
+      if (this.timingPhase === 'gather') {
+        this.gatherT += dt;
+        const p = Math.min(1, this.gatherT / this.gatherDur);
+        el.style.setProperty('--gather', p);
+        const orb = el.querySelector('.bt-gather');
+        if (orb) {
+          orb.style.opacity = 0.2 + p * 0.75;
+          orb.style.transform = `translate(-50%, -50%) scale(${2.6 - p * 1.7})`;
+        }
+        for (const z of el.querySelectorAll('.bt-zone')) {
+          z.style.opacity = p * (z.classList.contains('perfect') ? 1 : 0.9);
+        }
+        if (p >= 1) {
+          this.timingPhase = 'live';
+          el.classList.remove('gathering');
+          if (orb) orb.style.opacity = 0;
+          const marker = el.querySelector('.bt-marker');
+          if (marker) marker.style.opacity = 1;
+          // headless playtests: battle.strikeAutoplay = {p, g} pre-rolls a
+          // grade and presses at the matching moment of the sweep
+          if (this.strikeAutoplay) {
+            const r = Math.random();
+            this._strikeTarget = r < this.strikeAutoplay.p ? (this.zones.p0 + this.zones.p1) / 2
+              : r < this.strikeAutoplay.p + this.strikeAutoplay.g
+                ? Math.min(0.97, this.zones.p1 + (this.zones.g1 - this.zones.p1) * 0.5)
+                : null;
+          }
+        }
+      } else {
+        this.timingT += dt * this.timingSpeed / CONFIG.battle.timing.travel;
+        if (this.strikeAutoplay && this._strikeTarget != null && this.timingT >= this._strikeTarget) {
+          this._strikeTarget = null;
+          this._resolveTiming();
+        }
+        if (this.timingActive && this.timingT >= 1) { this.timingT = 1; this._resolveTiming(); }
+        const marker = document.querySelector('#b-timing .bt-marker');
+        if (marker && this.timingActive) {
+          const shown = this.timingReverse ? 1 - this.timingT : this.timingT;
+          marker.style.left = (shown * 100) + '%';
+        }
+        // desert sand-veil: the zones fade from sight partway across
+        if (this.timingVeil && this.timingT > 0.4) {
+          for (const z of document.querySelectorAll('#b-timing .bt-zone')) {
+            z.style.transition = 'opacity 0.25s';
+            z.style.opacity = 0;
+          }
         }
       }
+    }
+
+    // the falling block-lanes
+    if (this.laneActive && this.lane) {
+      const K = this.lane;
+      K.t += dt;
+      const windowEl = document.querySelector('#b-lanes .bl-window');
+      const H = windowEl ? windowEl.clientHeight : 216;
+      const hitY = H - 30;
+      for (const n of [...K.notes, ...K.traps]) {
+        const p = 1 - (n.hit - K.t) / K.fall;   // 0 at spawn → 1 on the hit-line
+        if (p < -0.02) continue;
+        if (!n.el && p < 1.35 && windowEl) {
+          n.el = document.createElement('div');
+          n.el.className = 'bl-note' + (n.crush ? ' wide' : ' l' + n.lane) + (n.trap ? ' trap' : '');
+          windowEl.appendChild(n.el);
+        }
+        if (n.el) {
+          n.el.style.top = (-26 + p * (hitY + 26)) + 'px';
+          if (!n.resolved) {
+            // notes coalesce out of the dark as they fall…
+            let op = Math.min(1, Math.max(0, p) / CONFIG.battle.lanes.fadePortion);
+            // …and the sand-veil swallows them again near the line
+            if (K.veil && p > 0.55) op *= Math.max(0, 1 - (p - 0.55) / 0.3);
+            n.el.style.opacity = op;
+          }
+          if (p > 1.5) { n.el.remove(); n.el = null; }
+        }
+        // headless playtests: battle.laneAutoplay = {p, g} pre-rolls each
+        // note and presses its lane at the matching offset
+        if (this.laneAutoplay && !n.trap && !n.resolved) {
+          if (n._auto === undefined) {
+            const r = Math.random();
+            n._auto = r < this.laneAutoplay.p ? 0
+              : r < this.laneAutoplay.p + this.laneAutoplay.g ? (K.winP + K.winG) / 2 : null;
+          }
+          if (n._auto != null && K.t - n.hit >= n._auto - K.winP * 0.4) {
+            this._lanePress(n.crush ? 0 : n.lane);
+          }
+        }
+        const late = K.t - n.hit;
+        if (!n.resolved && !n.trap && late > (n.crush ? K.winP : K.winG)) {
+          n.resolved = true;
+          K.grades[n.swing].push(0);
+          this._laneJudge(n, 'miss');
+        }
+        if (!n.resolved && n.trap && late > K.winT) {
+          n.resolved = true;   // the feint sails past, harmless
+          if (n.el) n.el.classList.add('passed');
+        }
+      }
+      if (K.t >= K.end) this._laneFinish();
     }
 
     // tweens
