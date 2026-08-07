@@ -17,7 +17,29 @@ class Run {
     this.hexesVisited = new Set();
     this.reviveUsed = false;
     this.shrineHeals = 0;          // wayshrine offerings this run (cost escalates)
+    this.boons = [];               // blessings & bargains: { id, name, stats?, flags? }
+    this.shrineBoons = new Set();  // shrine site ids already communed with
+    this.vantageSeen = new Set();  // celestial voices already heard
+    this.woundOpen = false;        // the Wound has torn open this run
     this._recompute();
+  }
+
+  get mutationCount() { return this.items.filter(i => i.mutation).length; }
+
+  addBoon(boon) {
+    this.boons.push(boon);
+    const before = this.stats.maxHP;
+    this._recompute();
+    if (this.stats.maxHP > before) this.hp += this.stats.maxHP - before;
+    this.hp = Math.min(this.hp, this.stats.maxHP);
+  }
+
+  removeItem(id) {
+    const i = this.items.findIndex(it => it.id === id);
+    if (i < 0) return null;
+    const [gone] = this.items.splice(i, 1);
+    this._recompute();
+    return gone;
   }
 
   get ownedIds() { return new Set(this.items.map(i => i.id)); }
@@ -47,6 +69,13 @@ class Run {
       if (it.ability) abilities.push({ ...it.ability });
       for (const t of it.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
     }
+    // blessings and bargains layer on top of the hoard
+    for (const b of this.boons || []) {
+      for (const [k, v] of Object.entries(b.stats || {})) s[k] = (s[k] || 0) + v;
+      for (const [k, v] of Object.entries(b.flags || {})) {
+        flags[k] = typeof v === 'number' ? (flags[k] || 0) + v : v;
+      }
+    }
     this.tagCounts = tagCounts;
     const setDone = tag => (tagCounts[tag] || 0) >= (SETS[tag]?.need ?? 3);
     this.synergies = SYNERGIES.filter(sy => sy.sets.every(setDone));
@@ -64,6 +93,7 @@ class Run {
     if (has('steamveil')) { s.dodge += 15; delete flags.waterWeak; flags.blockHeal = (flags.blockHeal || 0) + 2; }
     if (has('pale_hand')) flags.houndStrike = Math.max(flags.houndStrike || 0, 8);
     if (has('stained_glass')) s.luck += 10;
+    if (flags.noFirstDodge) delete flags.firstStrikeDodge;   // the Eyes never close
     if (flags.cooldownMinus) for (const a of abilities) a.cd = Math.max(1, a.cd - flags.cooldownMinus);
 
     s.maxHP = Math.max(10, s.maxHP);
@@ -90,6 +120,7 @@ class Run {
       completeSets,
       grand: this.synergies.filter(sy => sy.grand).map(sy => sy.id),
       itemCount: this.items.length,
+      mutations: this.items.filter(i => i.mutation).map(i => i.id),
     };
   }
 
@@ -97,7 +128,8 @@ class Run {
   get appearanceSig() {
     const a = this.appearance;
     const tags = Object.keys(a.tagCounts).sort().map(t => t + Math.min(a.tagCounts[t], 3)).join(',');
-    return tags + '|' + a.completeSets.join(',') + '|' + a.grand.join(',') + '|' + Math.min(a.itemCount, 8);
+    return tags + '|' + a.completeSets.join(',') + '|' + a.grand.join(',')
+      + '|' + Math.min(a.itemCount, 8) + '|' + a.mutations.join(',');
   }
 
   // rough strength score, used for danger comparison on gates

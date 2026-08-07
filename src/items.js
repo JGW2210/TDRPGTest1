@@ -645,6 +645,46 @@ export const ITEMS = [
     ability: { id: 'zodiac', name: 'Cast the Zodiac', cd: 4, kind: 'gamble', desc: '0–300% ATK, judged by beasts of bone.' },
     desc: '+15% crit. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
     flavor: 'Twelve faces, each a hungry constellation. All of them owe you one.' }),
+
+  // ═════════════════════════════════════════════════════ MUTATIONS (8) ═══
+  // Cosmic mutations never appear in ordinary draws — they come only from
+  // the deep places (satellite bosses, tier-3+ keepers, astral pedestals,
+  // nebulas). Each rewrites the wanderer's body: great power, real cost.
+  // Carrying three tears open the Wound in the Meridian.
+  I('maw_beneath', 'MUTATION', 'm', 'The Maw Beneath', {
+    core: true, mutation: true, stats: { atk: 8, maxHP: -8 }, tags: [], flags: { shopMarkup: 0.4 },
+    desc: '+8 ATK, −8 max HP. Merchants see the teeth: shop prices +40%.',
+    flavor: 'Your gentle smile is still there. It is just no longer the outermost one.' }),
+  I('thousand_eyes', 'MUTATION', 'm', 'A Thousand Unclosing Eyes', {
+    core: true, mutation: true, stats: { luck: 15, dodge: 10, maxHP: -6 }, tags: [],
+    flags: { seeIntent: true, noFirstDodge: true },
+    desc: '+15% crit, +10% dodge, see all foe intents, −6 max HP. They never close: effects that auto-dodge first blows are lost.',
+    flavor: 'You see everything now. Everything sees that you see it. Introductions are exhausting.' }),
+  I('antler_deep', 'MUTATION', 'm', 'Antler Crown of the Deep', {
+    core: true, mutation: true, stats: { maxHP: 20, atk: 2, spd: -3 }, tags: [], flags: { heavyGait: true },
+    desc: '+20 max HP, +2 ATK, −3 SPD. The crown is heavy: you can never travel fast again.',
+    flavor: 'Something old and drowned mistook you for its heir. It refuses to take the crown back.' }),
+  I('tatter_wings', 'MUTATION', 'm', 'Wings of Torn Vellum', {
+    core: true, mutation: true, stats: { spd: 4, dodge: 12, maxHP: -10, shardGain: -25 }, tags: [],
+    flags: { fastTravel: true },
+    desc: '+4 SPD, +12% dodge, fast travel everywhere — but −10 max HP and shard finds −25% as pieces of you scatter.',
+    flavor: 'They unfolded out of your own margins. The wind reads you as it carries you.' }),
+  I('tide_gills', 'MUTATION', 'm', 'Tidewrought Gills', {
+    core: true, mutation: true, stats: { atk: 3, dodge: 8 }, tags: [], flags: { drylandAche: 2 },
+    desc: '+3 ATK, +8% dodge. Dry land aches: after every battle outside the shallows, lose 2 HP.',
+    flavor: 'The sea remembered you before you were paper. It wants its draft back.' }),
+  I('starving_halo', 'MUTATION', 'm', 'The Starving Halo', {
+    core: true, mutation: true, stats: { atk: 2 }, tags: [], flags: { killHeal: 4, dewMuted: true },
+    desc: '+2 ATK, heal 4 whenever a foe falls — but star-dew only half-nourishes you now.',
+    flavor: 'A ring of black light that eats what you defeat and tithes you the marrow.' }),
+  I('hollow_chest', 'MUTATION', 'm', 'The Hollow Chest', {
+    core: true, mutation: true, stats: { maxHP: -5 }, tags: [], flags: { cooldownMinus: 1, abilityToll: 2 },
+    desc: 'Ability cooldowns −1 turn, −5 max HP, and every ability costs 2 HP. The hollow gives; the hollow takes.',
+    flavor: 'Where your chest-rune sat there is now a small tidy absence with one star inside.' }),
+  I('voice_wound', 'MUTATION', 'm', 'Voice of the Wound', {
+    core: true, mutation: true, stats: { luck: 8, shardGain: -30 }, tags: [], flags: { chillOnHit: 1 },
+    desc: '+8% crit, your strikes Chill — but the whispers cost you: shard finds −30%.',
+    flavor: 'You speak your own language now. Only the rift speaks it back.' }),
 ];
 
 // Sets & synergies. Every tag is a set; carry enough relics of one set and
@@ -699,6 +739,7 @@ export const RARITY = {
   u: { name: 'Uncommon', color: '#6fe0c8' },
   r: { name: 'Rare', color: '#b48aff' },
   a: { name: 'Astral', color: '#f0c46a' },
+  m: { name: 'Mutation', color: '#a6ff57' },
 };
 
 const SOURCE_WEIGHTS = {
@@ -718,7 +759,7 @@ export function drawItem(rng, pool, ownedIds, opts = {}) {
   let roll = rng(), rarity = 'c';
   for (const k of ['c', 'u', 'r', 'a']) { if (roll < w[k]) { rarity = k; break; } roll -= w[k]; }
 
-  const ok = i => !ownedIds.has(i.id) && (!unlocked || unlocked.has(i.id));
+  const ok = i => !ownedIds.has(i.id) && i.rarity !== 'm' && (!unlocked || unlocked.has(i.id));
   const tryPools = [pool, 'ANY'];
   const rarityOrder = [rarity, 'r', 'u', 'c', 'a'];
   for (const p of tryPools) {
@@ -729,6 +770,12 @@ export function drawItem(rng, pool, ownedIds, opts = {}) {
   }
   const any = ITEMS.filter(ok);
   return any.length ? pick(rng, any) : null;
+}
+
+// Mutations come only from the deep places, never the ordinary draw.
+export function drawMutation(rng, ownedIds) {
+  const cands = ITEMS.filter(i => i.rarity === 'm' && !ownedIds.has(i.id));
+  return cands.length ? pick(rng, cands) : null;
 }
 
 export const CONSUMABLES = {

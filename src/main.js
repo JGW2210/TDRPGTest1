@@ -12,8 +12,8 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES } from './names.js';
-import { drawItem, CONSUMABLES } from './items.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES } from './names.js';
+import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
 import { run } from './run.js';
 import { RoamerSystem } from './roamers.js';
 import { saveRun, loadRun, clearSave, applySave } from './save.js';
@@ -92,6 +92,7 @@ let restoredRun = false;
     restoredRun = true;
     exploreHintShown = true;
     player.setAppearance(run.appearance, run.appearanceSig);
+    if (run.mutationCount >= 3) openWound({ announce: false });
   }
 }
 
@@ -218,6 +219,8 @@ dom.addEventListener('pointermove', e => {
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
         (worldView.roamerOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#ff9a5a">⚔ a hunting pack prowls here</div>' : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
+        (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ the void beside this shore hums — something folded waits</div>' : '') +
+        (tile.vantage && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#dfe6ff">☄ the sky leans close here</div>' : '') +
         extra,
         e.clientX, e.clientY
       );
@@ -262,13 +265,18 @@ function travelTo(target, onArrive = null) {
   if (from === target) { if (onArrive) onArrive(); return; }
   const path = findPath(world.tiles, from, target, gateLocked);
   if (!path) {
-    ui.toast(world.gates.some(g => gateLocked(g))
-      ? 'No open road leads there — a warden bars the way.'
-      : 'The rift denies passage — no road threads that stretch of void.');
+    if (target.region >= 100 && target.region < 200 && !world.satellites[target.region - 100]?.revealed) {
+      ui.toast('☄ That world hangs beyond a bridge not yet unfurled. Its shore hums where the seam waits — bring a star-charge.');
+    } else {
+      ui.toast(world.gates.some(g => gateLocked(g))
+        ? 'No open road leads there — a warden bars the way.'
+        : 'The rift denies passage — no road threads that stretch of void.');
+    }
     return;
   }
   followPlayer = true;
-  const fast = run.flags.fastTravel || path.length > CONFIG.fastPathLen;
+  // the Antler Crown's heavy gait forbids fast travel entirely
+  const fast = !run.flags.heavyGait && (run.flags.fastTravel || path.length > CONFIG.fastPathLen);
   player.hopTime = fast ? CONFIG.hopDurationFast : CONFIG.hopDuration;
   player.setPath(path,
     tile => {
@@ -284,6 +292,7 @@ function travelTo(target, onArrive = null) {
         }
       }));
       refreshHud(tile);
+      if (tile.vantage && !run.vantageSeen.has(tile.vantage)) speakSky(tile.vantage);
       if (followPlayer && !worldRig.dragMode) worldRig.panTo({ x: tile.x, z: tile.z });
       // the world takes its turn: every roaming pack steps once per hop
       const hunter = roamers.step(tile);
@@ -313,6 +322,32 @@ function revealRegionMemory(tile) {
   for (const t of reg.tiles || []) worldView.explored.add(keyOf(t.q, t.r));
   worldView.updateFog(tile, { animate: false });
   ui.toast(`The Meridian Compass charts ${reg.name} into memory.`, true);
+}
+
+// Standing beneath a celestial body earns its attention, once per run.
+function speakSky(voiceId) {
+  const voice = SKY_VOICES.find(v => v.id === voiceId);
+  if (!voice) return;
+  run.vantageSeen.add(voiceId);
+  voice.lines.forEach((line, i) => {
+    setTimeout(() => ui.toast(`☄ <b>${voice.name}</b>: “${line}”`, true), 500 + i * 2800);
+  });
+  if (voice.gift) {
+    setTimeout(() => {
+      if (voice.gift.shards) {
+        const got = run.gainShards(voice.gift.shards);
+        ui.toast(`☄ Something small falls from the sky into your hand. (+${got} ☆)`, true);
+      }
+      if (voice.gift.boon) {
+        run.addBoon(voice.gift.boon);
+        ui.toast(`☄ <b>${voice.gift.boon.name}</b> settles over you like weather.`, true);
+      }
+      refreshHud(player.tile);
+      saveNow(true);
+    }, 500 + voice.lines.length * 2800);
+  } else {
+    saveNow(true);
+  }
 }
 
 function engageRoamer(pack) {
@@ -354,7 +389,7 @@ function challengeGate(gateTile) {
       if (label.startsWith('⚔')) {
         ui.closeModal();
         startBattle({
-          team: { biome: g.biome, tier: g.tier, count: 1, boss: true, bossName: gateTile.landmark.name },
+          team: { biome: g.biome, tier: g.tier, count: 1, boss: true, bossName: gateTile.landmark.name, bossKind: 'warden' },
           title: gateTile.landmark.name,
           onWin: () => {
             run.openedGates.add(keyOf(gateTile.q, gateTile.r));
@@ -540,13 +575,15 @@ function startGauntlet(site, tile) {
       ui.toast(`⚑ The vault is broken open — ☆ ${got} and the Keeper's gift are yours.`, true);
       announceFeats(meta.bump(s => { s.keepers++; }));
       const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 1234) * 0xffffffff));
-      const item = drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds });
+      // deep keepers sometimes guard a change instead of a relic
+      const item = (tier >= 3 && rng() < 0.25 && drawMutation(rng, run.ownedIds))
+        || drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds });
       if (item) grantItem(item);
     },
     waves: [
       { team: { biome, tier, count: 2 }, title: `${site.name} · First Chamber` },
       { team: { biome, tier: tier + 1, count: 2 }, title: `${site.name} · Second Chamber` },
-      { team: { biome, tier: tier + 1, count: 1, boss: true, bossName: keeper }, title: keeper },
+      { team: { biome, tier: tier + 1, count: 1, boss: true, bossName: keeper, bossKind: 'keeper' }, title: keeper },
     ],
   });
 }
@@ -554,11 +591,86 @@ function startGauntlet(site, tile) {
 function checkGlint(tile) {
   if (!tile) return;
   const sites = world.getSites(tile);
-  const meaningful = sites.filter(s => s.type === 'battle' || s.type === 'pedestal' || s.subtype === 'cache' || s.subtype === 'mystery');
+  const meaningful = sites.filter(s => s.type === 'battle' || s.type === 'pedestal'
+    || s.subtype === 'cache' || s.subtype === 'mystery' || s.subtype === 'bargain');
   if (meaningful.every(s => run.clearedSites.has(s.id))) worldView.setGlint(tile, false);
 }
 
+const statText = stats => Object.entries(stats || {})
+  .map(([k, v]) => `${v > 0 ? '+' : ''}${v}${k === 'luck' ? '% crit' : k === 'dodge' ? '% dodge' : ' ' + k.toUpperCase()}`)
+  .join(', ');
+
+// A bargain asks for something real; refusal is always free.
+function resolveBargain(site) {
+  if (run.clearedSites.has(site.id)) { ui.toast('The bargain is struck and done.'); return; }
+  const b = site.bargain;
+  const tile = currentLocalTile || player.tile;
+  const tier = world.regionOf(tile).tier;
+  const sigBefore = run.appearanceSig;
+  if (b.cost === 'relic') {
+    const cands = run.items.filter(i => !i.mutation);
+    if (!cands.length) { ui.toast('You carry nothing it wants to eat.'); return; }
+    const order = { c: 0, u: 1, r: 2, a: 3 };
+    cands.sort((x, y) => order[x.rarity] - order[y.rarity]);
+    const eaten = run.removeItem(cands[0].id);
+    ui.toast(`The star swallows <b>${eaten.name}</b> whole, and chews with its whole face.`);
+  } else if (b.cost.hp) {
+    if (run.hp <= b.cost.hp) { ui.toast('It would take more than you have left to give.'); return; }
+    run.hp -= b.cost.hp;
+  } else if (b.cost.maxHP) {
+    if (run.stats.maxHP - b.cost.maxHP < 12) { ui.toast('There is not enough of you left to trade away.'); return; }
+    run.addBoon({ id: b.id + '_price', name: b.name + ' (the price)', stats: { maxHP: -b.cost.maxHP } });
+  } else if (b.cost.shards) {
+    if (!run.spendShards(b.cost.shards)) { ui.toast('Your purse does not meet the asking.'); return; }
+  }
+  run.clearedSites.add(site.id);
+  ui.closeModal();
+  const rngB = mulberry32((Math.random() * 2 ** 31) | 0);
+  if (b.gain === 'draw_rare' || b.gain === 'draw_boosted') {
+    const item = drawItem(rngB, world.regionOf(tile).dominantBiome, run.ownedIds,
+      { source: b.gain === 'draw_rare' ? 'boss' : 'secret', tier, unlocked: meta.unlockedIds });
+    if (item) grantItem(item);
+    else { const got = run.gainShards(20); ui.toast(`It pays in loose light instead. (+${got} ☆)`, true); }
+  } else if (b.gain === 'gamble_shards') {
+    const got = run.gainShards(Math.floor(rngB() * 31));
+    ui.toast(got >= 12 ? `The well echoes generously: +${got} ☆.`
+      : got > 0 ? `The echo comes back thin: +${got} ☆.`
+      : 'The well keeps your offering. The silence afterward is smug.', got >= 12);
+  } else if (b.gain === 'mutation') {
+    const m = drawMutation(rngB, run.ownedIds);
+    if (m) grantItem(m);
+    else { const got = run.gainShards(30); ui.toast(`The dust finds nothing left to improve — it pays you off. (+${got} ☆)`, true); }
+  } else if (b.gain.boon) {
+    run.addBoon(b.gain.boon);
+    ui.toast(`<b>${b.gain.boon.name}</b> takes hold, for the rest of this run.`, true);
+  }
+  if (run.appearanceSig !== sigBefore) player.setAppearance(run.appearance, run.appearanceSig);
+  if (currentLocalTile) {
+    localView.build(currentLocalTile, world, sitesFor(currentLocalTile));
+    checkGlint(currentLocalTile);
+  }
+  refreshHud(player.tile);
+  saveNow(true);
+}
+
 // ------------------------------------------------------------ site actions ---
+
+// Three mutations, and the world admits what it has been hiding.
+function openWound({ announce = true } = {}) {
+  if (run.woundOpen) return;
+  run.woundOpen = true;
+  world.revealWound();
+  worldView.revealHiddenTiles([...world.wound.bridgeTiles, ...world.wound.tiles]);
+  worldView.updateFog(player.tile, { animate: false });
+  if (announce) {
+    audio.sfxReveal();
+    ui.toast('☒ Your third change is answered. Far past the rim, something TEARS…', true);
+    ui.toast('☒ <b>The Wound in the Meridian</b> lies open. A scar-tissue bridge waits at the edge of the map.', true);
+    ui.toast('☒ What is inside is beyond every warden you have faced. It sent the invitation anyway.', true);
+  }
+  announceFeats(meta.bump(s => { s.woundOpened = true; }));
+  saveNow(true);
+}
 
 function grantItem(item) {
   const before = new Set(run.synergies.map(s => s.id));
@@ -566,6 +678,11 @@ function grantItem(item) {
   run.addItem(item);
   const fresh = run.synergies.filter(s => !before.has(s.id));
   audio.sfxPickup(item.rarity);
+  if (item.mutation) {
+    ui.toast('☒ The change goes deeper than cloth. Your paper body remembers a different shape…', true);
+    announceFeats(meta.bump(s => { s.mutations = (s.mutations || 0) + 1; }));
+    if (run.mutationCount >= 3) openWound();
+  }
   // the hoard marks the wanderer: repaint the paper self if the look changed
   if (run.appearanceSig !== sigBefore) {
     player.setAppearance(run.appearance, run.appearanceSig);
@@ -695,13 +812,88 @@ function handleAction(site, label, btn) {
   if (label.startsWith('⚔') && site.team) {
     startBattle({
       team: site.team, title: site.name, siteId: site.id,
-      onWin: site.team.boss && site.team.satellite ? () => {
+      onWin: site.team.deity ? () => {
+        announceFeats(meta.bump(s => { s.woundClosed = true; }));
+        setTimeout(() => ui.showEnding(run, world, meta), 900);
+      } : site.team.boss && site.team.satellite ? () => {
         ui.toast('☄ The satellite’s heart is yours to claim.', true);
         announceFeats(meta.bump(s => {
           if (!s.sats.includes(site.team.satellite)) s.sats.push(site.team.satellite);
         }));
+        // the deep sky pays in changed flesh: satellite bosses seed mutations
+        const m = drawMutation(mulberry32((Math.random() * 2 ** 31) | 0), run.ownedIds);
+        if (m) grantItem(m);
       } : null,
     });
+    return;
+  }
+  if (site.bargain && label === site.bargain.action) {
+    resolveBargain(site);
+    return;
+  }
+  if (label === 'Refuse') {
+    ui.closeModal();
+    ui.toast('You keep what is yours. The offer does not lower its price.');
+    return;
+  }
+  if (label === 'Commune with the Shrine') {
+    if (run.shrineBoons.has(site.id)) { ui.toast('The shrine has given what it will give this pilgrimage.'); return; }
+    const tileHere = currentLocalTile || player.tile;
+    const rng0 = mulberry32(Math.floor(hash2(tileHere.q * 13 + 5, tileHere.r * 7 + 3, world.seed + 4400) * 0xffffffff));
+    const offer = SHRINE_BOONS[Math.floor(rng0() * SHRINE_BOONS.length)];
+    if (!site._communeOffered) {
+      site._communeOffered = true;
+      const costTxt = offer.cost.shards ? `☆ ${offer.cost.shards}` : `${offer.cost.hp} HP of your ink`;
+      ui.modalOutcome(`The shrine stirs. It offers ${offer.name} (${statText(offer.boon.stats)}) in exchange for ${costTxt}. Commune again to accept.`);
+      return;
+    }
+    if (offer.cost.shards && !run.spendShards(offer.cost.shards)) {
+      ui.toast('You lack the starlight the shrine asks.');
+      return;
+    }
+    if (offer.cost.hp) {
+      if (run.hp <= offer.cost.hp) { ui.toast('The shrine asks more ink than you can spare.'); return; }
+      run.hp -= offer.cost.hp;
+    }
+    run.shrineBoons.add(site.id);
+    run.addBoon({ id: offer.id, name: offer.name, stats: offer.boon.stats });
+    audio.sfxHeal();
+    ui.toast(`✚ ${offer.line} (${statText(offer.boon.stats)})`, true);
+    refreshHud(player.tile);
+    saveNow(true);
+    return;
+  }
+  if (label === 'Listen Closely') {
+    if (run.clearedSites.has(site.id)) { ui.toast('The whisper has said its piece.'); return; }
+    run.clearedSites.add(site.id);
+    const roll = Math.random();
+    if (roll < 0.5) {
+      const got = run.gainShards(10);
+      ui.modalOutcome(`You listen. It tells you where something was buried before "buried" meant anything. (+${got} ☆)`);
+    } else if (roll < 0.8) {
+      run.addBoon({ id: 'whisper_' + site.id, name: 'A Whispered Truth', stats: { luck: 3 } });
+      ui.modalOutcome('You listen. You will never repeat it, and it will never stop being useful. (+3% crit)');
+    } else {
+      run.hp = Math.max(1, run.hp - 4);
+      ui.modalOutcome('You listen too long. Something on the far side listens back. (−4 HP)');
+    }
+    refreshHud(player.tile);
+    saveNow(true);
+    return;
+  }
+  if (label === 'Cradle a Newborn Star') {
+    if (run.clearedSites.has(site.id)) { ui.toast('The nursery sleeps. Let it.'); return; }
+    run.clearedSites.add(site.id);
+    if (Math.random() < 0.55) {
+      run.addBoon({ id: 'star_warmth', name: 'Newborn Starlight', stats: { luck: 4, maxHP: 3 } });
+      audio.sfxHeal();
+      ui.modalOutcome('The little star settles in your palms, considers its options, and moves into your chest-rune. (+4% crit, +3 max HP)');
+    } else {
+      const got = run.gainShards(16);
+      ui.modalOutcome(`The star sneezes stardust all over you. Good manners require keeping it. (+${got} ☆)`);
+    }
+    refreshHud(player.tile);
+    saveNow(true);
     return;
   }
   if (label === 'Claim the Gift') {
@@ -710,8 +902,10 @@ function handleAction(site, label, btn) {
     const source = site.pool === 'ASTRAL' ? 'astral'
       : site.pool === 'BOSS' ? 'boss'
       : tileHere.secretRevealed ? 'secret' : 'pedestal';
-    const item = drawItem(rng, site.pool, run.ownedIds,
-      { source, tier: world.regionOf(tileHere).tier, unlocked: meta.unlockedIds });
+    // astral pedestals occasionally hold something far stranger
+    const item = (source === 'astral' && rng() < 0.15 && drawMutation(rng, run.ownedIds))
+      || drawItem(rng, site.pool, run.ownedIds,
+        { source, tier: world.regionOf(tileHere).tier, unlocked: meta.unlockedIds });
     run.clearedSites.add(site.id);
     ui.closeModal();
     if (item) grantItem(item);
@@ -766,10 +960,15 @@ function handleAction(site, label, btn) {
   if (label === 'Investigate') {
     const out = mysteryOutcome(mulberry32((Math.random() * 2 ** 31) | 0));
     run.shards = Math.max(0, run.shards + out.shards);
+    if (out.boon) run.addBoon({ ...out.boon });
+    if (out.hp) run.hp = Math.max(1, run.hp + out.hp);
     run.clearedSites.add(site.id);
     refreshHud(player.tile);
     saveNow(true);
-    ui.modalOutcome(out.text + (out.shards ? `  (${out.shards > 0 ? '+' : ''}${out.shards} ☆)` : ''));
+    ui.modalOutcome(out.text
+      + (out.shards ? `  (${out.shards > 0 ? '+' : ''}${out.shards} ☆)` : '')
+      + (out.boon ? `  (${statText(out.boon.stats)})` : '')
+      + (out.hp ? `  (${out.hp} HP)` : ''));
     btn.disabled = true;
     if (currentLocalTile) checkGlint(currentLocalTile);
     return;
@@ -813,11 +1012,26 @@ function detonate() {
   if (run.consumables.charge <= 0) { ui.toast('No star-charges left. Traders sell them, and foes sometimes drop them.'); return; }
   run.consumables.charge--;
   refreshHud(player.tile);
-  const secret = neighborsOf(player.tile.q, player.tile.r)
-    .map(([q, r]) => world.tiles.get(keyOf(q, r)))
-    .find(t => t && t.secret);
+  const neighbors = neighborsOf(player.tile.q, player.tile.r)
+    .map(([q, r]) => world.tiles.get(keyOf(q, r)));
+  const secret = neighbors.find(t => t && t.secret);
+  const seam = neighbors.find(t => t && t.hiddenBridge && t.bridgeSeam);
   player.burstNow?.();
   audio.sfxDetonate();
+  if (seam) {
+    const satIdx = seam.region - 100;
+    const sat = world.satellites[satIdx];
+    world.revealBridge(satIdx);
+    worldView.revealHiddenTiles(sat.bridgeTiles);
+    worldView.updateFog(player.tile, { animate: false });
+    audio.sfxReveal();
+    audio.sfxGate();
+    ui.toast(`✸ The blast strikes the resonant seam — a folded star-bridge UNFURLS across the void!`, true);
+    ui.toast(`☄ The way to <b>${sat.def.name}</b> lies open. What waits there is stronger than this shore.`, true);
+    announceFeats(meta.bump(s => { s.bridges = (s.bridges || 0) + 1; }));
+    saveNow(true);
+    return;
+  }
   if (secret) {
     world.revealSecret(secret);
     worldView.revealSecretTile(secret);
@@ -904,6 +1118,10 @@ document.getElementById('inv-close').addEventListener('click', () => ui.toggleIn
 document.getElementById('btn-newrun').addEventListener('click', () => {
   location.href = '?seed=' + Math.floor(Math.random() * 1e6);
 });
+document.getElementById('btn-ascend').addEventListener('click', () => {
+  clearSave(world.seed);   // the healed world is finished; a new one is drawn
+  location.href = '?seed=' + Math.floor(Math.random() * 1e6);
+});
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape') {
@@ -945,8 +1163,8 @@ window.__vael = {
     saveNow(true);
     return true;
   },
-  testBattle: (tier = 1, biome = 'MEADOW', boss = false) =>
-    startBattle({ team: { biome, tier, count: 2, boss }, title: 'Test Battle' }),
+  testBattle: (tier = 1, biome = 'MEADOW', boss = false, extra = {}) =>
+    startBattle({ team: { biome, tier, count: 2, boss, ...extra }, title: extra.bossName || 'Test Battle' }),
   openGateAt: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t?.gate) challengeGate(t); },
   detonate,
   lookAt: (x, z, dist) => { worldRig.panTo({ x, z }, { instant: true }); if (dist) { worldRig.dist = dist; worldRig.apply(); } },
@@ -970,7 +1188,15 @@ window.__vael = {
       ? { kind: 'item', id: o.item.id, rarity: o.item.rarity, price: o.price, sold: !!o.sold }
       : { kind: o.kind, id: o.id, price: o.price, stock: o.stock });
   },
-  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); player.setAppearance(run.appearance, run.appearanceSig); refreshHud(player.tile); saveNow(true); } }); },
+  give: id => { import('./items.js').then(m => {
+    const it = m.ITEMS.find(i => i.id === id);
+    if (!it) return;
+    run.addItem(it);
+    player.setAppearance(run.appearance, run.appearanceSig);
+    if (it.mutation && run.mutationCount >= 3) openWound();
+    refreshHud(player.tile);
+    saveNow(true);
+  }); },
 };
 
 const clock = new THREE.Clock();

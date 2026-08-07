@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { hash2 } from './rng.js';
 import { keyOf, hexDist, neighborsOf } from './hex.js';
-import { BIOMES, CELESTIALS } from './names.js';
+import { BIOMES, CELESTIALS, FOES, speciesSlug } from './names.js';
 import { run } from './run.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeMistTexture, makeStarTexture,
@@ -52,8 +52,14 @@ export class WorldView {
 
     const size = CONFIG.hexSize;
     this.worldRadius = Math.sqrt(3) * size * (CONFIG.mapRadius + 1);
-    // secret hexes render too (hidden until revealed), so they get slots
-    this.renderTiles = [...world.land, ...world.secrets];
+    // hidden hexes render too (secrets, folded bridges, the Wound) — they
+    // get instance slots now so revealing them later is just a scale-up
+    this.renderTiles = [
+      ...world.land, ...world.secrets,
+      ...world.satellites.flatMap(s => s.bridgeTiles),
+      ...world.wound.bridgeTiles,
+      ...world.wound.tiles.filter(t => t.void),
+    ];
 
     this._buildLights();
     this._buildBase();
@@ -454,6 +460,67 @@ export class WorldView {
       this.comet = { holder, angle: rng(3, 3) * Math.PI * 2, radius: R * 1.12, y: 7.5, speed: (Math.PI * 2) / 150 };
       g.add(holder);
     }
+
+    // --- the speaking sky: bodies with vantage hexes below them -----------
+    // (positions come from worldgen's skyAnchors so their voices line up)
+    for (const anchor of this.world.skyAnchors) {
+      if (anchor.id === 'giant') continue;   // built above
+      const holder = new THREE.Group();
+      holder.position.set(anchor.x, 6.5, anchor.z);
+      if (anchor.id === 'third_sister') {
+        // the unshattered moon, quietly whole
+        const moon = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(3.4, 1),
+          new THREE.MeshStandardMaterial({
+            color: 0xcdd6f2, flatShading: true, roughness: 0.85,
+            emissive: 0x9aa8d8, emissiveIntensity: 0.35,
+          })
+        );
+        holder.add(moon, glowSprite('#cdd6f2', 11, 0.25));
+        const lbl = skyLabel('The Third Sister', 'the moon that held', '#cdd6f2', 0.014, 0.6);
+        lbl.position.y = 5.4;
+        holder.add(lbl);
+        this.celestialSpinners.push({ obj: moon, speed: 0.02 });
+      } else if (anchor.id === 'ferry_lantern') {
+        const flame = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.8),
+          new THREE.MeshStandardMaterial({
+            color: 0xffd98a, flatShading: true, emissive: 0xffc75a, emissiveIntensity: 2, roughness: 0.3,
+          })
+        );
+        flame.scale.y = 1.6;
+        const cage = new THREE.Mesh(
+          new THREE.TorusGeometry(1.5, 0.08, 6, 24),
+          new THREE.MeshBasicMaterial({
+            color: 0x8a7a58, transparent: true, opacity: 0.8, fog: false,
+          })
+        );
+        holder.add(flame, cage, glowSprite('#ffd98a', 7, 0.5));
+        const lbl = skyLabel('The Ferry Lantern', 'hung, and waiting', '#ffe2a8', 0.012, 0.6);
+        lbl.position.y = 3.4;
+        holder.add(lbl);
+        this.celestialSpinners.push({ obj: cage, speed: 0.15 });
+      } else if (anchor.id === 'door_ajar') {
+        // a thin slit of warm light standing in the dark
+        const slab = new THREE.Mesh(
+          new THREE.BoxGeometry(2.6, 5.4, 0.4),
+          new THREE.MeshStandardMaterial({ color: 0x1a1430, flatShading: true, roughness: 0.9 })
+        );
+        const light = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.5, 5.0),
+          new THREE.MeshBasicMaterial({
+            color: 0xffe2b0, transparent: true, opacity: 0.95,
+            blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+          })
+        );
+        light.position.set(1.2, 0, 0.25);
+        holder.add(slab, light, glowSprite('#ffe2b0', 6, 0.3));
+        const lbl = skyLabel('A Door, Ajar', 'the smell of bread', '#ffe2b0', 0.011, 0.55);
+        lbl.position.y = 4.0;
+        holder.add(lbl);
+      }
+      g.add(holder);
+    }
   }
 
   // -------------------------------------------------------- the hex layer ---
@@ -784,8 +851,8 @@ export class WorldView {
     rts.forEach((tile, i) => {
       tile.capPos = new THREE.Vector3(tile.x, tile.topY + 0.5, tile.z);
       tile.capYaw = hash2(tile.q, tile.r, 907) * Math.PI * 2;
-      // unrevealed secrets hide entirely: no cap, no prism
-      this._setCapScale(i, tile.secret ? 0 : 1);
+      // unrevealed secrets / folded bridges / the Wound hide entirely
+      this._setCapScale(i, tile.secret || tile.hiddenBridge || tile.woundHidden ? 0 : 1);
     });
     this.layer.add(this.mistMesh);
   }
@@ -852,7 +919,6 @@ export class WorldView {
 
   _buildCracks() {
     // hairline gold runes on tiles adjacent to sealed secrets
-    const tex = makeLabelTexture('⚡', { color: '#f0c46a' });
     this.crackSprites = [];
     for (const t of this.world.land) {
       if (!t.crackHint) continue;
@@ -865,6 +931,19 @@ export class WorldView {
       this.layer.add(sp);
       t.crackSprite = sp;
       this.crackSprites.push(sp);
+    }
+    // resonant seams: a cold blue shimmer on shores where a bridge waits
+    for (const t of this.world.land) {
+      if (!t.seamHint && !t.vantage) continue;
+      const blue = !!t.seamHint;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(blue ? '#9fe8ff' : '#dfe6ff'), transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      sp.scale.setScalar(blue ? 0.8 : 0.6);
+      sp.position.set(t.x - 0.2, t.topY + 0.16, t.z + 0.2);
+      this.layer.add(sp);
+      t.seamSprite = sp;
     }
   }
 
@@ -885,6 +964,21 @@ export class WorldView {
       const n = this.world.tiles.get(keyOf(nq, nr));
       if (n?.crackSprite) { n.crackHint = false; n.crackSprite.material.opacity = 0; }
     }
+  }
+
+  // A folded span (or the Wound itself) surfaces: pop its tiles in, shore
+  // to far end, like a road being dealt from a deck.
+  revealHiddenTiles(tilesArr) {
+    tilesArr.forEach((tile, i) => {
+      this._styleTile(tile);
+      this.tileMesh.setColorAt(tile.idx, tile.baseColor);
+      this.ringMesh.setColorAt(tile.idx, tile.ringColor);
+      tile.capPos = new THREE.Vector3(tile.x, tile.topY + 0.5, tile.z);
+      tile.fogState = -1;
+      setTimeout(() => this.popAnims.push({ tile, t: 0 }), i * 90);
+    });
+    this.tileMesh.instanceColor.needsUpdate = true;
+    this.ringMesh.instanceColor.needsUpdate = true;
   }
 
   // -------------------------------------------------------------- traders ---
@@ -935,13 +1029,15 @@ export class WorldView {
 
   _roamerTexture(r) {
     const dread = r.tier >= 3;
-    const key = r.biome + (dread ? ':d' : '');
+    const roster = FOES[r.biome] || FOES.MEADOW;
+    const spec = roster[(hash2(r.q, r.r, 55) * roster.length) | 0];
+    const key = r.biome + ':' + spec.n + (dread ? ':d' : '');
     if (!this._roamerTex[key]) {
       const base = '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).color)
         .offsetHSL(0, 0.1, dread ? -0.16 : -0.08).getHexString();
       this._roamerTex[key] = makeEnemyTexture({
         base, eye: dread ? '#ff5a7a' : '#ffd24a', seed: hash2(r.r, r.q, 56),
-        role: ['brute', 'swift', 'guard'][hash2(r.q, r.r, 55) * 3 | 0],
+        role: spec.r, species: speciesSlug(spec.n),
         accent: '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).accent).getHexString(),
       });
     }
@@ -1041,6 +1137,10 @@ export class WorldView {
         const sense = run.flags?.crackSense;
         tile.crackSprite.material.opacity =
           tile.crackHint && (state === 3 || (sense && state >= 1)) ? (sense ? 0.55 : 0.35) : 0;
+      }
+      if (tile.seamSprite) {
+        tile.seamSprite.material.opacity =
+          (tile.seamHint || tile.vantage) && state >= 2 ? (state === 3 ? 0.5 : 0.3) : 0;
       }
       this._applyGlint(tile);
     }

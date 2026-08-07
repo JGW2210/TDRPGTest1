@@ -47,6 +47,33 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    dew scarcity (start 0, 5% drop, heal 12, capped cache/shop stock);
    timing/block-window items rarity-bumped and block widening 50%→30%.
 
+7. **World-identity round** (same branch; poll held, all 4 recommended
+   options chosen): per-species enemy art — every named foe (39 species)
+   has a hand-authored painter in `src/monsters.js`, plus one-off boss
+   portraits (warden/keeper/guardian/champion/3 satellite bosses/deity);
+   airtight worldgen — rift-leak seal pass (rules 1+2 + causeway-mouth
+   anchor protection + re-anchor repair pass), MST validation before
+   union, zero-width-rift boundary wardens, natural-rift crossing
+   recording (fixed two seeds where region 0 had no causeway at all;
+   regression suite: 0 leaks / 0 lost regions over 40 seeds); satellites
+   are radius-5 areas (tier-5 packs, 7-site budgets) with **hidden
+   star-bridges** — visible worlds, invisible spans revealed by
+   detonating a resonant seam on the glinting shore (persisted in save
+   v3); shallows rivers carved from lakes (region-confined), 2 nebula
+   landmark hexes with unique events, water-locked shoal roamers;
+   shrine Commune boons (seeded, once per shrine, two-step confirm),
+   sacrifice bargains (relic-eating star, tithe-stone, moth court, paid
+   door, echo well) via `run.boons`, mystery outcomes with boons/big
+   swings; 4 sky-voice celestials (giant/third sister/ferry lantern/
+   door ajar) with vantage hexes + one-time dialogue and gifts;
+   **8 cosmic mutations** (rarity 'm', only from satellite bosses
+   [guaranteed], t3+ keepers [25%], astral pedestals [15%], nebula
+   bargain) each with monstrous texture overrides and real downsides —
+   3 carried tears open **the Wound in the Meridian** (region 200,
+   tier 6, WOUND biome, whisper landmarks, wound battles) with deity
+   boss Vhal-Suthek (tier 7, crush/siphon/flurry rotation) and an
+   alternative ending screen (`#ending`, `ui.showEnding`).
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -245,8 +272,18 @@ give(itemId), openGateAt(q,r), detonate(), localSites(), act(siteId,label)`.
 - Round-6 combat numbers (comboMult 0.5, missMult 0.5, blockPerfect 0.15,
   crush ×1.2, band half-widths, flurry chances) are theory-tuned only —
   human playtesting will likely want the first-bar speeds eased or the
-  crush telegraph lengthened. Old saves load (VERSION 2 unchanged) but
-  mid-run balance shifted under them.
+  crush telegraph lengthened.
+- Save VERSION is now 3 (round 7) — v2 saves are discarded on load.
+  Worldgen changed for identical seeds (rivers, sealing, satellites), so
+  this is by design.
+- Round-7 numbers untested by humans: mutation stat swings, deity
+  hp ×2.6×1.6 at tier 7, wound-battle counts, bargain prices, water-pack
+  density (≈11-16/world), nebula reward rates. The worldgen suite +
+  Playwright smokes (scratchpad: worldgen-suite.mjs, smoke.mjs,
+  smoke3.mjs) verify structure, not feel.
+- The deity is one phase; a phase-2 (adds/board-clear) was floated but
+  not built. Mutations cannot be removed once taken (no cleansing
+  shrine yet).
 - The rarity skew and MEADOW/FOREST astral holes were fixed this round
   (16 retags; totals now 42c/48u/43r/17a, one astral per biome pool).
 - `summary.md` (this file) and the `__vael` debug handle ship in the repo;

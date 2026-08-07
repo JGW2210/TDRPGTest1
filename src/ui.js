@@ -2,6 +2,7 @@
 
 import { RARITY, SETS } from './items.js';
 import { FEATS } from './meta.js';
+import { BIOMES } from './names.js';
 
 const $ = id => document.getElementById(id);
 
@@ -23,14 +24,8 @@ export const ui = {
   fade(on) { $('fade').classList.toggle('on', on); },
 
   setLocation(tile, kingdom) {
-    const biomeNames = {
-      MEADOW: 'Starlit Meadow', FOREST: 'Sighing Forest', MOUNTAIN: 'Cloudpiercers',
-      VOLCANO: 'Ember Wastes', DESERT: 'Glass Dunes', TUNDRA: 'Pale Expanse',
-      SEA: 'Astral Shallows', CRYSTAL: 'Prism Fields', ROAD: 'Warded Causeway',
-      BRIDGE: 'Star-Bridge', LUNAR: 'Lunar Shale', CRIMSON: 'Crimson Waste',
-      VERDANT: 'Verdant Drift', SECRET: 'Hollowed Secret',
-    };
-    $('hud-loc').innerHTML = `<b>${tile.name}</b><br><span style="color:var(--ink-dim);font-style:italic">${biomeNames[tile.biome]} · hex ${tile.q}, ${tile.r}</span>`;
+    const biomeName = BIOMES[tile.biome]?.name || '—';
+    $('hud-loc').innerHTML = `<b>${tile.name}</b><br><span style="color:var(--ink-dim);font-style:italic">${biomeName} · hex ${tile.q}, ${tile.r}</span>`;
     const kEl = $('hud-king');
     if (kingdom) {
       const hex = '#' + kingdom.color.toString(16).padStart(6, '0');
@@ -136,6 +131,18 @@ export const ui = {
       $('itemcard-scrim').classList.add('hidden');
       if (onTaken) onTaken();
     };
+  },
+
+  // The alternative ending: the deity falls and the run is complete.
+  showEnding(run, world, meta) {
+    $('ending-stats').innerHTML =
+      `hexes wandered <b>${run.hexesVisited.size}</b> · battles won <b>${run.battlesWon}</b> · ` +
+      `wardens felled <b>${run.bossesDown}</b><br>` +
+      `relics gathered <b>${run.items.length}</b> · mutations carried <b>${run.mutationCount}</b> · ` +
+      `star-shards at the end <b>${run.shards}</b><br>` +
+      (meta ? `echoes inscribed <b>${meta.data.feats.length} / ${FEATS.length}</b><br>` : '') +
+      `<span style="font-style:italic;color:var(--ink-dim)">seed ${world.seed} is healed now. It will not remember you. You will remember it.</span>`;
+    $('ending').classList.remove('hidden');
   },
 
   showDeath(run, world, meta) {

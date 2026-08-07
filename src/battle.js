@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { mulberry32, hash2, pick } from './rng.js';
-import { BIOMES, FOES } from './names.js';
+import { BIOMES, FOES, speciesSlug } from './names.js';
 import { run } from './run.js';
 import { audio } from './audio.js';
 import {
@@ -192,6 +192,7 @@ export class BattleSystem {
       let atk = Math.round((2.5 + 1.8 * tier) * mods.atk * 10) / 10;
       let spd = Math.round((4 + tier) * mods.spd);
       if (team.boss) { hp = Math.round(hp * 2.6); atk = Math.round(atk * 1.2 * 10) / 10; }
+      if (team.deity) { hp = Math.round(hp * 1.6); atk = Math.round(atk * 1.15 * 10) / 10; }
 
       const bodyC = '#' + new THREE.Color(biome.color).offsetHSL(0.02 * i, 0.12, -0.1).getHexString();
       const tex = makeEnemyTexture({
@@ -200,6 +201,8 @@ export class BattleSystem {
         role: spec.r,
         seed: this.rng(),
         boss: !!team.boss,
+        species: team.boss ? null : speciesSlug(spec.n),
+        bossKind: team.boss ? (team.bossKind || 'warden') : (team.bossKind || null),
         accent: '#' + new THREE.Color(biome.accent).getHexString(),
       });
       const s = team.boss ? 3.1 : 1.9 + (spec.r === 'brute' ? 0.35 : 0);
@@ -216,7 +219,7 @@ export class BattleSystem {
 
       return {
         id: i, name: spec.n + (count > 1 ? ` ${'ABC'[i]}` : ''), role: spec.r,
-        hp, maxHP: hp, atk, spd, boss: !!team.boss,
+        hp, maxHP: hp, atk, spd, boss: !!team.boss, deity: !!team.deity,
         burn: 0, burnTurns: 0, chill: 0, stun: 0, charging: false, enraged: false,
         mesh, home: mesh.position.clone(), dead: false,
         intent: 'attack',
@@ -493,6 +496,10 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     this.abilityCds[ab.id] = ab.cd;
+    if (run.flags.abilityToll) {   // the Hollow Chest takes its cut
+      run.hp = Math.max(1, run.hp - run.flags.abilityToll);
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${run.flags.abilityToll}`, 'dmg');
+    }
     this._log(`✧ ${ab.name}!`);
     const alive = this._aliveEnemies();
     if (ab.kind === 'aoe') {
@@ -576,7 +583,8 @@ export class BattleSystem {
     this._hideMenu();
     run.consumables.dew--;
     audio.sfxHeal();
-    const amount = 12 + (run.flags.dewPotency || 0);
+    let amount = 12 + (run.flags.dewPotency || 0);
+    if (run.flags.dewMuted) amount = Math.ceil(amount / 2);   // the Starving Halo tithes it
     run.hp = Math.min(run.stats.maxHP, run.hp + amount);
     this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${amount}`, 'heal');
     this._log(`❋ The star-dew glows going down. +${amount} HP.`);
@@ -666,6 +674,27 @@ export class BattleSystem {
         // wound-up blows land as unblockable crushes in the deep (and always from bosses)
         const crush = e.boss || tier >= 2;
         await this._enemyStrike(e, 2.0, crush ? { crush: true } : { heavy: true });
+      } else if (e.deity && this.rng() < 0.65) {
+        // the Wound made flesh fights with every voice at once
+        const move = this.turn % 3;
+        if (move === 0) {
+          e.charging = true;
+          this._log(`${e.name} folds the light back for a CRUSHING blow…`);
+          this._refreshCards();
+          await wait(600);
+          continue;
+        } else if (move === 1) {
+          const drain = 4 + Math.round((this.team.tier || 6) * 0.8);
+          run.hp -= drain;
+          e.hp = Math.min(e.maxHP, e.hp + drain);
+          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
+          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drain}`, 'heal');
+          this._log(`${e.name} drinks the seam between you and the world…`);
+          this._refreshCards();
+          await wait(550);
+        } else {
+          await this._enemyStrike(e, 1, { hits: 2 });
+        }
       } else if (e.role === 'mystic' && this.rng() < 0.42) {
         e.intent = 'special';
         const hurt = this._aliveEnemies().filter(o => o !== e && o.hp < o.maxHP * 0.7);
@@ -820,7 +849,11 @@ export class BattleSystem {
 
   _applyBiomeAffliction(e, dmg) {
     const biome = this.team.biome;
-    if (['VOLCANO', 'CRIMSON'].includes(biome) && this.rng() < 0.4) {
+    if (biome === 'WOUND' && this.rng() < 0.35) {
+      this.playerBurn = { dmg: 2, turns: 2 };
+      if ((this.playerChill || 0) < 3) this.playerChill = (this.playerChill || 0) + 1;
+      this._log('Un-light seeps into your folds — it burns cold.');
+    } else if (['VOLCANO', 'CRIMSON'].includes(biome) && this.rng() < 0.4) {
       this.playerBurn = { dmg: 2, turns: 2 };
       this._log('Cinders catch in your paper folds — you are BURNING!');
     } else if (['TUNDRA', 'LUNAR'].includes(biome) && this.rng() < 0.4 && (this.playerChill || 0) < 3) {
@@ -847,6 +880,9 @@ export class BattleSystem {
     if (this.rng() < 0.18 + (run.flags.chargeDropBonus || 0)) { run.consumables.charge++; drops.charge = 1; }
     else if (this.rng() < 0.05) { run.consumables.dew++; drops.dew = 1; }   // dew is precious now
     if (run.flags.afterBattleHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.afterBattleHeal);
+    if (run.flags.drylandAche && !['SEA', 'BRIDGE'].includes(this.team.biome)) {
+      run.hp = Math.max(1, run.hp - run.flags.drylandAche);   // the gills miss the water
+    }
     run.battlesWon++;
     if (boss) run.bossesDown++;
     this._log(`Victory! +${shards} ☆${drops.charge ? ' · +1 ✸' : ''}${drops.dew ? ' · +1 ❋' : ''}`);

@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { mulberry32, hash2 } from './rng.js';
-import { BIOMES } from './names.js';
+import { BIOMES, FOES, speciesSlug } from './names.js';
 import { hexRingGeometry } from './world3d.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeLabelTexture, makeGlowTexture,
@@ -204,9 +204,11 @@ export class LocalView {
     if (site.type === 'battle') {
       const biome = BIOMES[tile.biome];
       const body = '#' + new THREE.Color(biome.color).offsetHSL(0, 0.1, -0.12).getHexString();
+      const roster = FOES[tile.biome] || FOES.MEADOW;
+      const spec = roster[Math.floor(rng() * roster.length)];
       const tex = makeEnemyTexture({
         base: body, eye: '#ffd24a', seed: rng(),
-        role: ['brute', 'swift', 'mystic', 'guard'][Math.floor(rng() * 4)],
+        role: spec.r, species: speciesSlug(spec.n),
         accent: '#' + new THREE.Color(biome.accent).getHexString(),
       });
       parent.add(billboardPlane(tex, 1.5, 1.5));

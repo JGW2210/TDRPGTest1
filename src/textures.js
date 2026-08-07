@@ -1,6 +1,7 @@
 // All art in Vaeldrift is painted at runtime onto canvases — no image assets.
 
 import * as THREE from 'three';
+import { paintSpecies, paintBoss } from './monsters.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -165,11 +166,30 @@ export function makePlayerTexture(appearance = null) {
   const done = tag => ap.completeSets.includes(tag);
   const grand = id => ap.grand.includes(id);
 
-  // colors: the first (up to two) complete sets claim cloak and eyes
+  // cosmic mutations override everything: the body remembers the Wound
+  const muts = ap.mutations || [];
+  const mut = id => muts.includes(id);
+  const eldritch = muts.length >= 3;
+
+  // colors: the first (up to two) complete sets claim cloak and eyes —
+  // unless mutation has already claimed the flesh
   const looks = ap.completeSets.map(t => SET_LOOK[t]).filter(Boolean);
-  const cloakC = looks[0]?.cloak || '#2c2f63';
-  const trimC = looks[0]?.trim || '#f0c46a';
-  const eyeC = looks[1]?.eye || looks[0]?.eye || '#5a4ee0';
+  const cloakC = eldritch ? '#150b26' : muts.length ? '#2a1633' : (looks[0]?.cloak || '#2c2f63');
+  const trimC = eldritch ? '#a6ff57' : (looks[0]?.trim || '#f0c46a');
+  const eyeC = eldritch ? '#a6ff57' : (looks[1]?.eye || looks[0]?.eye || '#5a4ee0');
+
+  // torn vellum wings unfurl behind the cloak
+  if (mut('tatter_wings')) {
+    g.fillStyle = eldritch ? '#241238' : '#332046';
+    g.strokeStyle = '#171938'; g.lineWidth = 4;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(s * 40, -40);
+      g.bezierCurveTo(s * 110, -110, s * 128, -30, s * 92, 10);
+      g.lineTo(s * 104, 30); g.lineTo(s * 78, 26); g.lineTo(s * 84, 52); g.lineTo(s * 56, 34);
+      g.closePath(); g.fill(); g.stroke();
+    }
+  }
 
   // cloak — a tall teardrop silhouette
   const cloakPath = () => {
@@ -454,7 +474,7 @@ export function makePlayerTexture(appearance = null) {
   g.strokeStyle = '#6b5537';
   g.lineWidth = 9;
   g.beginPath(); g.moveTo(76, 118); g.lineTo(92, -70); g.stroke();
-  const shardC = looks[0]?.eye || '#9fe8ff';
+  const shardC = eldritch ? '#a6ff57' : (looks[0]?.eye || '#9fe8ff');
   g.fillStyle = shardC;
   g.shadowColor = shardC; g.shadowBlur = 18;
   g.save();
@@ -466,7 +486,100 @@ export function makePlayerTexture(appearance = null) {
   g.restore();
   g.shadowBlur = 0;
 
+  // ---- cosmic mutations, drawn over everything the person used to be ----
+  if (mut('maw_beneath')) {
+    // the gentle face opens on something else
+    g.fillStyle = '#1a0b20';
+    g.beginPath(); g.ellipse(0, -52, 30, 34, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#efe6d5';
+    for (let i = 0; i < 5; i++) {
+      const x = -20 + i * 10;
+      g.beginPath(); g.moveTo(x - 4, -70); g.lineTo(x, -52); g.lineTo(x + 4, -70); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(x - 3, -32); g.lineTo(x, -46); g.lineTo(x + 3, -32); g.closePath(); g.fill();
+    }
+    glowDot(g, -12, -78, 4, '#ff4a6a'); glowDot(g, 12, -78, 4, '#ff4a6a');
+  }
+  if (mut('thousand_eyes')) {
+    for (const [x, y, r] of [[-22, -80, 4], [0, -88, 5], [20, -78, 4], [-30, -58, 3.4], [30, -56, 3.4], [-8, -36, 3], [12, -34, 3]]) {
+      glowDot(g, x, y, r, eldritch ? '#a6ff57' : '#ffd24a');
+    }
+  }
+  if (mut('antler_deep')) {
+    g.strokeStyle = '#241833'; g.lineWidth = 6; g.lineCap = 'round';
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(s * 18, -112);
+      g.bezierCurveTo(s * 30, -134, s * 18, -144, s * 44, -156);
+      g.stroke();
+      g.beginPath(); g.moveTo(s * 24, -126); g.lineTo(s * 44, -134); g.stroke();
+      g.beginPath(); g.moveTo(s * 30, -142); g.lineTo(s * 16, -150); g.stroke();
+    }
+  }
+  if (mut('tide_gills')) {
+    g.strokeStyle = '#57e0d4'; g.lineWidth = 3.5;
+    g.shadowColor = '#57e0d4'; g.shadowBlur = 6;
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
+      g.beginPath();
+      g.moveTo(s * (22 + i * 4), -70 + i * 10);
+      g.quadraticCurveTo(s * (30 + i * 4), -66 + i * 10, s * (24 + i * 4), -58 + i * 10);
+      g.stroke();
+    }
+    g.shadowBlur = 0;
+    g.fillStyle = '#2a7a80';
+    g.beginPath(); g.moveTo(-6, -116); g.lineTo(0, -142); g.lineTo(8, -114); g.closePath(); g.fill();
+  }
+  if (mut('starving_halo')) {
+    g.strokeStyle = '#0c0614'; g.lineWidth = 7;
+    g.beginPath(); g.arc(0, -136, 22, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#0c0614';
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const x = Math.cos(a) * 22, y = -136 + Math.sin(a) * 22;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x - Math.cos(a) * 9 - 3, y - Math.sin(a) * 9);
+      g.lineTo(x - Math.cos(a) * 9 + 3, y - Math.sin(a) * 9);
+      g.closePath(); g.fill();
+    }
+  }
+  if (mut('hollow_chest')) {
+    g.fillStyle = '#05030c';
+    g.beginPath(); g.ellipse(0, 26, 22, 26, 0, 0, Math.PI * 2); g.fill();
+    glowDot(g, 0, 26, 5, '#9fe8ff');
+  }
+  if (mut('voice_wound')) {
+    g.fillStyle = '#a6ff57'; g.globalAlpha = 0.85;
+    g.font = 'bold 15px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const [x, y] of [[-34, 60], [-10, 78], [22, 64], [40, 84], [-42, 88]]) g.fillText('ᛗ', x, y);
+    g.globalAlpha = 1;
+  }
+  if (eldritch) {
+    // the full shape: tendrils where the hem used to end, and an aura
+    g.strokeStyle = '#150b26'; g.lineWidth = 8; g.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const x = -48 + i * 24;
+      g.beginPath();
+      g.moveTo(x, 108);
+      g.bezierCurveTo(x - 10, 128, x + 14, 138, x + (i % 2 ? -6 : 8), 154);
+      g.stroke();
+    }
+    g.strokeStyle = '#a6ff5744'; g.lineWidth = 10;
+    g.beginPath();
+    g.moveTo(0, -122);
+    g.bezierCurveTo(68, -108, 82, -10, 66, 122);
+    g.moveTo(0, -122);
+    g.bezierCurveTo(-68, -108, -82, -10, -66, 122);
+    g.stroke();
+  }
+
   return toTexture(c);
+}
+
+function glowDot(g, x, y, r, color) {
+  g.fillStyle = color;
+  g.shadowColor = color; g.shadowBlur = 10;
+  g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  g.shadowBlur = 0;
 }
 
 export function makeTraderTexture() {
@@ -508,15 +621,31 @@ export function makeTraderTexture() {
   return toTexture(c);
 }
 
-// Parametric paper monsters, one silhouette per battle role: brutes are wide
-// and tusked, swifts lean and finned, mystics robed beneath orbiting runes,
-// guards armored in hex plates. Seeded details keep each one individual.
-export function makeEnemyTexture({ base, eye, role = 'brute', seed = 0.5, boss = false, accent = null }) {
+// Every named species gets hand-authored art from the bestiary
+// (monsters.js); bosses get one-off portraits. The parametric role bodies
+// below remain as the fallback for anything unnamed.
+export function makeEnemyTexture({ base, eye, role = 'brute', seed = 0.5, boss = false, accent = null, species = null, bossKind = null }) {
   const [c, g] = canvas(224, 224);
   g.translate(112, 124);
   const ink = 'rgba(0,0,0,0.45)';
   const dark = 'rgba(0,0,0,0.55)';
   const acc = accent || eye;
+
+  const opts = { base, eye, accent: acc, seed, boss };
+  if (bossKind && paintBoss(g, bossKind, opts)) return toTexture(c);
+  if (species && paintSpecies(g, species, opts)) {
+    if (boss) {   // a species standing in as a boss still earns a crown
+      g.fillStyle = '#ff5a7a';
+      g.shadowColor = '#ff5a7a'; g.shadowBlur = 12;
+      g.beginPath();
+      g.moveTo(-30, -88);
+      for (let i = 0; i <= 4; i++) g.lineTo(-30 + i * 15, -88 - (i % 2 ? 22 : 6));
+      g.lineTo(30, -80); g.lineTo(-30, -80);
+      g.closePath(); g.fill();
+      g.shadowBlur = 0;
+    }
+    return toTexture(c);
+  }
 
   const blob = (rx, ry, wobble) => {
     g.beginPath();

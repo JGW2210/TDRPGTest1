@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 2; // v2: roamer state + shrineHeals; v1 saves are discarded
+const VERSION = 3; // v3: boons, shrine boons, sky voices, revealed bridges; older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -17,6 +17,10 @@ export function saveRun(world, player, worldView, roamers = null) {
       shards: run.shards,
       hp: run.hp,
       shrineHeals: run.shrineHeals,
+      boons: run.boons,
+      shrineBoons: [...run.shrineBoons],
+      vantageSeen: [...run.vantageSeen],
+      revealedBridges: world.satellites.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       roamers: roamers ? roamers.serialize() : null,
       reviveUsed: run.reviveUsed,
       bossesDown: run.bossesDown,
@@ -55,10 +59,18 @@ export function applySave(data, world, worldView, roamers = null) {
     const item = ITEMS.find(i => i.id === id);
     if (item) run.items.push(item);
   }
+  run.boons = Array.isArray(data.boons) ? data.boons : [];
   run._recompute();
   run.consumables = { charge: 0, dew: 0, feather: 0, ...data.consumables };
   run.shards = data.shards;
   run.shrineHeals = data.shrineHeals | 0;
+  run.shrineBoons = new Set(data.shrineBoons || []);
+  run.vantageSeen = new Set(data.vantageSeen || []);
+  for (const idx of data.revealedBridges || []) {
+    if (world.revealBridge(idx)) {
+      worldView.revealHiddenTiles(world.satellites[idx].bridgeTiles);
+    }
+  }
   if (roamers && data.roamers) roamers.restore(data.roamers);
   run.reviveUsed = !!data.reviveUsed;
   run.bossesDown = data.bossesDown | 0;

@@ -23,6 +23,7 @@ export const BIOMES = {
   CRIMSON: { name: 'Crimson Waste',   color: 0x9e4a3c, accent: 0xff9a6a, deco: 'cactus' },
   VERDANT: { name: 'Verdant Drift',   color: 0x3c8a5e, accent: 0x8affc4, deco: 'crystal'},
   SECRET:  { name: 'Hollowed Secret', color: 0x54406e, accent: 0xffd98a, deco: 'crystal'},
+  WOUND:   { name: 'The Wound',       color: 0x3a1430, accent: 0xa6ff57, deco: 'crystal'},
 };
 
 // ------------------------------------------------------------- satellites ---
@@ -100,7 +101,12 @@ export const FOES = {
   CRIMSON: [{ n: 'Rust Hound', r: 'swift' }, { n: 'Oxide Shambler', r: 'brute' }, { n: 'Dust Chorister', r: 'mystic' }],
   VERDANT: [{ n: 'Seed Sentinel', r: 'guard' }, { n: 'Vine Lasher', r: 'swift' }, { n: 'Bloom Horror', r: 'brute' }],
   SECRET:  [{ n: 'Hoard Mimic', r: 'brute' }],
+  WOUND:   [{ n: 'Meridian Leech', r: 'swift' }, { n: 'Unfolded Pilgrim', r: 'mystic' }, { n: 'The Choir Below', r: 'brute' }],
 };
+
+// species slug for art lookup: 'Sun-Bleached Revenant' -> 'sun_bleached_revenant'
+export const speciesSlug = name =>
+  name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z]+/g, '_').replace(/^_|_$/g, '');
 
 const WARDEN_TITLES = {
   MEADOW: 'Warden of the Quiet Field', FOREST: 'Warden of Whispered Boughs',
@@ -335,6 +341,150 @@ const MYSTERY_OUTCOMES = [
   { text: 'You poke it. It pokes back, gently, and pays you for the privilege.', shards: +2 },
   { text: 'You leave an offering of two star-shards. The silence afterward feels grateful.', shards: -2 },
   { text: 'Nothing happens — audibly. But for the rest of the day, your shadow walks with better posture.', shards: 0 },
+  { text: 'Beneath it: a purse someone hid from someone who is no longer anyone. It is heavy.', shards: +12 },
+  { text: 'It was a trap, of the polite kind. You pay the toll and are complimented on your grace.', shards: -5 },
+  { text: 'A voice explains, at length, the arrangement of the heavens. You emerge older but luckier.', shards: 0, boon: { id: 'starlore', name: 'Starlore', stats: { luck: 4 } } },
+  { text: 'Something small and cold climbs into your pack and refuses to leave. It seems protective.', shards: 0, boon: { id: 'small_cold', name: 'A Small Cold Companion', stats: { dodge: 4 } } },
+  { text: 'You touch it. The world flinches. Somewhere a bell you cannot hear stops ringing.', shards: 0, hp: -4 },
+];
+
+// ------------------------------------------------- sacrifice bargains ---
+// Events that ask for something real. Each bargain's `cost` and `gain` are
+// resolved by main.js; refusing is always free.
+
+export const BARGAINS = [
+  {
+    id: 'hungering_star', name: 'A Hungering Star',
+    flavor: 'A pale star sits in a nest of scorched grass, breathing. It is very hungry, and very honest about it: it eats relics, and it pays for its meals.',
+    cost: 'relic', gain: 'draw_rare',
+    action: 'Feed it the dimmest relic',
+  },
+  {
+    id: 'tithe_stone', name: 'The Tithe-Stone',
+    flavor: 'A basalt altar with a bowl worn smooth by centuries of palms. The inscription is one word: MORE. It wants blood, or what passes for it in paper.',
+    cost: { hp: 8 }, gain: { boon: { id: 'tithe_edge', name: 'Tithe-Sharpened Edge', stats: { atk: 2 } } },
+    action: 'Bleed into the bowl (−8 HP)',
+  },
+  {
+    id: 'moth_court', name: 'The Court of Moths',
+    flavor: 'A thousand moths arranged in the shape of a judge. They will trade fortune for warmth — a piece of your flame, forever this run.',
+    cost: { maxHP: 4 }, gain: { boon: { id: 'moth_favor', name: 'The Moths’ Favor', stats: { luck: 10, dodge: 5 } } },
+    action: 'Give up your warmth (−4 max HP)',
+  },
+  {
+    id: 'unlit_door', name: 'A Door, Priced',
+    flavor: 'A door of folded starlight, slightly ajar. The doorkeeper is a hand, palm up. It does not say what is behind the door. They never do.',
+    cost: { shards: 25 }, gain: 'draw_boosted',
+    action: 'Pay the hand (☆ 25)',
+  },
+  {
+    id: 'echo_well', name: 'The Echo Well',
+    flavor: 'A well that returns what is dropped into it, changed. Star-shards come back as something else. Sometimes better. The well makes no promises, only echoes.',
+    cost: { shards: 12 }, gain: 'gamble_shards',
+    action: 'Drop in a handful (☆ 12)',
+  },
+];
+
+// ---------------------------------------------------- wayshrine boons ---
+// Communing at a Wayshrine offers one seeded boon, once per shrine per run.
+
+export const SHRINE_BOONS = [
+  { id: 'pilgrim_stride', name: 'Pilgrim’s Stride', cost: { shards: 14 }, boon: { stats: { spd: 2 } },
+    line: 'The shrine blesses your steps: the road will be shorter, both ways.' },
+  { id: 'lantern_heart', name: 'Lantern Heart', cost: { shards: 14 }, boon: { stats: { maxHP: 6 } },
+    line: 'A small light takes up residence behind your chest-rune.' },
+  { id: 'keen_omen', name: 'Keen Omen', cost: { shards: 16 }, boon: { stats: { luck: 6 } },
+    line: 'The shrine shows you, briefly, where everything is going to be.' },
+  { id: 'wardens_grace', name: 'Warden’s Grace', cost: { hp: 6 }, boon: { stats: { dodge: 6 } },
+    line: 'The shrine takes a little of your ink and redraws your outline, slightly to the left of danger.' },
+  { id: 'sharpened_meridian', name: 'Sharpened Meridian', cost: { shards: 20 }, boon: { stats: { atk: 2 } },
+    line: 'The shrine hones your shadow to an edge.' },
+];
+
+// ------------------------------------------------ voices in the sky ---
+// Standing on a vantage hex beneath a celestial body earns its attention.
+
+export const SKY_VOICES = [
+  {
+    id: 'giant', name: 'Thal-Vaur, the Sleeping Giant',
+    lines: [
+      '…you are standing on my dream again.',
+      'Little wick. When I turn over, mind the tide of hills.',
+      'Sleep is a country. I am its king. Go quietly.',
+    ],
+    gift: { shards: 6 },
+  },
+  {
+    id: 'third_sister', name: 'The Third Sister',
+    lines: [
+      'My siblings shattered and I did not. Do you know why? Neither do I.',
+      'I have watched every wanderer since the breaking. You walk like the fourth one. She made it further than most.',
+    ],
+    gift: { boon: { id: 'sisters_eye', name: 'The Sister’s Eye', flags: { visionPlus: 1 } } },
+  },
+  {
+    id: 'ferry_lantern', name: 'The Ferry Lantern',
+    lines: [
+      'The ferryman hung me here and went to find his river. Hold your course; I am watching your feet.',
+      'Left at the rift. He always said that. Left at the rift.',
+    ],
+    gift: { shards: 4 },
+  },
+  {
+    id: 'door_ajar', name: 'A Door, Ajar (in the sky)',
+    lines: [
+      'From the other side: the smell of bread, and a conversation that pauses when you look up.',
+      '…no. Not yet. But it is kind of you to knock.',
+    ],
+    gift: null,
+  },
+];
+
+// ------------------------------------------------------ nebula sites ---
+
+export const NEBULA_NAMES = ['The Cradle Nebula', 'The Widow’s Veil'];
+
+export function nebulaSites(rng, name) {
+  return [
+    {
+      type: 'side', subtype: 'nebula',
+      name: 'The Star Nursery',
+      flavor: 'Newborn stars drift in the shallows like lantern-fish, wobbling on their first light. One of them keeps bumping into your ankles, insistently.',
+      actions: ['Cradle a Newborn Star'],
+    },
+    {
+      type: 'battle', subtype: 'nebula',
+      name: 'The Jealous Current',
+      enemy: 'what guards the nursery',
+      flavor: 'Something old coils beneath the star-spawn, and it has counted them, and it counts you as a thief on principle.',
+      actions: ['⚔ Face the Current'],
+    },
+    {
+      type: 'side', subtype: 'bargain', bargain: {
+        id: 'nebula_shape', name: 'A Shape in the Dust',
+        flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
+        cost: { maxHP: 5 }, gain: 'mutation',
+        action: 'Let it improve you (−5 max HP)',
+      },
+      name: 'A Shape in the Dust',
+      flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
+      actions: ['Let it improve you (−5 max HP)'],
+    },
+  ];
+}
+
+// ------------------------------------------------------ the deity ---
+
+export const DEITY = {
+  name: 'Vhal-Suthek, the Wound Made Flesh',
+  flavor: 'The rift that broke the Meridian was not an accident. It was a mouth, opening. What waits at its center has been patient for an age, and your changed body is the invitation it wrote for itself.',
+  sub: 'the alternative end',
+};
+
+export const WOUND_WHISPERS = [
+  { name: 'A Chorus of Hinges', flavor: 'The sound of every door in the world, opening at once, very slowly. It is coming from underneath the hex.' },
+  { name: 'The Inverted Shrine', flavor: 'A wayshrine, upside down, its offerings falling forever into the sky. Praying here feels like being overheard.' },
+  { name: 'Where the Map Ends', flavor: 'A cartographer’s desk, abandoned mid-stroke. The unfinished line on the vellum continues on its own when you are not looking directly at it.' },
 ];
 
 const VISTAS = [
@@ -349,11 +499,20 @@ const CAMPS = [
 
 export function makeSide(rng) {
   const roll = rng();
+  // a slice of the wild's events now drives a hard bargain
+  if (roll >= 0.62 && roll < 0.8) {
+    const b = pick(rng, BARGAINS);
+    return {
+      type: 'side', subtype: 'bargain', bargain: b,
+      name: b.name, flavor: b.flavor,
+      actions: [b.action, 'Refuse'],
+    };
+  }
   let pool, subtype;
-  if (roll < 0.3) { pool = RUINS; subtype = 'ruin'; }
-  else if (roll < 0.55) { pool = SHRINES; subtype = 'shrine'; }
-  else if (roll < 0.82) { pool = MYSTERIES; subtype = 'mystery'; }
-  else if (roll < 0.92) { pool = VISTAS; subtype = 'vista'; }
+  if (roll < 0.26) { pool = RUINS; subtype = 'ruin'; }
+  else if (roll < 0.46) { pool = SHRINES; subtype = 'shrine'; }
+  else if (roll < 0.62) { pool = MYSTERIES; subtype = 'mystery'; }
+  else if (roll < 0.9) { pool = VISTAS; subtype = 'vista'; }
   else { pool = CAMPS; subtype = 'camp'; }
   const base = pick(rng, pool);
   return {
