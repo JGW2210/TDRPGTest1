@@ -501,10 +501,11 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   into the menu (`#menu-courts`) + `gm-seed`/`gm-buildnum` — the old
   `#legend` box is gone. Shop rows get `.ware-icon` sigils (main.js).
 - `main.js` — wiring: mode machine ('world'|'transition'|'local'|'battle'|
-  'dead'), activeScene render switch, travel (gate-blocked A*, fast hops
-  >7 or fastTravel flag; **each hop steps the roamers** — engagement
-  clears the path and starts the pack battle), `powerTier()` =
-  floor((power−18)/12) and `threatFor(region)`, gate approach/challenge
+  '**skyEvent**'|'dead'), activeScene render switch, travel (gate-blocked
+  A*, fast hops >7 or fastTravel flag; **each hop steps the roamers** —
+  engagement clears the path and starts the pack battle), `powerTier()` =
+  floor((power−18)/12), `expectedPower(tier)` = 14+8·tier and
+  `threatFor(region)`, gate approach/challenge
   flow, `startBattle` (**hardens every team**: tier = max(authored,
   powerTier(+1 for bosses)); supports `waves` chaining for gauntlets,
   +4 HP between chambers; flee calms the pack),
@@ -516,10 +517,18 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   reveals the matching satellite bridge / islet footbridge; legacy
   seam-tile check as fallback; a one-time toast nudges on stepping onto
   a humming shore), `engageRoamer` (species-named toasts/titles,
-  passes `team.species`), save/load boot + `saveNow` throttle, meta event
+  passes `team.species`), **the speaking-sky cinematics** (`skyDefFor` →
+  SKY_VOICES on vantage hexes / SKY_GAZES on satellite tiles;
+  `startSkyEvent` locks the rig + flies the camera to
+  `worldView.skyBodies[id]`, `updateSkyEvent` drives out/hold/back from
+  the loop, `advanceSkyEvent` on click/Space, gift + vantageSeen at
+  dialogue END; `updateSkyButton` shows the pulsing ☄ *behold* button
+  from `refreshHud`; first vantage arrival drops the rest of the path
+  and auto-runs with an isMoving-retry), save/load boot + `saveNow`
+  throttle, meta event
   bumps + `announceFeats`, audio boot on first gesture + `setRegionMusic`
-  in `refreshHud`, buttons (inventory/detonate/recenter/return), the
-  **wanderer's menu** (`toggleMenu`, Esc opens/closes; music toggle +
+  in `refreshHud`, buttons (skyview/inventory/detonate/recenter/return),
+  the **wanderer's menu** (`toggleMenu`, Esc opens/closes; music toggle +
   echoes moved here; *refold this world* = clearSave+reload, *wake in a
   new world* = fresh seed — both arm-on-first-click), loop.
 
@@ -527,14 +536,24 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 
 `mode, playerTile, isMoving, run, world, battle, view, meta, audio,
 roamers, powerTier(), announceFeats, pickAt(x,y), travel(q,r),
-warp(q,r) (instant, saves; does NOT step roamers), lookAt(x,z,dist),
+warp(q,r) (instant, saves; does NOT step roamers; never auto-runs sky
+events), lookAt(x,z,dist),
 testBattle(tier,biome,boss,extra) (extra merges into team — e.g.
 {deity:true, bossKind:'deity', count:1} or {species:'Star-Drowned
 Siren', speciesRole:'mystic'}), smite() (all enemies →1hp),
 give(itemId) (routes mutation count → openWound), openGateAt(q,r),
 detonate() (unfurls bridges/islets from hint tiles, opens secrets),
 revealIslet(i) (world + view + fog + save), localSites(),
-act(siteId,label), shopOffers(q,r)`.
+act(siteId,label), shopOffers(q,r), skyEventState (getter:
+{id, phase, idx} | null), startSkyEvent() (from the current tile),
+advanceSkyEvent()`.
+
+Battle-instance knobs for headless playtests (properties, not __vael):
+`battle.strikeAutoplay = {p, g}` pre-rolls each strike bar and presses
+at the matching sweep moment; `battle.laneAutoplay = {p, g}` likewise
+per falling note. For guaranteed Meteor perfects at 2 fps, inject
+directly: wait for `timingPhase === 'live'`, set `battle.timingT` to
+the band mid, call `battle._resolveTiming()`.
 
 ## Testing approach
 
@@ -564,16 +583,25 @@ act(siteId,label), shopOffers(q,r)`.
   sink prices, and role-special chances are all fresh and untested by
   human play — expect a tuning pass. Boss ×2.6/×1.2 was softened once
   already.
-- Round-12 combat feel is untested by humans: lane fall speed (1.25s),
-  press windows (±0.07/±0.17s), trap density, gather durations, stance
-  band scales, and the Monte-Carlo-tuned enemy curve all follow the
-  sim (scratchpad `balance_sim_lib.mjs` — rebuild from round-12 history
-  if needed), which deliberately excludes brace/interrupt/consumable
-  play. If real players find even-tier fights too hot, ease `atkT`
-  first; if too cold, raise `hpQ`/`atkQ` before touching linear terms.
+- Round-12/13 combat feel is untested by humans: lane fall speed (1.05s
+  after the round-13 "real challenge" speed-up), press windows
+  (±0.07/±0.15s), marker travel (0.72s), trap density, gather durations,
+  stance band scales, meteor-chain ramps, rattle strength and the
+  Monte-Carlo-tuned enemy curve all follow the sim (scratchpad
+  `balance_sim_lib.mjs` — rebuild from round-12/13 history if needed),
+  which deliberately excludes brace/interrupt/consumable play. If real
+  players find even-tier fights too hot, ease `atkT` first; if too
+  cold, raise `hpQ`/`atkQ` before touching linear terms.
   Headless caveat: at ~2 fps the marker can step clear over the Meteor
   band in one frame — heavy perfects need direct `_resolveTiming`
   injection in tests (60 fps humans are unaffected).
+- Sky-event cinematics (round 14) are verified headless only: camera
+  flight pacing (1.7s out / 1.3s back), the hold-drift amplitude, and
+  dialogue type sizes await a taste pass on a real GPU. Known cosmetic
+  nit: floating sky-labels (and e.g. the Pale Daughter's satboss throne
+  nameplate) can sit inside the cinematic frame — they read as world
+  detail, but hiding labels during `body.in-skyevent` was floated and
+  deliberately deferred ("for now" per user).
 - Save VERSION is now 4 (round 8: archipelago worldgen + revealedIslets) —
   older saves are discarded on load. Worldgen changed again for identical
   seeds (quadrant climates, erosion, water web, islets), by design.
@@ -618,6 +646,10 @@ act(siteId,label), shopOffers(q,r)`.
   yet — falls back by biome default; ISLET likewise)
 - A mutation-cleansing shrine (mutations are currently permanent)
 - Optional "lite" render mode for weak GPUs
+- Hide floating sky-labels during sky-event cinematics (2-line change:
+  toggle the label sprites' visibility from start/endSkyEvent)
+- More SKY_GAZES: Vael the sun, the shattermoons, constellations —
+  bodies without tiles would need a nearest-hex rule like pass 14's
 
 ## Conventions
 
