@@ -324,20 +324,20 @@ body.in-battle #btn-menu { display: none; }
 .st.stun { color: #dfc2ff; text-shadow: 0 0 8px rgba(210, 170, 255, 0.6); }
 .st.charge { color: #ffe2a8; text-shadow: 0 0 8px rgba(255, 210, 110, 0.6); }
 #b-player {
-  position: absolute; bottom: 118px; left: 26px; pointer-events: auto;
+  position: absolute; bottom: 152px; left: 26px; pointer-events: auto;
   width: 280px; text-shadow: var(--tsh);
 }
 #b-player .b-name { font-size: 14.5px; color: #fff; letter-spacing: 0.04em; }
 #b-log {
-  position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%);
-  font-size: 15px; color: #e8ebff; max-width: 72vw; text-align: center;
+  position: absolute; bottom: 122px; left: 50%; transform: translateX(-50%);
+  font-size: 15px; color: #e8ebff; max-width: 52vw; text-align: center;
   padding: 10px 30px; background: var(--softbg);
   text-shadow: 0 1px 3px rgba(2, 3, 10, 0.9);
 }
 #b-menu {
   position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; align-items: baseline;
-  pointer-events: auto; max-width: 92vw;
+  display: flex; gap: 8px 24px; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  pointer-events: auto; max-width: 74vw;
 }
 #b-menu.hidden { display: none; }
 #b-menu button {
@@ -356,7 +356,7 @@ body.in-battle #btn-menu { display: none; }
 #b-menu button.ghost { color: var(--ink-faint); font-size: 13.5px; }
 #b-menu button.ghost:hover { color: var(--ink-dim); }
 #b-timing {
-  position: absolute; bottom: 172px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 216px; left: 50%; transform: translateX(-50%);
   width: min(430px, 80vw); pointer-events: none;
 }
 #b-timing.hidden { display: none; }

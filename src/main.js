@@ -219,8 +219,8 @@ dom.addEventListener('pointermove', e => {
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
         (roamers.at(tile) && tile.fogState >= 2 ? `<div class="tt-extra" style="color:#ff9a5a">⚔ ${roamers.at(tile).species?.n || 'a hunting pack'} prowls here — step onto its hex to give battle</div>` : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
-        (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ the void beside this shore hums — something folded waits</div>' : '') +
-        (tile.isletHint != null && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#d8ffb0">❂ a thin hum in the void — something small and stubborn holds on out there</div>' : '') +
+        (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ this shore hums — stand here and detonate a star-charge to unfurl the folded bridge</div>' : '') +
+        (tile.isletHint != null && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#d8ffb0">❂ this shore hums faintly — stand here and detonate a star-charge to reach what holds on out there</div>' : '') +
         (tile.vantage && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#dfe6ff">☄ the sky leans close here</div>' : '') +
         extra,
         e.clientX, e.clientY
@@ -294,6 +294,10 @@ function travelTo(target, onArrive = null) {
       }));
       refreshHud(tile);
       if (tile.vantage && !run.vantageSeen.has(tile.vantage)) speakSky(tile.vantage);
+      if ((tile.seamHint || tile.isletHint != null) && !seamNudged.has(keyOf(tile.q, tile.r))) {
+        seamNudged.add(keyOf(tile.q, tile.r));
+        ui.toast('✸ The shore HUMS beneath your feet — something folded waits in the void. A star-charge detonated here would answer it.', true);
+      }
       if (followPlayer && !worldRig.dragMode) worldRig.panTo({ x: tile.x, z: tile.z });
       // the world takes its turn: every roaming pack steps once per hop
       const hunter = roamers.step(tile);
@@ -316,6 +320,7 @@ function travelTo(target, onArrive = null) {
 }
 
 const revealedRegions = new Set();
+const seamNudged = new Set();   // humming shores already whispered about
 function revealRegionMemory(tile) {
   const reg = world.regionOf(tile);
   if (reg.id >= 100 || revealedRegions.has(reg.id)) return;
@@ -1019,15 +1024,25 @@ function detonate() {
   refreshHud(player.tile);
   const neighbors = neighborsOf(player.tile.q, player.tile.r)
     .map(([q, r]) => world.tiles.get(keyOf(q, r)));
+  const nearTiles = [player.tile, ...neighbors].filter(Boolean);
   const secret = neighbors.find(t => t && t.secret);
-  const seam = neighbors.find(t => t && t.hiddenBridge && t.bridgeSeam);
-  const isleSeam = neighbors.find(t => t && t.isletHidden && t.isletSeam);
+  // The humming shore itself is the trigger: standing on it — or right
+  // beside it — is enough. The blast finds the folded seam on its own,
+  // however the coastline twisted the span's first tile.
+  let isletIdx = nearTiles.find(t => t.isletHint != null)?.isletHint;
+  if (isletIdx == null) isletIdx = neighbors.find(t => t && t.isletHidden && t.isletSeam)?.isletBridge;
+  let satIdx = null;
+  const seamShore = nearTiles.find(t => t.seamHint);
+  if (seamShore) satIdx = world.satellites.findIndex(s => s.def.id === seamShore.seamHint);
+  if (satIdx == null || satIdx < 0) {
+    const seam = neighbors.find(t => t && t.hiddenBridge && t.bridgeSeam);
+    satIdx = seam ? seam.region - 100 : null;
+  }
   player.burstNow?.();
   audio.sfxDetonate();
-  if (isleSeam) {
-    const idx = isleSeam.isletBridge;
-    const isl = world.islets[idx];
-    world.revealIslet(idx);
+  if (isletIdx != null && world.islets[isletIdx] && !world.islets[isletIdx].revealed) {
+    const isl = world.islets[isletIdx];
+    world.revealIslet(isletIdx);
     worldView.revealHiddenTiles([...isl.bridgeTiles, ...isl.tiles]);
     if (isl.shore?.seamSprite) isl.shore.seamSprite.material.opacity = 0;
     worldView.updateFog(player.tile, { animate: false });
@@ -1039,11 +1054,11 @@ function detonate() {
     saveNow(true);
     return;
   }
-  if (seam) {
-    const satIdx = seam.region - 100;
+  if (satIdx != null && satIdx >= 0 && world.satellites[satIdx] && !world.satellites[satIdx].revealed) {
     const sat = world.satellites[satIdx];
     world.revealBridge(satIdx);
     worldView.revealHiddenTiles(sat.bridgeTiles);
+    if (sat.shore?.seamSprite) sat.shore.seamSprite.material.opacity = 0;
     worldView.updateFog(player.tile, { animate: false });
     audio.sfxReveal();
     audio.sfxGate();
