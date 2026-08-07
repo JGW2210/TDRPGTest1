@@ -146,6 +146,21 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    card. Audio/echoes buttons live in the menu now (`gm-audio`,
    `gm-echoes` — old `btn-audio`/`btn-echoes` ids are gone).
 
+11. **Accessibility & overlap round** (same branch): the archipelago's
+   ragged coasts could leave a satellite's seam void tile 2 hexes from
+   its glowing shore (3/120 across 40 seeds — detonating on the shore
+   silently failed); detonation is now keyed off the **hint tiles**
+   (`seamHint`/`isletHint` on the player's own tile OR any neighbor
+   reveals the matching bridge; legacy seam-tile check kept as
+   fallback), a one-time toast nudges when stepping onto a humming
+   shore, and tooltips state the instruction outright; the worldgen
+   suite now asserts full accessibility every seed (satellite shores
+   hinted + walkable, satellite bosses / wound deity / islets reachable
+   post-reveal, every secret has a crack-hinted neighbor); battle
+   layout un-clipped for crowded action rows (log bottom 122 · 52vw,
+   timing 216, player plate 152, menu 74vw with tighter wrap gap) —
+   verified with 7 buttons (3 abilities + charge + dew). BUILD is 11.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
