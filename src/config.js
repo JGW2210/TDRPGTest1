@@ -35,11 +35,23 @@ export const CONFIG = {
     baseHP: 30,
     baseAtk: 5,
     baseSpd: 5,
-    timing: { travel: 0.85, perfect: [0.66, 0.8], good: [0.48, 0.66] },
+    // The timing minigame: the gold band lands somewhere new every swing,
+    // the marker's speed and direction vary, and the bands are narrow.
+    timing: {
+      travel: 0.85,        // base seconds across the track
+      perfectHalf: 0.05,   // half-width of the gold band on strikes
+      blockHalf: 0.045,    // …when blocking
+      dodgeHalf: 0.035,    // …when dodging a crush (no good band at all)
+      goodPad: 0.085,      // the good band extends this far past the gold
+      reverseChance: 0.35, // odds the marker sweeps right-to-left
+    },
     perfectMult: 1.5,
     goodMult: 1.2,
-    missMult: 0.85,
-    blockMult: 0.5,
+    missMult: 0.5,         // a dropped beat truly costs now
+    blockPerfect: 0.15,    // damage multiplier on a perfect block
+    blockGood: 0.6,        // …on a good block
+    comboHits: 3,          // Star Strike chains up to this many bars
+    comboMult: 0.5,        // each landed combo hit carries this share of ATK
   },
 
   camera: {

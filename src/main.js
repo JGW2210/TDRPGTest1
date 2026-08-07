@@ -91,6 +91,7 @@ let restoredRun = false;
     }
     restoredRun = true;
     exploreHintShown = true;
+    player.setAppearance(run.appearance, run.appearanceSig);
   }
 }
 
@@ -561,9 +562,16 @@ function checkGlint(tile) {
 
 function grantItem(item) {
   const before = new Set(run.synergies.map(s => s.id));
+  const sigBefore = run.appearanceSig;
   run.addItem(item);
   const fresh = run.synergies.filter(s => !before.has(s.id));
   audio.sfxPickup(item.rarity);
+  // the hoard marks the wanderer: repaint the paper self if the look changed
+  if (run.appearanceSig !== sigBefore) {
+    player.setAppearance(run.appearance, run.appearanceSig);
+    if (fresh.some(s => s.grand)) ui.toast('✦ Your paper form is rewritten by the union of sets.', true);
+    else if (fresh.length) ui.toast('✦ The completed set re-inks your cloak.', true);
+  }
   if (fresh.length) {
     announceFeats(meta.bump(s => {
       for (const sy of fresh) if (!s.synergies.includes(sy.id)) s.synergies.push(sy.id);
@@ -572,22 +580,43 @@ function grantItem(item) {
   ui.showItemCard(item, fresh, () => { refreshHud(player.tile); saveNow(true); });
 }
 
+// Shops are lean now: relics come from a harshly weighted loot table (up to
+// three, mostly common), consumables carry finite stock, and every rummage
+// for fresh wares doubles in price until the cart is simply empty.
+const SHOP_POOLS = ['MEADOW', 'FOREST', 'MOUNTAIN', 'VOLCANO', 'DESERT', 'TUNDRA', 'SEA', 'CRYSTAL'];
+const MAX_RESTOCKS = 2;
+
+function shopMarkup() {
+  return (1 + (run.flags.shopMarkup || 0)) * (1 + run.items.length * 0.06);
+}
+
+function buildItemOffers(site, tile, rng) {
+  if (site.subtype === 'wandering') return [];   // roadside carts carry no relics
+  const tier = world.regionOf(tile).tier;
+  const markup = shopMarkup();
+  const count = 1 + (rng() < 0.45 ? 1 : 0) + (rng() < 0.2 ? 1 : 0);   // up to 3, rarely
+  const offers = [];
+  const taken = new Set(run.ownedIds);
+  for (let i = 0; i < count; i++) {
+    const pool = SHOP_POOLS[Math.floor(rng() * SHOP_POOLS.length)];
+    const item = drawItem(rng, pool, taken, { source: 'shop', tier, unlocked: meta.unlockedIds });
+    if (!item) continue;
+    taken.add(item.id);
+    const base = { c: 18, u: 30, r: 48, a: 80 }[item.rarity] || 30;
+    offers.push({ kind: 'item', item, price: Math.round((base + tier * 8) * markup) });
+  }
+  return offers;
+}
+
 function buildOffers(site, tile, rngOverride = null) {
   const rng = rngOverride || mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 553) * 0xffffffff));
-  const tier = world.regionOf(tile).tier;
-  // prices climb with the hoard: the more relics you carry, the dearer the world
-  const markup = (1 + (run.flags.shopMarkup || 0)) * (1 + run.items.length * 0.04);
+  const markup = shopMarkup();
   const offers = [
-    { kind: 'consumable', id: 'charge', price: Math.round(6 * markup) },
-    { kind: 'consumable', id: 'dew', price: Math.round(5 * markup) },
+    { kind: 'consumable', id: 'charge', price: Math.round(8 * markup), stock: 1 + (rng() < 0.4 ? 1 : 0) },
   ];
-  if (rng() < 0.6) offers.push({ kind: 'consumable', id: 'feather', price: Math.round(8 * markup) });
-  const pool = ['MEADOW', 'FOREST', 'MOUNTAIN', 'VOLCANO', 'DESERT', 'TUNDRA', 'SEA', 'CRYSTAL'][Math.floor(rng() * 8)];
-  const item = drawItem(rng, pool, run.ownedIds, { source: 'shop', tier, unlocked: meta.unlockedIds });
-  if (item && site.subtype !== 'wandering') {
-    const base = { c: 14, u: 22, r: 34, a: 50 }[item.rarity] || 22;
-    offers.push({ kind: 'item', item, price: Math.round((base + tier * 7) * markup) });
-  }
+  if (rng() < 0.55) offers.push({ kind: 'consumable', id: 'dew', price: Math.round(12 * markup), stock: 1 });
+  if (rng() < 0.5) offers.push({ kind: 'consumable', id: 'feather', price: Math.round(9 * markup), stock: 1 });
+  offers.push(...buildItemOffers(site, tile, rng));
   return offers;
 }
 
@@ -595,20 +624,19 @@ function renderShop(site) {
   const extra = document.getElementById('modal-extra');
   extra.innerHTML = '';
   for (const offer of site.offers) {
-    const sold = offer.sold;
+    const sold = offer.kind === 'item' ? offer.sold : offer.stock <= 0;
     const row = document.createElement('div');
     row.className = 'ware';
     const label = offer.kind === 'item'
       ? `<b>${offer.item.name}</b> <span style="color:var(--ink-dim);font-size:12px">${offer.item.desc}</span>`
-      : `${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} <span style="color:var(--ink-dim);font-size:12px">${CONSUMABLES[offer.id].desc}</span>`;
-    row.innerHTML = `<span>${label}</span><span class="price">${sold ? 'sold' : '☆ ' + offer.price}</span>`;
+      : `${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name}${offer.stock > 1 ? ` ×${offer.stock}` : ''} <span style="color:var(--ink-dim);font-size:12px">${CONSUMABLES[offer.id].desc}</span>`;
+    row.innerHTML = `<span>${label}</span><span class="price">${sold ? 'sold out' : '☆ ' + offer.price}</span>`;
     if (!sold) {
       row.style.cursor = 'pointer';
       row.addEventListener('click', () => {
         if (!run.spendShards(offer.price)) { ui.toast('Not enough star-shards. The trader’s sympathy is complimentary.'); return; }
-        offer.sold = offer.kind === 'item';
-        if (offer.kind === 'item') grantItem(offer.item);
-        else { run.consumables[offer.id]++; ui.toast(`${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} acquired.`); }
+        if (offer.kind === 'item') { offer.sold = true; grantItem(offer.item); }
+        else { offer.stock--; run.consumables[offer.id]++; ui.toast(`${CONSUMABLES[offer.id].icon} ${CONSUMABLES[offer.id].name} acquired.`); }
         refreshHud(player.tile);
         saveNow(true);
         renderShop(site);
@@ -616,22 +644,31 @@ function renderShop(site) {
     }
     extra.appendChild(row);
   }
-  // a shard sink: gamble for fresh wares, dearer with every rummage
-  const tile = currentLocalTile || player.tile;
-  const cost = Math.round((8 + world.regionOf(tile).tier * 2) * (1 + (site.restocks || 0)));
-  const row = document.createElement('div');
-  row.className = 'ware';
-  row.innerHTML = `<span>↻ Fresh stock <span style="color:var(--ink-dim);font-size:12px">the trader rummages deeper into the cart</span></span><span class="price">☆ ${cost}</span>`;
-  row.style.cursor = 'pointer';
-  row.addEventListener('click', () => {
-    if (!run.spendShards(cost)) { ui.toast('Not enough star-shards for a rummage.'); return; }
-    site.restocks = (site.restocks || 0) + 1;
-    site.offers = buildOffers(site, tile, mulberry32((Math.random() * 2 ** 31) | 0));
-    refreshHud(player.tile);
-    saveNow(true);
-    renderShop(site);
-  });
-  extra.appendChild(row);
+  // the rummage: re-rolls the relic shelf only, doubles each time, then ends
+  if (site.subtype !== 'wandering') {
+    const tile = currentLocalTile || player.tile;
+    const restocks = site.restocks || 0;
+    const row = document.createElement('div');
+    row.className = 'ware';
+    if (restocks >= MAX_RESTOCKS) {
+      row.innerHTML = `<span>↻ Fresh stock <span style="color:var(--ink-dim);font-size:12px">the trader turns the cart out — nothing left but straw and apologies</span></span><span class="price">empty</span>`;
+      row.style.opacity = 0.55;
+    } else {
+      const cost = Math.round((12 + world.regionOf(tile).tier * 4) * Math.pow(2, restocks));
+      row.innerHTML = `<span>↻ Fresh stock <span style="color:var(--ink-dim);font-size:12px">the trader rummages deeper into the cart (${MAX_RESTOCKS - restocks} left)</span></span><span class="price">☆ ${cost}</span>`;
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => {
+        if (!run.spendShards(cost)) { ui.toast('Not enough star-shards for a rummage.'); return; }
+        site.restocks = (site.restocks || 0) + 1;
+        site.offers = site.offers.filter(o => o.kind !== 'item')
+          .concat(buildItemOffers(site, tile, mulberry32((Math.random() * 2 ** 31) | 0)));
+        refreshHud(player.tile);
+        saveNow(true);
+        renderShop(site);
+      });
+    }
+    extra.appendChild(row);
+  }
 }
 
 const ACTION_LINES = {
@@ -801,8 +838,9 @@ ui.inventoryHandlers = {
   useDew: () => {
     if (run.consumables.dew <= 0 || run.hp >= run.stats.maxHP) return;
     run.consumables.dew--;
-    run.hp = Math.min(run.stats.maxHP, run.hp + 15);
-    ui.toast('❋ The star-dew glows going down. +15 HP.');
+    const amount = 12 + (run.flags.dewPotency || 0);
+    run.hp = Math.min(run.stats.maxHP, run.hp + amount);
+    ui.toast(`❋ The star-dew glows going down. +${amount} HP.`);
     refreshHud(player.tile);
     ui.renderInventory(run);
     saveNow(true);
@@ -922,7 +960,17 @@ window.__vael = {
     return !!site;
   },
   smite: () => { for (const e of battle.enemies || []) if (!e.dead) e.hp = 1; },
-  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); refreshHud(player.tile); saveNow(true); } }); },
+  shopOffers: (q, r) => {
+    const t = world.tiles.get(q + ',' + r);
+    if (!t) return null;
+    const site = sitesFor(t).find(s => s.type === 'trader');
+    if (!site) return null;
+    site.offers ??= buildOffers(site, t);
+    return site.offers.map(o => o.kind === 'item'
+      ? { kind: 'item', id: o.item.id, rarity: o.item.rarity, price: o.price, sold: !!o.sold }
+      : { kind: o.kind, id: o.id, price: o.price, stock: o.stock });
+  },
+  give: id => { import('./items.js').then(m => { const it = m.ITEMS.find(i => i.id === id); if (it) { run.addItem(it); player.setAppearance(run.appearance, run.appearanceSig); refreshHud(player.tile); saveNow(true); } }); },
 };
 
 const clock = new THREE.Clock();

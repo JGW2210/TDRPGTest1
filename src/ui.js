@@ -1,6 +1,6 @@
 // DOM layer: HUD, legend, tooltip, site modal, toasts, fades.
 
-import { RARITY } from './items.js';
+import { RARITY, SETS } from './items.js';
 import { FEATS } from './meta.js';
 
 const $ = id => document.getElementById(id);
@@ -88,9 +88,19 @@ export const ui = {
       $('inv-use-dew')?.addEventListener('click', () => h.useDew());
       $('inv-use-feather')?.addEventListener('click', () => h.useFeather());
     }
-    $('inv-synergies').innerHTML = run.synergies.length
-      ? run.synergies.map(sy => `<div class="syn"><b>${sy.name}</b> — ${sy.desc}</div>`).join('')
-      : '<div class="syn" style="opacity:0.6">No synergies yet — certain pairs of relics ignite when carried together…</div>';
+    const setRows = Object.entries(SETS)
+      .map(([tag, def]) => ({ tag, def, n: run.tagCounts[tag] || 0 }))
+      .filter(x => x.n > 0)
+      .map(({ tag, def, n }) => {
+        const done = n >= def.need;
+        return `<span class="setchip" style="color:${def.color};border-color:${def.color}${done ? '' : '44'};${done ? '' : 'opacity:0.7'}">` +
+          `${def.name} ${Math.min(n, def.need)}/${def.need}${done ? ' ✦' : ''}</span>`;
+      }).join(' ');
+    $('inv-synergies').innerHTML =
+      (setRows ? `<div class="syn" style="border:none;padding:4px 0">${setRows}</div>` : '') +
+      (run.synergies.length
+        ? run.synergies.map(sy => `<div class="syn${sy.grand ? ' grand' : ''}"><b>${sy.grand ? '✦ ' : ''}${sy.name}</b> — ${sy.desc}</div>`).join('')
+        : '<div class="syn" style="opacity:0.6">No synergies yet — gather 3–4 relics of one set to ignite it; complete two sets for something greater…</div>');
     $('inv-items').innerHTML = run.items.length
       ? run.items.map(it => {
         const rar = RARITY[it.rarity] || RARITY.c;

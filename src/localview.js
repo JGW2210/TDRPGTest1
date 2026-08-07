@@ -204,7 +204,11 @@ export class LocalView {
     if (site.type === 'battle') {
       const biome = BIOMES[tile.biome];
       const body = '#' + new THREE.Color(biome.color).offsetHSL(0, 0.1, -0.12).getHexString();
-      const tex = makeEnemyTexture(body, '#ffd24a', 1 + Math.floor(rng() * 3), rng());
+      const tex = makeEnemyTexture({
+        base: body, eye: '#ffd24a', seed: rng(),
+        role: ['brute', 'swift', 'mystic', 'guard'][Math.floor(rng() * 4)],
+        accent: '#' + new THREE.Color(biome.accent).getHexString(),
+      });
       parent.add(billboardPlane(tex, 1.5, 1.5));
       return;
     }

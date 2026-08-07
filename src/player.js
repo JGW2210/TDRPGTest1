@@ -17,6 +17,7 @@ export class PlayerToken {
 
     this.group = new THREE.Group();
 
+    this._appearanceSig = '';
     const tex = makePlayerTexture();
     this.mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(1.35, 1.7),
@@ -57,6 +58,16 @@ export class PlayerToken {
   get isMoving() { return this.hop !== null || this.path.length > 0; }
 
   burstNow() { this._spawnBurst(); }
+
+  // Repaint the token when the hoard has changed the wanderer's look.
+  setAppearance(appearance, sig) {
+    if (sig === this._appearanceSig) return;
+    this._appearanceSig = sig;
+    const old = this.mesh.material.map;
+    this.mesh.material.map = makePlayerTexture(appearance);
+    this.mesh.material.needsUpdate = true;
+    if (old) old.dispose();
+  }
 
   setPath(path, onStep, onDone) {
     this.path = path.slice();

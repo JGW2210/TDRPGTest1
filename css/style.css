@@ -199,6 +199,14 @@ html, body {
   background: rgba(240,196,106,0.07); font-size: 12.5px; line-height: 1.5;
 }
 #inv-synergies .syn b { color: var(--gold); letter-spacing: 0.12em; }
+#inv-synergies .syn.grand {
+  border-left-color: #d79bff; background: rgba(215,155,255,0.1);
+}
+#inv-synergies .syn.grand b { color: #d79bff; }
+.setchip {
+  display: inline-block; margin: 2px 3px 2px 0; padding: 2px 8px;
+  border: 1px solid; border-radius: 9px; font-size: 11px; letter-spacing: 0.08em;
+}
 #inv-items .inv-item {
   margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(126,140,255,0.18);
   border-radius: 8px; font-size: 12.5px; line-height: 1.5;

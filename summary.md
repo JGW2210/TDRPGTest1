@@ -30,6 +30,22 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    regional site budgets, roaming enemy packs, power-matched scaling
    floor, role battle specials, threat HUD, shard sinks, rarity
    smoothing. All four poll answers were the recommended options.
+6. **Identity & combat depth round** (same branch, reset from main; no
+   poll — user gave explicit direction): Isaac-style appearance system
+   (tags mark the cloak, complete sets transform it, grand synergies
+   rewrite the silhouette; world token + battle sprite repaint via
+   `run.appearance`/`appearanceSig`); synergies became **sets** (3–4 of a
+   tag; 7 set synergies + 6 grand two-set synergies in items.js
+   `SETS`/`SYNERGIES`); combat overhaul (random band placement/speed/
+   direction, 3-bar Star Strike combos, swift flurries with per-hit bars,
+   unblockable crush attacks with dodge-only bars, perfect/good block =
+   0.15×/0.6×, miss mult 0.5, player burn/chill statuses, desert sand-veil
+   hides bands mid-sweep, mystic siphon/mend, guard self-shell); role-
+   specific enemy silhouettes in `makeEnemyTexture({...})` (object arg
+   now); shop overhaul (1–3 relics from harsh c-heavy table, finite
+   consumable stock, restock re-rolls relics only at doubling cost, max 2);
+   dew scarcity (start 0, 5% drop, heal 12, capped cache/shop stock);
+   timing/block-window items rarity-bumped and block widening 50%→30%.
 
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
@@ -226,6 +242,11 @@ give(itemId), openGateAt(q,r), detonate(), localSites(), act(siteId,label)`.
   sink prices, and role-special chances are all fresh and untested by
   human play — expect a tuning pass. Boss ×2.6/×1.2 was softened once
   already.
+- Round-6 combat numbers (comboMult 0.5, missMult 0.5, blockPerfect 0.15,
+  crush ×1.2, band half-widths, flurry chances) are theory-tuned only —
+  human playtesting will likely want the first-bar speeds eased or the
+  crush telegraph lengthened. Old saves load (VERSION 2 unchanged) but
+  mid-run balance shifted under them.
 - The rarity skew and MEADOW/FOREST astral holes were fixed this round
   (16 retags; totals now 42c/48u/43r/17a, one astral per biome pool).
 - `summary.md` (this file) and the `__vael` debug handle ship in the repo;

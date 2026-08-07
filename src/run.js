@@ -1,12 +1,12 @@
 // State of the current run. Death discards all of this and rolls a new world.
 
 import { CONFIG } from './config.js';
-import { ITEMS, SYNERGIES } from './items.js';
+import { ITEMS, SYNERGIES, SETS } from './items.js';
 
 class Run {
   constructor() {
     this.items = [];              // item defs, in pickup order
-    this.consumables = { charge: 2, dew: 1, feather: 0 };
+    this.consumables = { charge: 2, dew: 0, feather: 0 };
     this.shards = 10;
     this.hp = CONFIG.battle.baseHP;
     this.clearedSites = new Set(); // site ids resolved this run
@@ -38,19 +38,31 @@ class Run {
     };
     const flags = {};
     const abilities = [];
-    const tags = new Set();
+    const tagCounts = {};
     for (const it of this.items) {
       for (const [k, v] of Object.entries(it.stats || {})) s[k] = (s[k] || 0) + v;
       for (const [k, v] of Object.entries(it.flags || {})) {
         flags[k] = typeof v === 'number' ? (flags[k] || 0) + v : v;
       }
       if (it.ability) abilities.push({ ...it.ability });
-      for (const t of it.tags || []) tags.add(t);
+      for (const t of it.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
     }
-    this.synergies = SYNERGIES.filter(sy => sy.tags.every(t => tags.has(t)));
+    this.tagCounts = tagCounts;
+    const setDone = tag => (tagCounts[tag] || 0) >= (SETS[tag]?.need ?? 3);
+    this.synergies = SYNERGIES.filter(sy => sy.sets.every(setDone));
     const has = id => this.synergies.some(sy => sy.id === id);
-    if (has('eclipse')) s.atk += 2;
-    if (has('steamveil')) { s.dodge += 10; delete flags.waterWeak; }
+
+    // set synergies
+    if (has('cinderhost')) { s.atk += 1; flags.burnOnHit = (flags.burnOnHit || 0) + 1; }
+    if (has('glassworks')) s.luck += 8;
+    if (has('moonbound')) { s.dodge += 10; flags.firstStrikeDodge = true; }
+    if (has('high_noon')) s.atk += 2;
+    if (has('tideborne')) { s.dodge += 5; flags.afterBattleHeal = (flags.afterBattleHeal || 0) + 3; }
+    // grand synergies
+    if (has('fulgurite')) s.atk += 2;
+    if (has('eclipse')) s.atk += 3;
+    if (has('steamveil')) { s.dodge += 15; delete flags.waterWeak; flags.blockHeal = (flags.blockHeal || 0) + 2; }
+    if (has('pale_hand')) flags.houndStrike = Math.max(flags.houndStrike || 0, 8);
     if (has('stained_glass')) s.luck += 10;
     if (flags.cooldownMinus) for (const a of abilities) a.cd = Math.max(1, a.cd - flags.cooldownMinus);
 
@@ -60,11 +72,33 @@ class Run {
     this.stats = s;
     this.flags = flags;
     this.abilities = abilities;
-    this.tags = tags;
+    this.tags = new Set(Object.keys(tagCounts));
     if (this.hp > s.maxHP) this.hp = s.maxHP;
   }
 
   hasSynergy(id) { return this.synergies.some(sy => sy.id === id); }
+
+  // What the wanderer looks like now — read by the texture painter.
+  // Tags leave small marks, complete sets transform, grand synergies more so.
+  get appearance() {
+    const completeSets = [];
+    for (const [tag, def] of Object.entries(SETS)) {
+      if ((this.tagCounts[tag] || 0) >= def.need) completeSets.push(tag);
+    }
+    return {
+      tagCounts: { ...this.tagCounts },
+      completeSets,
+      grand: this.synergies.filter(sy => sy.grand).map(sy => sy.id),
+      itemCount: this.items.length,
+    };
+  }
+
+  // a stable signature so views only repaint when the look actually changes
+  get appearanceSig() {
+    const a = this.appearance;
+    const tags = Object.keys(a.tagCounts).sort().map(t => t + Math.min(a.tagCounts[t], 3)).join(',');
+    return tags + '|' + a.completeSets.join(',') + '|' + a.grand.join(',') + '|' + Math.min(a.itemCount, 8);
+  }
 
   // rough strength score, used for danger comparison on gates
   get power() {

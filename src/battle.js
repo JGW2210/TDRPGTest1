@@ -56,6 +56,8 @@ export class BattleSystem {
     this.frenzyAtk = 0;
     this.shieldLeft = (run.flags.firstHitHalved ? 1 : 0) + (run.flags.shieldHits || 0);
     this.hexTurns = 0;   // mystic hex: rounds of narrowed timing bands
+    this.playerBurn = null;   // { dmg, turns } — cinders in your folds
+    this.playerChill = 0;     // frost stacks: the marker runs faster
     this.rng = mulberry32((run.battlesWon * 7919 + team.tier * 131 + 17) >>> 0);
     audio.battleStart({ boss: !!team.boss });
 
@@ -74,6 +76,26 @@ export class BattleSystem {
         if (run.hasSynergy('pale_hand')) { target.chill = (target.chill || 0) + 2; this._log('The Hound’s bite chills.'); }
         this._refreshCards();
       }, 700);
+    }
+    if (run.hasSynergy('drawn_hand')) {
+      setTimeout(() => {
+        const roll = this.rng();
+        if (roll < 0.4) {
+          const target = pick(this.rng, this._aliveEnemies());
+          if (target) {
+            this._hurtEnemy(target, 6 + (team.tier || 1) * 2, 'The Sword!');
+            this._log('The deck deals THE SWORD — it falls edge-first.');
+          }
+        } else if (roll < 0.7) {
+          this.frenzyAtk += 1;
+          this._log('The deck deals THE BANNER — +1 ATK for this battle.');
+        } else {
+          run.hp = Math.min(run.stats.maxHP, run.hp + 5);
+          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), '+5', 'heal');
+          this._log('The deck deals THE HEARTH — you are 5 HP warmer.');
+        }
+        this._refreshCards();
+      }, 850);
     }
     setTimeout(() => { this.state = 'playerMenu'; this._showMenu(); }, 1000);
   }
@@ -124,10 +146,10 @@ export class BattleSystem {
       scene.add(m);
     }
 
-    // your paper self
+    // your paper self, painted fresh each battle to match the hoard's marks
     const token = new THREE.Mesh(
       new THREE.PlaneGeometry(1.7, 2.15),
-      new THREE.MeshBasicMaterial({ map: this._shared('player', makePlayerTexture), transparent: true, fog: false })
+      new THREE.MeshBasicMaterial({ map: makePlayerTexture(run.appearance), transparent: true, fog: false })
     );
     token.geometry.translate(0, 1.07, 0);
     token.position.set(-4.4, 0, 2.9);
@@ -172,7 +194,14 @@ export class BattleSystem {
       if (team.boss) { hp = Math.round(hp * 2.6); atk = Math.round(atk * 1.2 * 10) / 10; }
 
       const bodyC = '#' + new THREE.Color(biome.color).offsetHSL(0.02 * i, 0.12, -0.1).getHexString();
-      const tex = makeEnemyTexture(bodyC, team.boss ? '#ff5a7a' : '#ffd24a', 1 + Math.floor(this.rng() * 3), this.rng());
+      const tex = makeEnemyTexture({
+        base: bodyC,
+        eye: team.boss ? '#ff5a7a' : '#ffd24a',
+        role: spec.r,
+        seed: this.rng(),
+        boss: !!team.boss,
+        accent: '#' + new THREE.Color(biome.accent).getHexString(),
+      });
       const s = team.boss ? 3.1 : 1.9 + (spec.r === 'brute' ? 0.35 : 0);
       const mesh = new THREE.Mesh(
         new THREE.PlaneGeometry(s, s),
@@ -234,9 +263,15 @@ export class BattleSystem {
       en.appendChild(card);
     }
     const pct = Math.max(0, run.hp / run.stats.maxHP * 100);
+    const pStatus = [
+      this.playerGuardBonus ? '<span class="st chill">guarded</span>' : '',
+      this.hexTurns > 0 ? '<span class="st burn">hexed</span>' : '',
+      this.playerBurn?.turns > 0 ? `<span class="st burn">🔥${this.playerBurn.dmg}</span>` : '',
+      this.playerChill > 0 ? `<span class="st chill">❄×${this.playerChill}</span>` : '',
+    ].filter(Boolean).join(' ');
     $('b-player').innerHTML = `<div class="b-name">You, the Star-Wanderer</div>
       <div class="b-hpbar"><div class="b-hpfill player" style="width:${pct}%"></div></div>
-      <div class="b-sub">${run.hp} / ${run.stats.maxHP} HP · ATK ${this._playerAtk()} · SPD ${run.stats.spd}${this.playerGuardBonus ? ' · <span class="st chill">guarded</span>' : ''}${this.hexTurns > 0 ? ' · <span class="st burn">hexed</span>' : ''}</div>`;
+      <div class="b-sub">${run.hp} / ${run.stats.maxHP} HP · ATK ${this._playerAtk()} · SPD ${run.stats.spd}${pStatus ? ' · ' + pStatus : ''}</div>`;
   }
 
   _playerAtk() {
@@ -287,29 +322,49 @@ export class BattleSystem {
   }
 
   // --------------------------------------------------------- timing minigame ---
+  // Every bar is different: the gold band lands somewhere new, the marker's
+  // speed varies with the attack, and some sweeps run right-to-left. Dodge
+  // bars (crush attacks) have no good band at all — leap true or take it.
 
-  _startTiming(kind) {
-    // kind: 'strike' | 'block'
+  _startTiming(kind, opts = {}) {
+    // kind: 'strike' | 'block' | 'dodge'
     return new Promise(resolve => {
+      const T = CONFIG.battle.timing;
       this.timingActive = true;
       this.timingKind = kind;
       this.timingT = 0;
+      this.timingSpeed = opts.speed || 1;
+      this.timingReverse = this.rng() < T.reverseChance;
+      this.timingVeil = !!opts.veil;
       this.timingResolve = resolve;
       const el = $('b-timing');
       el.classList.remove('hidden');
-      $('b-timing-label').textContent = kind === 'strike' ? 'Strike! (click / space)' : 'Block!';
-      const widen = kind === 'block' ? (run.stats.blockBonus ? 1.5 : 1) : 1;
-      const shrink = this.hexTurns > 0 ? 0.55 : 1; // mystic hex narrows the gold band
-      let [p0, p1] = CONFIG.battle.timing.perfect;
-      if (run.hasSynergy('eclipse')) { p0 -= 0.04; }
-      const mid = (p0 + p1) / 2, half = (p1 - p0) / 2 * widen * shrink;
-      this.zones = { p0: mid - half, p1: mid + half, g0: CONFIG.battle.timing.good[0], g1: CONFIG.battle.timing.good[1] };
-      const zp = el.querySelector('.bt-zone.perfect');
-      zp.style.left = (this.zones.p0 * 100) + '%';
-      zp.style.width = ((this.zones.p1 - this.zones.p0) * 100) + '%';
+      $('b-timing-label').textContent = opts.label
+        || (kind === 'strike' ? 'Strike! (click / space)' : kind === 'dodge' ? '☄ DODGE!' : 'Block!');
+
+      const widen = kind === 'block' ? 1 + 0.3 * (run.stats.blockBonus || 0) : 1;
+      const shrink = (this.hexTurns > 0 ? 0.55 : 1) * (opts.shrink || 1);
+      let half = (kind === 'strike' ? T.perfectHalf : kind === 'dodge' ? T.dodgeHalf : T.blockHalf)
+        * widen * shrink;
+      if (run.hasSynergy('eclipse')) half += 0.015;
+      const mid = 0.28 + this.rng() * 0.5;   // the band wanders every swing
+      const pad = kind === 'dodge' ? 0 : T.goodPad;
+      this.zones = {
+        p0: mid - half, p1: mid + half,
+        g0: Math.max(0.02, mid - half - pad), g1: Math.min(0.98, mid + half + pad),
+      };
+      // draw the zones in screen space (mirrored when the sweep reverses)
+      const show = (zEl, a, b) => {
+        const [s0, s1] = this.timingReverse ? [1 - b, 1 - a] : [a, b];
+        zEl.style.left = (s0 * 100) + '%';
+        zEl.style.width = ((s1 - s0) * 100) + '%';
+        zEl.style.opacity = 1;
+        zEl.style.transition = 'none';
+      };
+      show(el.querySelector('.bt-zone.perfect'), this.zones.p0, this.zones.p1);
       const zg = el.querySelector('.bt-zone.good');
-      zg.style.left = (this.zones.g0 * 100) + '%';
-      zg.style.width = ((this.zones.g1 - this.zones.g0) * 100) + '%';
+      if (pad > 0) { show(zg, this.zones.g0, this.zones.g1); }
+      else { zg.style.width = '0%'; }
     });
   }
 
@@ -321,13 +376,16 @@ export class BattleSystem {
     const bonus = (run.stats.timingBonus || 0) * 0.15;
     let grade, mult;
     if (t >= this.zones.p0 && t <= this.zones.p1) { grade = 'perfect'; mult = CONFIG.battle.perfectMult + bonus; }
-    else if (t >= this.zones.g0 && t <= this.zones.g1) { grade = 'good'; mult = CONFIG.battle.goodMult + bonus; }
-    else { grade = 'miss'; mult = CONFIG.battle.missMult + bonus * 0.5; }
+    else if (this.timingKind !== 'dodge' && t >= this.zones.g0 && t <= this.zones.g1) {
+      grade = 'good'; mult = CONFIG.battle.goodMult + bonus;
+    } else { grade = 'miss'; mult = CONFIG.battle.missMult + bonus * 0.5; }
     this.timingResolve({ grade, mult });
   }
 
   // ----------------------------------------------------------- player turn ---
 
+  // Star Strike is a combo now: up to three bars, each faster and tighter
+  // than the last. Land perfect or good to keep the chain; a miss drops it.
   async _playerAttack() {
     if (this.state !== 'playerMenu') return;
     this.state = 'playerActing';
@@ -338,19 +396,34 @@ export class BattleSystem {
     // lunge toward the foe
     this._tween(this.playerMesh.position, { x: target.home.x - 1.6, z: target.home.z + 1.2 }, 0.32);
     await wait(300);
-    let timing;
-    if (run.flags.firstHitPerfect && !this.usedFirstPerfect) {
-      this.usedFirstPerfect = true;
-      timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult + (run.stats.timingBonus || 0) * 0.15 };
-      this._log('The Dawn Thimble guides your hand — Perfect!');
-    } else {
-      timing = await this._startTiming('strike');
+
+    const maxHits = CONFIG.battle.comboHits;
+    let bestPerfect = null;
+    for (let h = 0; h < maxHits && !target.dead; h++) {
+      let timing;
+      if (h === 0 && run.flags.firstHitPerfect && !this.usedFirstPerfect) {
+        this.usedFirstPerfect = true;
+        timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult + (run.stats.timingBonus || 0) * 0.15 };
+        this._log('The Dawn Thimble guides your hand — Perfect!');
+      } else {
+        timing = await this._startTiming('strike', {
+          speed: 1 + h * 0.22,
+          shrink: Math.pow(0.88, h),
+          label: h === 0 ? 'Strike! (click / space)' : `Strike ${h + 1} — keep the chain!`,
+        });
+      }
+      await this._strike(target, timing, CONFIG.battle.comboMult, h > 0);
+      if (timing.grade === 'perfect') bestPerfect = timing;
+      if (timing.grade === 'miss') {
+        if (h < maxHits - 1) this._log('The chain slips from your hands…');
+        break;
+      }
+      if (h < maxHits - 1 && !target.dead) await wait(170);
     }
-    await this._strike(target, timing, 1);
-    if (timing.grade === 'perfect' && run.flags.perfectEcho && !target.dead) {
+    if (bestPerfect && run.flags.perfectEcho && !target.dead) {
       await wait(220);
       this._log('The Echo Hammer rings!');
-      await this._strike(target, { grade: 'echo', mult: timing.mult * run.flags.perfectEcho }, 1, true);
+      await this._strike(target, { grade: 'echo', mult: bestPerfect.mult * run.flags.perfectEcho }, CONFIG.battle.comboMult, true);
     }
     this._tween(this.playerMesh.position, { x: this.playerHome.x, z: this.playerHome.z }, 0.3);
     await wait(330);
@@ -359,10 +432,11 @@ export class BattleSystem {
 
   async _strike(target, timing, baseMult, silent = false) {
     let dmg = this._playerAtk() * timing.mult * baseMult * (0.92 + this.rng() * 0.16);
+    if (timing.grade === 'perfect' && run.hasSynergy('high_noon')) dmg *= 1.2;
     let crit = false;
     let luck = run.stats.luck || 0;
     if (run.hasSynergy('stained_glass')) luck += 10;
-    if (this.rng() * 100 < luck) { crit = true; dmg *= 2; }
+    if (this.rng() * 100 < luck) { crit = true; dmg *= run.hasSynergy('glassworks') ? 2.5 : 2; }
     if (run.flags.critShatter && this.shatterNext) { dmg += this.shatterNext; this.shatterNext = 0; }
     if (run.flags.executeBonus && target.hp / target.maxHP < 0.3) dmg *= 1.5;
     if (target.role === 'guard') dmg *= 0.75;
@@ -502,7 +576,7 @@ export class BattleSystem {
     this._hideMenu();
     run.consumables.dew--;
     audio.sfxHeal();
-    const amount = 15 + (run.flags.dewPotency || 0);
+    const amount = 12 + (run.flags.dewPotency || 0);
     run.hp = Math.min(run.stats.maxHP, run.hp + amount);
     this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${amount}`, 'heal');
     this._log(`❋ The star-dew glows going down. +${amount} HP.`);
@@ -570,6 +644,7 @@ export class BattleSystem {
 
   async _enemyPhase() {
     this.state = 'enemyPhase';
+    const tier = this.team.tier ?? 0;
     for (const e of this._aliveEnemies()) {
       // burn ticks at the start of the foe's action
       if (e.burnTurns > 0) {
@@ -588,10 +663,27 @@ export class BattleSystem {
       }
       if (e.charging) {
         e.charging = false;
-        await this._enemyStrike(e, 2.0, true);
-      } else if (e.role === 'mystic' && this.rng() < 0.3) {
+        // wound-up blows land as unblockable crushes in the deep (and always from bosses)
+        const crush = e.boss || tier >= 2;
+        await this._enemyStrike(e, 2.0, crush ? { crush: true } : { heavy: true });
+      } else if (e.role === 'mystic' && this.rng() < 0.42) {
         e.intent = 'special';
-        if ((this.team.tier ?? 0) >= 2 && this.hexTurns === 0 && this.rng() < 0.5) {
+        const hurt = this._aliveEnemies().filter(o => o !== e && o.hp < o.maxHP * 0.7);
+        const roll = this.rng();
+        if (hurt.length && roll < 0.3) {
+          const ally = hurt.sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
+          const mend = Math.round(ally.maxHP * 0.25);
+          ally.hp = Math.min(ally.maxHP, ally.hp + mend);
+          this._float(ally.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${mend}`, 'heal');
+          this._log(`${e.name} re-folds ${ally.name}'s wounds shut.`);
+        } else if (tier >= 3 && roll < 0.55) {
+          const drain = 3 + Math.round(tier * 0.7);
+          run.hp -= drain;
+          e.hp = Math.min(e.maxHP, e.hp + drain);
+          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
+          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drain}`, 'heal');
+          this._log(`${e.name} siphons your starlight into itself…`);
+        } else if (tier >= 2 && this.hexTurns === 0 && roll < 0.75) {
           this.hexTurns = 2;
           this._log(`${e.name} knots the light around your hands — your timing bands narrow!`);
         } else {
@@ -601,28 +693,32 @@ export class BattleSystem {
         }
         this._refreshCards();
         await wait(550);
-      } else if (e.role === 'guard' && (this.team.tier ?? 0) >= 2 && this.rng() < 0.3
-        && this._aliveEnemies().some(o => o !== e && !o.warded)) {
-        const ally = this._aliveEnemies().filter(o => o !== e && !o.warded)
-          .sort((a, b) => a.hp - b.hp)[0];
-        ally.warded = true;
+      } else if (e.role === 'guard' && this.rng() < 0.32) {
         e.intent = 'special';
-        this._log(`${e.name} raises a rune-wall around ${ally.name}.`);
+        const bare = this._aliveEnemies().filter(o => o !== e && !o.warded);
+        if (tier >= 2 && bare.length && this.rng() < 0.6) {
+          const ally = bare.sort((a, b) => a.hp - b.hp)[0];
+          ally.warded = true;
+          this._log(`${e.name} raises a rune-wall around ${ally.name}.`);
+        } else if (!e.warded) {
+          e.warded = true;
+          this._log(`${e.name} locks its plates into a rune-shell.`);
+        } else {
+          await this._enemyStrike(e, 1);
+        }
         this._refreshCards();
         await wait(550);
-      } else if (this.rng() < (e.boss ? 0.1 + 0.05 * (this.team.tier || 1) : 0.13)) {
+      } else if (this.rng() < (e.boss ? 0.12 + 0.05 * (this.team.tier || 1) : 0.15)) {
         e.charging = true;
-        this._log(`${e.name} is gathering a heavy blow!`);
+        this._log(`${e.name} is gathering a ${e.boss || tier >= 2 ? 'crushing' : 'heavy'} blow!`);
         this._refreshCards();
         await wait(600);
         continue;
+      } else if (e.role === 'swift' && this.rng() < 0.3 + tier * 0.08) {
+        // the flurry: every swing gets its own quickening bar
+        await this._enemyStrike(e, 1, { hits: tier >= 3 ? 3 : 2 });
       } else {
         await this._enemyStrike(e, 1);
-        // swift foes dart in a second time, lighter but relentless
-        if (e.role === 'swift' && (this.team.tier ?? 0) >= 2 && !e.dead && run.hp > 0 && this.rng() < 0.35) {
-          this._log(`${e.name} darts in again!`);
-          await this._enemyStrike(e, 0.5);
-        }
       }
       if (run.hp <= 0) return this._defeat();
       this._refreshCards();
@@ -630,52 +726,113 @@ export class BattleSystem {
     }
     this.turn++;
     if (this.hexTurns > 0) this.hexTurns--;
+    if (this.playerChill > 0 && this.rng() < 0.5) this.playerChill--;
     for (const k of Object.keys(this.abilityCds)) this.abilityCds[k] = Math.max(0, this.abilityCds[k] - 1);
     if (this._aliveEnemies().length === 0) return this._victory();
-    if (run.hasSynergy('verdance') && run.hp < run.stats.maxHP) {
-      run.hp = Math.min(run.stats.maxHP, run.hp + 2);
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), '+2 ❀', 'heal');
+    // your burn ticks as your turn comes around
+    if (this.playerBurn && this.playerBurn.turns > 0) {
+      run.hp -= this.playerBurn.dmg;
+      this.playerBurn.turns--;
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${this.playerBurn.dmg} 🔥`, 'dmg');
+      if (run.hp <= 0) return this._defeat();
+    }
+    let regen = 0;
+    if (run.hasSynergy('fullbloom')) regen += 2;
+    if (run.hasSynergy('verdance')) regen += 3;
+    if (regen && run.hp < run.stats.maxHP) {
+      run.hp = Math.min(run.stats.maxHP, run.hp + regen);
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${regen} ❀`, 'heal');
     }
     this.state = 'playerMenu';
     this._showMenu();
     this._refreshCards();
   }
 
-  async _enemyStrike(e, mult, heavy = false) {
-    this._log(`${e.name}${heavy ? ' unleashes the heavy blow!' : ' attacks!'}`);
+  // One enemy attack action. opts.heavy: a wound-up blow. opts.crush: an
+  // unblockable heavy — only a narrow dodge timing (or passive dodge) saves
+  // you. opts.hits > 1: a flurry, each swing with its own accelerating bar.
+  async _enemyStrike(e, mult, opts = {}) {
+    const { heavy = false, crush = false, hits = 1 } = opts;
+    const tier = this.team.tier || 1;
+    const veil = ['DESERT', 'CRIMSON'].includes(this.team.biome);   // sand hides the bands
+    this._log(`${e.name}${crush ? '’s CRUSHING blow falls — dodge!'
+      : heavy ? ' unleashes the heavy blow!'
+      : hits > 1 ? ` strikes in a flurry of ${hits}!` : ' attacks!'}`);
     this._tween(e.mesh.position, { x: this.playerHome.x + 1.6, z: this.playerHome.z - 1.0 }, 0.3);
     await wait(300);
-    const timing = await this._startTiming('block');
-    let dmg = Math.max(1, e.atk - (e.chill || 0)) * mult * (0.9 + this.rng() * 0.2);
-    // dodge check
-    const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
-    if (autoDodge || this.rng() * 100 < (run.stats.dodge || 0) + (run.hasSynergy('steamveil') ? 10 : 0)) {
-      this.firstDodgeUsed = true;
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'dodged!', 'heal');
-      this._log('You flutter aside — dodged!');
-      dmg = 0;
-    } else {
-      const blocked = timing.grade === 'perfect' || timing.grade === 'good';
-      if (blocked) {
-        dmg *= CONFIG.battle.blockMult;
-        this._log('Blocked!');
+
+    for (let h = 0; h < hits; h++) {
+      if (run.hp <= 0) break;
+      const perHit = hits > 1 ? mult * 0.55 : mult;
+      const speed = 1 + tier * 0.04 + (crush ? 0.3 : heavy ? 0.2 : 0) + h * 0.15
+        + (this.playerChill || 0) * 0.08;
+      const timing = await this._startTiming(crush ? 'dodge' : 'block', {
+        speed, veil,
+        label: crush ? '☄ DODGE!' : hits > 1 ? `Block! (${h + 1}/${hits})` : 'Block!',
+      });
+      let dmg = Math.max(1, e.atk - (e.chill || 0)) * perHit * (0.9 + this.rng() * 0.2);
+
+      const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
+      const passiveDodge = this.rng() * 100 < (run.stats.dodge || 0);
+      if (crush && timing.grade === 'perfect') {
+        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'leapt clear!', 'heal');
+        this._log('You fold sideways — the blow shatters empty ground!');
         audio.sfxBlock();
-        if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
+        dmg = 0;
+      } else if (autoDodge || passiveDodge) {
+        this.firstDodgeUsed = true;
+        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'dodged!', 'heal');
+        this._log('You flutter aside — dodged!');
+        dmg = 0;
       } else {
-        audio.sfxHurt();
+        if (crush) {
+          dmg *= 1.2;   // caught flat-footed under the full weight
+          audio.sfxHurt();
+        } else if (timing.grade === 'perfect') {
+          dmg *= CONFIG.battle.blockPerfect;
+          this._log('PERFECT block!');
+          audio.sfxBlock();
+          if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
+        } else if (timing.grade === 'good') {
+          dmg *= CONFIG.battle.blockGood;
+          this._log('Blocked — most of it.');
+          audio.sfxBlock();
+        } else {
+          audio.sfxHurt();
+        }
+        if (this.shieldLeft > 0) { dmg *= 0.5; this.shieldLeft--; }
+        if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) dmg += run.flags.waterWeak;
+        dmg = Math.max(1, Math.round(dmg));
+        run.hp -= dmg;
+        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${dmg}`, 'dmg');
+        this._shake(this.playerMesh);
+        if (run.flags.thorns && !e.dead) {
+          this._hurtEnemy(e, run.flags.thorns, '⟁');
+        }
+        // the land fights through its beasts
+        if (dmg > 0) this._applyBiomeAffliction(e, dmg);
       }
-      if (this.shieldLeft > 0) { dmg *= 0.5; this.shieldLeft--; }
-      if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) dmg += run.flags.waterWeak;
-      dmg = Math.max(1, Math.round(dmg));
-      run.hp -= dmg;
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${dmg}`, 'dmg');
-      this._shake(this.playerMesh);
-      if (run.flags.thorns && !e.dead) {
-        this._hurtEnemy(e, run.flags.thorns, '⟁');
-      }
+      if (hits > 1) { this._refreshCards(); await wait(200); }
     }
     this._tween(e.mesh.position, { x: e.home.x, z: e.home.z }, 0.3);
     await wait(320);
+  }
+
+  _applyBiomeAffliction(e, dmg) {
+    const biome = this.team.biome;
+    if (['VOLCANO', 'CRIMSON'].includes(biome) && this.rng() < 0.4) {
+      this.playerBurn = { dmg: 2, turns: 2 };
+      this._log('Cinders catch in your paper folds — you are BURNING!');
+    } else if (['TUNDRA', 'LUNAR'].includes(biome) && this.rng() < 0.4 && (this.playerChill || 0) < 3) {
+      this.playerChill = (this.playerChill || 0) + 1;
+      this._log('Frost stiffens your hands — the marker runs faster while you shiver.');
+    } else if (['SEA', 'BRIDGE'].includes(biome) && !e.dead) {
+      const drink = Math.round(dmg * 0.4);
+      if (drink > 0) {
+        e.hp = Math.min(e.maxHP, e.hp + drink);
+        this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drink}`, 'heal');
+      }
+    }
   }
 
   // ---------------------------------------------------------------- ending ---
@@ -688,7 +845,7 @@ export class BattleSystem {
     shards = run.gainShards(shards);
     const drops = { shards };
     if (this.rng() < 0.18 + (run.flags.chargeDropBonus || 0)) { run.consumables.charge++; drops.charge = 1; }
-    else if (this.rng() < 0.14) { run.consumables.dew++; drops.dew = 1; }
+    else if (this.rng() < 0.05) { run.consumables.dew++; drops.dew = 1; }   // dew is precious now
     if (run.flags.afterBattleHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.afterBattleHeal);
     run.battlesWon++;
     if (boss) run.bossesDown++;
@@ -774,10 +931,20 @@ export class BattleSystem {
 
     // timing marker
     if (this.timingActive) {
-      this.timingT += dt / CONFIG.battle.timing.travel;
+      this.timingT += dt * this.timingSpeed / CONFIG.battle.timing.travel;
       if (this.timingT >= 1) { this.timingT = 1; this._resolveTiming(); }
       const marker = document.querySelector('#b-timing .bt-marker');
-      if (marker) marker.style.left = (this.timingT * 100) + '%';
+      if (marker) {
+        const shown = this.timingReverse ? 1 - this.timingT : this.timingT;
+        marker.style.left = (shown * 100) + '%';
+      }
+      // desert sand-veil: the zones fade from sight partway across
+      if (this.timingVeil && this.timingT > 0.4) {
+        for (const z of document.querySelectorAll('#b-timing .bt-zone')) {
+          z.style.transition = 'opacity 0.25s';
+          z.style.opacity = 0;
+        }
+      }
     }
 
     // tweens

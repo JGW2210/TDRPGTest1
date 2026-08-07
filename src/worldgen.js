@@ -617,7 +617,7 @@ export function generateWorld(seed) {
           : {
             type: 'side', subtype: 'cache', name: 'Abandoned Supply Drop',
             flavor: 'A crate on cracked runners, still lashed tight. The manifest lists three items and one apology.',
-            actions: ['Open the Cache'], cacheConsumables: rng() < 0.5 ? { charge: 2 } : { dew: 2 },
+            actions: ['Open the Cache'], cacheConsumables: rng() < 0.65 ? { charge: 2 } : { dew: 1 },
           }];
       } else {
         sites = [makeSide(rng)];

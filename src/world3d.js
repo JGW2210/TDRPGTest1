@@ -939,8 +939,11 @@ export class WorldView {
     if (!this._roamerTex[key]) {
       const base = '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).color)
         .offsetHSL(0, 0.1, dread ? -0.16 : -0.08).getHexString();
-      this._roamerTex[key] = makeEnemyTexture(base, dread ? '#ff5a7a' : '#ffd24a',
-        1 + (hash2(r.q, r.r, 55) * 3 | 0), hash2(r.r, r.q, 56));
+      this._roamerTex[key] = makeEnemyTexture({
+        base, eye: dread ? '#ff5a7a' : '#ffd24a', seed: hash2(r.r, r.q, 56),
+        role: ['brute', 'swift', 'guard'][hash2(r.q, r.r, 55) * 3 | 0],
+        accent: '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).accent).getHexString(),
+      });
     }
     return this._roamerTex[key];
   }
