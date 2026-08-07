@@ -199,6 +199,14 @@ html, body {
   background: rgba(240,196,106,0.07); font-size: 12.5px; line-height: 1.5;
 }
 #inv-synergies .syn b { color: var(--gold); letter-spacing: 0.12em; }
+#inv-synergies .syn.grand {
+  border-left-color: #d79bff; background: rgba(215,155,255,0.1);
+}
+#inv-synergies .syn.grand b { color: #d79bff; }
+.setchip {
+  display: inline-block; margin: 2px 3px 2px 0; padding: 2px 8px;
+  border: 1px solid; border-radius: 9px; font-size: 11px; letter-spacing: 0.08em;
+}
 #inv-items .inv-item {
   margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(126,140,255,0.18);
   border-radius: 8px; font-size: 12.5px; line-height: 1.5;
@@ -385,6 +393,24 @@ body.in-battle #legend, body.in-battle #controls, body.in-battle #tooltip, body.
   color: #0b0d20; background: var(--gold); border: none;
 }
 #btn-newrun:hover { filter: brightness(1.1); }
+
+/* ---------- the alternative ending ---------- */
+#ending {
+  position: absolute; inset: 0; z-index: 70;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, #10261a 0%, #05060f 75%);
+  text-align: center;
+}
+#ending.hidden { display: none; }
+#ending h1 { margin-top: 16px; font-size: 34px; letter-spacing: 0.34em; text-indent: 0.34em; color: #c8ffb0; }
+#ending-stats { margin-top: 22px; font-size: 14px; color: #c6ccf2; line-height: 2; }
+#ending-stats b { color: #a6ff57; }
+#btn-ascend {
+  margin-top: 28px; font-family: var(--serif); font-size: 16px; letter-spacing: 0.12em;
+  padding: 12px 34px; border-radius: 12px; cursor: pointer;
+  color: #0b0d20; background: #a6ff57; border: none;
+}
+#btn-ascend:hover { filter: brightness(1.1); }
 
 /* ---------- toasts ---------- */
 #toasts {

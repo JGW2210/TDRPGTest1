@@ -71,9 +71,9 @@ export const ITEMS = [
     core: true, stats: {}, tags: ['bloom'], flags: { thorns: 2 },
     desc: 'Foes that strike you take 2 damage back.',
     flavor: 'The forest forgives. The ring does not.' }),
-  I('bark_shield', 'FOREST', 'c', 'Treant-Bark Buckler', {
+  I('bark_shield', 'FOREST', 'r', 'Treant-Bark Buckler', {
     core: true, stats: { maxHP: 5, blockBonus: 1 }, tags: ['bloom'],
-    desc: '+5 max HP. Your Block window is 50% wider.',
+    desc: '+5 max HP. Your Block window is 30% wider.',
     flavor: 'Donated. Probably.' }),
   I('spore_pouch', 'FOREST', 'u', 'Sighing Spore Pouch', {
     stats: {}, tags: ['bloom'],
@@ -116,7 +116,7 @@ export const ITEMS = [
     flavor: 'A piece of the thing everything else is shaped on.' }),
   I('cairn_finger', 'MOUNTAIN', 'u', 'Cairn-Builder’s Finger', {
     stats: { maxHP: 8 }, tags: [], flags: { blockHeal: 2 },
-    desc: '+8 max HP. Successful Blocks restore 2 HP.',
+    desc: '+8 max HP. Perfect Blocks restore 2 HP.',
     flavor: 'Stone remembers being stacked kindly.' }),
   I('eyrie_horn', 'MOUNTAIN', 'u', 'Eyrie Signal-Horn', {
     stats: {}, tags: [],
@@ -236,9 +236,9 @@ export const ITEMS = [
     core: true, stats: {}, tags: ['card', 'moon'], flags: { houndStrike: 6 },
     desc: 'As each battle begins, the Hound is dealt: 6 damage to a random foe.',
     flavor: 'It is drawn. It was always going to be drawn.' }),
-  I('sleet_mantle', 'TUNDRA', 'c', 'Sleet Mantle', {
+  I('sleet_mantle', 'TUNDRA', 'r', 'Sleet Mantle', {
     core: true, stats: { blockBonus: 1 }, tags: ['moon'],
-    desc: 'Your Block window is 50% wider.',
+    desc: 'Your Block window is 30% wider.',
     flavor: 'The storm signs its work; this is a forgery good enough to fool it.' }),
   I('auroral_thread', 'TUNDRA', 'c', 'Auroral Thread', {
     core: true, stats: { maxHP: 5, dodge: 5 }, tags: ['moon'],
@@ -327,7 +327,7 @@ export const ITEMS = [
     core: true, stats: { luck: 10 }, tags: ['glass'], flags: { seeIntent: true },
     desc: '+10% crit. You see what each foe intends to do next.',
     flavor: 'Blink schedule: never.' }),
-  I('tuning_spar', 'CRYSTAL', 'c', 'Tuning Spar', {
+  I('tuning_spar', 'CRYSTAL', 'r', 'Tuning Spar', {
     core: true, stats: { timingBonus: 1 }, tags: ['glass'],
     desc: 'All your timing multipliers are raised by +0.15.',
     flavor: 'Hum first. It corrects you kindly.' }),
@@ -377,7 +377,7 @@ export const ITEMS = [
     core: true, stats: { maxHP: 4 }, tags: [], flags: { afterBattleHeal: 2 },
     desc: '+4 max HP. Heal 2 after each battle.',
     flavor: 'Boils on spite alone.' }),
-  I('spare_string', 'ANY', 'c', 'A Spare String', {
+  I('spare_string', 'ANY', 'r', 'A Spare String', {
     core: true, stats: { timingBonus: 1 }, tags: [],
     desc: 'Timing multipliers +0.15.',
     flavor: 'For the instrument you are, apparently.' }),
@@ -487,13 +487,13 @@ export const ITEMS = [
     flavor: 'Signed in someone else’s hand. Cash it carefully.' }),
   I('candle_endless', 'ANY', 'r', 'The Unlit Candle’s Twin', {
     stats: { maxHP: 10 }, tags: ['card'], flags: { blockHeal: 2 },
-    desc: '+10 max HP. Successful Blocks restore 2 HP.',
+    desc: '+10 max HP. Perfect Blocks restore 2 HP.',
     flavor: 'It burns exactly when its sibling does not. So: now.' }),
   I('rumor_earring', 'ANY', 'c', 'Rumor-Catcher Earring', {
     stats: { luck: 4, shardGain: 8 }, tags: [],
     desc: '+4% crit, +8% shard finds.',
     flavor: 'Hears where the shards fell and what they said on the way down.' }),
-  I('practice_sword', 'ANY', 'c', 'Practice Sword (Graduated)', {
+  I('practice_sword', 'ANY', 'u', 'Practice Sword (Graduated)', {
     stats: { atk: 1, timingBonus: 1 }, tags: [],
     desc: '+1 ATK, timing multipliers +0.15.',
     flavor: 'Wood that studied. Wood that passed.' }),
@@ -544,9 +544,9 @@ export const ITEMS = [
     core: true, stats: { spd: 1 }, tags: [], flags: { revealRegion: true },
     desc: '+1 SPD. Entering a region charts it all into hazy memory.',
     flavor: 'It points to where you will eventually have been.' }),
-  I('gate_splinter', 'BOSS', 'u', 'Splinter of a Broken Ward', {
+  I('gate_splinter', 'BOSS', 'r', 'Splinter of a Broken Ward', {
     core: true, stats: { maxHP: 8, blockBonus: 1 }, tags: [],
-    desc: '+8 max HP. Your Block window is 50% wider.',
+    desc: '+8 max HP. Your Block window is 30% wider.',
     flavor: 'The ward remembers holding. Now it holds for you.' }),
   I('wardens_gavel', 'BOSS', 'r', 'The Warden’s Gavel', {
     stats: { atk: 4 }, tags: [], flags: { stunOnPerfect: 20 },
@@ -634,7 +634,7 @@ export const ITEMS = [
     flavor: 'Vael does not miss it. Vael is politely certain you will return it.' }),
   I('starlight_suture', 'ASTRAL', 'r', 'Starlight Suture', {
     stats: { maxHP: 8 }, tags: ['moon'], flags: { blockHeal: 3, perfectHeal: 2 },
-    desc: '+8 max HP. Blocks restore 3 HP; Perfects restore 2.',
+    desc: '+8 max HP. Perfect Blocks restore 3 HP; Perfect strikes restore 2.',
     flavor: 'Stitches wounds with light that remembers being whole.' }),
   I('pale_daughter_tear', 'ASTRAL', 'a', 'The Pale Daughter’s Tear', {
     stats: { maxHP: 12, luck: 8 }, tags: ['moon', 'water'], flags: { dewPotency: 15 },
@@ -645,21 +645,90 @@ export const ITEMS = [
     ability: { id: 'zodiac', name: 'Cast the Zodiac', cd: 4, kind: 'gamble', desc: '0–300% ATK, judged by beasts of bone.' },
     desc: '+15% crit. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
     flavor: 'Twelve faces, each a hungry constellation. All of them owe you one.' }),
+
+  // ═════════════════════════════════════════════════════ MUTATIONS (8) ═══
+  // Cosmic mutations never appear in ordinary draws — they come only from
+  // the deep places (satellite bosses, tier-3+ keepers, astral pedestals,
+  // nebulas). Each rewrites the wanderer's body: great power, real cost.
+  // Carrying three tears open the Wound in the Meridian.
+  I('maw_beneath', 'MUTATION', 'm', 'The Maw Beneath', {
+    core: true, mutation: true, stats: { atk: 8, maxHP: -8 }, tags: [], flags: { shopMarkup: 0.4 },
+    desc: '+8 ATK, −8 max HP. Merchants see the teeth: shop prices +40%.',
+    flavor: 'Your gentle smile is still there. It is just no longer the outermost one.' }),
+  I('thousand_eyes', 'MUTATION', 'm', 'A Thousand Unclosing Eyes', {
+    core: true, mutation: true, stats: { luck: 15, dodge: 10, maxHP: -6 }, tags: [],
+    flags: { seeIntent: true, noFirstDodge: true },
+    desc: '+15% crit, +10% dodge, see all foe intents, −6 max HP. They never close: effects that auto-dodge first blows are lost.',
+    flavor: 'You see everything now. Everything sees that you see it. Introductions are exhausting.' }),
+  I('antler_deep', 'MUTATION', 'm', 'Antler Crown of the Deep', {
+    core: true, mutation: true, stats: { maxHP: 20, atk: 2, spd: -3 }, tags: [], flags: { heavyGait: true },
+    desc: '+20 max HP, +2 ATK, −3 SPD. The crown is heavy: you can never travel fast again.',
+    flavor: 'Something old and drowned mistook you for its heir. It refuses to take the crown back.' }),
+  I('tatter_wings', 'MUTATION', 'm', 'Wings of Torn Vellum', {
+    core: true, mutation: true, stats: { spd: 4, dodge: 12, maxHP: -10, shardGain: -25 }, tags: [],
+    flags: { fastTravel: true },
+    desc: '+4 SPD, +12% dodge, fast travel everywhere — but −10 max HP and shard finds −25% as pieces of you scatter.',
+    flavor: 'They unfolded out of your own margins. The wind reads you as it carries you.' }),
+  I('tide_gills', 'MUTATION', 'm', 'Tidewrought Gills', {
+    core: true, mutation: true, stats: { atk: 3, dodge: 8 }, tags: [], flags: { drylandAche: 2 },
+    desc: '+3 ATK, +8% dodge. Dry land aches: after every battle outside the shallows, lose 2 HP.',
+    flavor: 'The sea remembered you before you were paper. It wants its draft back.' }),
+  I('starving_halo', 'MUTATION', 'm', 'The Starving Halo', {
+    core: true, mutation: true, stats: { atk: 2 }, tags: [], flags: { killHeal: 4, dewMuted: true },
+    desc: '+2 ATK, heal 4 whenever a foe falls — but star-dew only half-nourishes you now.',
+    flavor: 'A ring of black light that eats what you defeat and tithes you the marrow.' }),
+  I('hollow_chest', 'MUTATION', 'm', 'The Hollow Chest', {
+    core: true, mutation: true, stats: { maxHP: -5 }, tags: [], flags: { cooldownMinus: 1, abilityToll: 2 },
+    desc: 'Ability cooldowns −1 turn, −5 max HP, and every ability costs 2 HP. The hollow gives; the hollow takes.',
+    flavor: 'Where your chest-rune sat there is now a small tidy absence with one star inside.' }),
+  I('voice_wound', 'MUTATION', 'm', 'Voice of the Wound', {
+    core: true, mutation: true, stats: { luck: 8, shardGain: -30 }, tags: [], flags: { chillOnHit: 1 },
+    desc: '+8% crit, your strikes Chill — but the whispers cost you: shard finds −30%.',
+    flavor: 'You speak your own language now. Only the rift speaks it back.' }),
 ];
 
-// Synergies: both tags present → the effect ignites.
+// Sets & synergies. Every tag is a set; carry enough relics of one set and
+// its synergy ignites. Grand synergies demand TWO completed sets at once and
+// transform accordingly.
+export const SETS = {
+  ember: { name: 'Ember', need: 3, color: '#ff7a45' },
+  bloom: { name: 'Bloom', need: 3, color: '#8affc4' },
+  glass: { name: 'Glass', need: 3, color: '#d79bff' },
+  moon:  { name: 'Moon',  need: 4, color: '#bcd8ff' },
+  sun:   { name: 'Sun',   need: 3, color: '#f5b942' },
+  water: { name: 'Water', need: 3, color: '#6f9bff' },
+  card:  { name: 'Card',  need: 3, color: '#d94f8e' },
+};
+
+// A synergy ignites when every listed set is complete (count >= need).
 export const SYNERGIES = [
-  { id: 'fulgurite', tags: ['ember', 'glass'], name: 'FULGURITE',
-    desc: 'Fire through glass: your crits also Burn (3/turn, 3 turns).' },
-  { id: 'pale_hand', tags: ['moon', 'card'], name: 'THE PALE HAND',
-    desc: 'The Hound hunts in moonlight: its opening strike also Chills (−2 ATK).' },
-  { id: 'steamveil', tags: ['ember', 'water'], name: 'STEAMVEIL',
-    desc: 'Fire meets sea: your water weakness is annulled and steam grants +10% dodge.' },
-  { id: 'eclipse', tags: ['sun', 'moon'], name: 'ECLIPSE',
-    desc: 'Sun and moon align: +2 ATK, and Perfect windows widen.' },
-  { id: 'verdance', tags: ['bloom', 'water'], name: 'VERDANCE',
-    desc: 'Rain on green: heal 2 at the start of every one of your turns.' },
-  { id: 'stained_glass', tags: ['glass', 'card'], name: 'STAINED GLASS',
+  // ---- set synergies: one completed set --------------------------------
+  { id: 'cinderhost', sets: ['ember'], name: 'CINDERHOST',
+    desc: 'Three embers make a hearth: +1 ATK and your strikes Burn (+1/turn).' },
+  { id: 'fullbloom', sets: ['bloom'], name: 'FULL BLOOM',
+    desc: 'The garden takes root in you: heal 2 at the start of your turns.' },
+  { id: 'glassworks', sets: ['glass'], name: 'GLASSWORKS',
+    desc: 'Everything refracts: +8% crit, and your crits cut 25% deeper.' },
+  { id: 'moonbound', sets: ['moon'], name: 'MOONBOUND',
+    desc: 'Four moons in one sky: +10% dodge, and you always dodge the first blow.' },
+  { id: 'high_noon', sets: ['sun'], name: 'HIGH NOON',
+    desc: 'The sun forgives nothing: +2 ATK, and Perfect strikes deal +20%.' },
+  { id: 'tideborne', sets: ['water'], name: 'TIDEBORNE',
+    desc: 'The sea keeps you: +5% dodge, heal 3 after every battle.' },
+  { id: 'drawn_hand', sets: ['card'], name: 'THE DRAWN HAND',
+    desc: 'The deck plays you first: a random card is dealt as each battle opens.' },
+  // ---- grand synergies: two completed sets -----------------------------
+  { id: 'fulgurite', sets: ['ember', 'glass'], grand: true, name: 'FULGURITE',
+    desc: 'Fire through glass: +2 ATK, and your crits also Burn (3/turn, 3 turns).' },
+  { id: 'pale_hand', sets: ['moon', 'card'], grand: true, name: 'THE PALE HAND',
+    desc: 'The Hound hunts in moonlight: each battle opens with its bite (8 damage, Chill −2 ATK).' },
+  { id: 'steamveil', sets: ['ember', 'water'], grand: true, name: 'STEAMVEIL',
+    desc: 'Fire meets sea: water weakness annulled, +15% dodge, and Perfect Blocks restore 2 HP.' },
+  { id: 'eclipse', sets: ['sun', 'moon'], grand: true, name: 'ECLIPSE',
+    desc: 'Sun and moon align: +3 ATK, and Perfect windows widen.' },
+  { id: 'verdance', sets: ['bloom', 'water'], grand: true, name: 'VERDANCE',
+    desc: 'Rain on green: heal 3 more at the start of every one of your turns.' },
+  { id: 'stained_glass', sets: ['glass', 'card'], grand: true, name: 'STAINED GLASS',
     desc: 'Fate refracted: +10% crit, and crits grant +1 star-shard.' },
 ];
 
@@ -670,13 +739,14 @@ export const RARITY = {
   u: { name: 'Uncommon', color: '#6fe0c8' },
   r: { name: 'Rare', color: '#b48aff' },
   a: { name: 'Astral', color: '#f0c46a' },
+  m: { name: 'Mutation', color: '#a6ff57' },
 };
 
 const SOURCE_WEIGHTS = {
   pedestal: { c: 0.56, u: 0.30, r: 0.12, a: 0.02 },
   boss: { c: 0.08, u: 0.40, r: 0.38, a: 0.14 },
   secret: { c: 0.16, u: 0.42, r: 0.34, a: 0.08 },
-  shop: { c: 0.45, u: 0.35, r: 0.18, a: 0.02 },
+  shop: { c: 0.62, u: 0.28, r: 0.09, a: 0.01 },   // harsh: traders rarely part with the good stock
   astral: { c: 0, u: 0.14, r: 0.44, a: 0.42 },
 };
 
@@ -689,7 +759,7 @@ export function drawItem(rng, pool, ownedIds, opts = {}) {
   let roll = rng(), rarity = 'c';
   for (const k of ['c', 'u', 'r', 'a']) { if (roll < w[k]) { rarity = k; break; } roll -= w[k]; }
 
-  const ok = i => !ownedIds.has(i.id) && (!unlocked || unlocked.has(i.id));
+  const ok = i => !ownedIds.has(i.id) && i.rarity !== 'm' && (!unlocked || unlocked.has(i.id));
   const tryPools = [pool, 'ANY'];
   const rarityOrder = [rarity, 'r', 'u', 'c', 'a'];
   for (const p of tryPools) {
@@ -702,6 +772,12 @@ export function drawItem(rng, pool, ownedIds, opts = {}) {
   return any.length ? pick(rng, any) : null;
 }
 
+// Mutations come only from the deep places, never the ordinary draw.
+export function drawMutation(rng, ownedIds) {
+  const cands = ITEMS.filter(i => i.rarity === 'm' && !ownedIds.has(i.id));
+  return cands.length ? pick(rng, cands) : null;
+}
+
 export const CONSUMABLES = {
   charge: {
     id: 'charge', name: 'Star-Charge', icon: '✸',
@@ -709,7 +785,7 @@ export const CONSUMABLES = {
   },
   dew: {
     id: 'dew', name: 'Star-Dew', icon: '❋',
-    desc: 'Drink to restore 15 HP. Usable in and out of battle.',
+    desc: 'Drink to restore 12 HP. Usable in and out of battle. Precious and scarce.',
   },
   feather: {
     id: 'feather', name: 'Homing Feather', icon: '➳',

@@ -26,6 +26,10 @@ export const FEATS = [
   { id: 'ash_repeated', name: 'Ash, Repeated', desc: 'Die 8 times', check: m => m.stats.deaths >= 8, unlocks: 5 },
   { id: 'magpie', name: 'Magpie', desc: 'Carry 12 relics in a single run', check: m => m.stats.maxItems >= 12, unlocks: 5 },
   { id: 'star_rich', name: 'Star-Rich', desc: 'Hold 150 star-shards at once', check: m => m.stats.maxShards >= 150, unlocks: 5 },
+  { id: 'seamfinder', name: 'Seam-Finder', desc: 'Unfurl a hidden star-bridge', check: m => (m.stats.bridges || 0) >= 1, unlocks: 5 },
+  { id: 'changed', name: 'Changed', desc: 'Carry a cosmic mutation', check: m => (m.stats.mutations || 0) >= 1, unlocks: 4 },
+  { id: 'thrice_changed', name: 'Thrice-Changed', desc: 'Tear open the Wound in the Meridian', check: m => !!m.stats.woundOpened, unlocks: 5 },
+  { id: 'the_other_end', name: 'The Other End', desc: 'Close the Wound: defeat what waits inside', check: m => !!m.stats.woundClosed, unlocks: 6 },
 ];
 
 class Meta {
@@ -34,6 +38,7 @@ class Meta {
       hexes: 0, battles: 0, wardens: 0, deepWarden: false, keepers: 0,
       deaths: 0, secrets: 0, maxItems: 0, maxShards: 0, runs: 0,
       sats: [], visitedSats: [], synergies: [],
+      bridges: 0, mutations: 0, woundOpened: false, woundClosed: false, packs: 0,
     } };
     try {
       const raw = localStorage.getItem(KEY);

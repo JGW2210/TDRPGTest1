@@ -26,8 +26,10 @@ export class RoamerSystem {
   at(tile) { return this.roamers.find(r => !r.dead && r.tile === tile); }
 
   _allowed(t, self) {
-    return t && !t.void && !t.landmark && !t.gate && t.biome !== 'BRIDGE'
-      && t.region === self.region
+    if (!t || t.void || t.landmark || t.gate) return false;
+    // shallows shoals never leave the water; everyone else avoids bridges
+    if (self.water ? t.biome !== 'SEA' : t.biome === 'BRIDGE') return false;
+    return t.region === self.region
       && !this.roamers.some(o => o !== self && !o.dead && o.tile === t);
   }
 
