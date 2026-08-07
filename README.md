@@ -33,9 +33,13 @@ the next pocket. Die anywhere and the world burns: new seed, nothing kept.
 - **Battles** — Pokémon-style dioramas: your paper token front-left, foes
   back-right on a biome-styled stage. Three attack stances with
   **Paper-Mario timing** — every bar *coalesces* into view before its
-  marker flies, and the stronger the stance the harder it reads: Swift Cut
-  (generous, grants poise), Star Strike (a 3-bar chain), Meteor Edge
-  (knife-thin, pierces wards and interrupts wind-ups). Blocking is a
+  marker flies, fast, and the stronger the stance the harder it reads:
+  Swift Cut (generous; a perfect marks an *opening* that buffs your next
+  attack), Star Strike (a 3-bar chain), Meteor Edge (a 3-bar chain of
+  knife-slits at 1.5× each — skill pays up to 4.5×; perfects pierce wards
+  and interrupt wind-ups, one miss shatters the chain). Deep brutes and
+  bosses whose big blows land leave you **rattled** — strike bands narrow
+  and markers run wild, making Swift Cut the steady answer. Blocking is a
   **falling-note rhythm**: shapes descend three lanes, press A / S / D as
   each crosses the hit-line — flurries fall as note runs, crushing blows as
   one wide shape you leap, and spiked **trap shapes** thread the pattern in

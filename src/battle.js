@@ -64,6 +64,10 @@ export class BattleSystem {
     this.playerBurn = null;   // { dmg, turns } — cinders in your folds
     this.playerChill = 0;     // frost stacks: the marker runs faster
     this.poise = 0;           // a swift perfect settles your stance for the next blocks
+    this.opening = 0;         // …and marks an opening: bonus mult on your next attack
+    this._openingNow = 0;     // the opening being spent by the current action
+    this.playerRattle = 0;    // big blows rattle your hands: strike bars narrow & speed
+    this._rattleTold = false;
     this.braced = false;      // Brace: slower notes, wider windows, a riposte
     this.laneActive = false;  // the falling-note block minigame is live
     this.lane = null;
@@ -292,6 +296,8 @@ export class BattleSystem {
       this.playerGuardBonus ? '<span class="st chill">guarded</span>' : '',
       this.braced ? '<span class="st chill">⛨ braced</span>' : '',
       this.poise ? '<span class="st chill">✦ poised</span>' : '',
+      this.opening > 0 ? `<span class="st charge">✦ opening +${Math.round(this.opening * 100)}%</span>` : '',
+      this.playerRattle > 0 ? '<span class="st burn">✖ rattled</span>' : '',
       this.hexTurns > 0 ? '<span class="st burn">hexed</span>' : '',
       this.playerBurn?.turns > 0 ? `<span class="st burn">🔥${this.playerBurn.dmg}</span>` : '',
       this.playerChill > 0 ? `<span class="st chill">❄×${this.playerChill}</span>` : '',
@@ -380,7 +386,11 @@ export class BattleSystem {
       $('b-timing-label').textContent = opts.label
         || (kind === 'strike' ? 'Strike! (click / space)' : '☄ DODGE!');
 
-      const shrink = (this.hexTurns > 0 ? 0.55 : 1) * (opts.shrink || 1);
+      // rattled hands: the band narrows and the marker runs wilder
+      const R = CONFIG.battle.rattle;
+      if (this.playerRattle > 0) this.timingSpeed *= R.speed;
+      const shrink = (this.hexTurns > 0 ? 0.55 : 1) * (opts.shrink || 1)
+        * (this.playerRattle > 0 ? R.shrink : 1);
       let half = (kind === 'dodge' ? T.dodgeHalf : T.perfectHalf) * shrink;
       if (run.hasSynergy('eclipse')) half += 0.015;
       const mid = 0.28 + this.rng() * 0.5;   // the band wanders every swing
@@ -435,11 +445,14 @@ export class BattleSystem {
 
   // Three stances, and the stronger the blow the harder it reads:
   //   Swift Cut  — one generous bar; a perfect settles you into POISE
-  //                (slower, wider blocks next enemy phase).
+  //                (slower, wider blocks next enemy phase) and marks an
+  //                OPENING: your next attack lands harder. The consistent
+  //                choice when rattled or hexed hands can't hold a chain.
   //   Star Strike — the 3-bar chain, each faster and tighter than the last.
-  //   Meteor Edge — one brutal bar, knife-thin and fast: a perfect hits for
-  //                2.6×, pierces guard-plates and wards, and knocks a
-  //                gathering (charging) blow apart. A miss barely grazes.
+  //   Meteor Edge — a 3-bar chain of knife-slits: each perfect lands 1.5×,
+  //                pierces guard-plates and wards, and knocks a gathering
+  //                (charging) blow apart; a good keeps the chain at 0.6×;
+  //                a miss grazes and SHATTERS it. Skill pays up to 4.5×.
   async _playerAttack(kind = 'star') {
     if (this.state !== 'playerMenu') return;
     this.state = 'playerActing';
@@ -447,6 +460,11 @@ export class BattleSystem {
     const target = this.enemies[this.targetId]?.dead ? this._aliveEnemies()[0] : this.enemies[this.targetId];
     if (!target) return;
     const A = CONFIG.battle.attacks;
+
+    // spend the opening Swift Cut marked — the whole action lands harder
+    this._openingNow = this.opening;
+    this.opening = 0;
+    if (this._openingNow > 0) this._log(`The opening you cut — every blow lands +${Math.round(this._openingNow * 100)}% harder!`);
 
     // lunge toward the foe
     this._tween(this.playerMesh.position, { x: target.home.x - 1.6, z: target.home.z + 1.2 }, 0.32);
@@ -460,24 +478,34 @@ export class BattleSystem {
       await this._strike(target, timing, A.swift.mult);
       if (timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.poiseful)) {
         this.poise = 1;
-        this._log('You land light and settle into stance — POISED for what answers.');
+        this.opening = A.swift.opening + (run.flags.openingPlus || 0);
+        this._log(`You land light and settle into stance — POISED, and an OPENING is marked (+${Math.round(this.opening * 100)}% next attack).`);
       }
     } else if (kind === 'heavy') {
-      const timing = await this._startTiming('strike', {
-        speed: A.heavy.speed, shrink: A.heavy.band, gather: A.heavy.gather * this._gatherCalm(),
-        label: '☄ METEOR EDGE — the window is a knife-slit',
-      });
-      const bonus = (run.stats.timingBonus || 0) * 0.15;
-      const mult = timing.grade === 'perfect' ? A.heavy.mult + (run.flags.heavyPlus || 0) + bonus
-        : timing.grade === 'good' ? A.heavy.good + bonus : A.heavy.miss;
-      const interrupts = timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.interruptGood);
-      if (interrupts && target.charging) {
-        target.charging = false;
-        this._log(`The meteor lands mid-wind-up — ${target.name}'s gathered blow is KNOCKED APART!`);
+      const tb = (run.stats.timingBonus || 0) * 0.15;
+      const perBarPlus = (run.flags.heavyPlus || 0) / A.heavy.hits;
+      for (let h = 0; h < A.heavy.hits && !target.dead; h++) {
+        const timing = await this._startTiming('strike', {
+          speed: A.heavy.speed * (1 + h * A.heavy.ramp),
+          shrink: A.heavy.band * Math.pow(A.heavy.shrinkRamp, h),
+          gather: (h === 0 ? A.heavy.gather : 0.18) * this._gatherCalm(),
+          label: h === 0 ? '☄ METEOR EDGE 1/3 — knife-slits!' : `☄ METEOR ${h + 1}/3 — hold the fall!`,
+        });
+        const mult = timing.grade === 'perfect' ? A.heavy.mult + perBarPlus + tb
+          : timing.grade === 'good' ? A.heavy.good + tb : A.heavy.miss;
+        const interrupts = timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.interruptGood);
+        if (interrupts && target.charging) {
+          target.charging = false;
+          this._log(`The meteor lands mid-wind-up — ${target.name}'s gathered blow is KNOCKED APART!`);
+        }
+        await this._strike(target, { grade: timing.grade, mult }, 1, h > 0,
+          { pierce: timing.grade === 'perfect' });
+        if (timing.grade === 'miss') {
+          this._log('The meteor grazes wide — the fall SHATTERS out of your hands.');
+          break;
+        }
+        if (h < A.heavy.hits - 1 && !target.dead) await wait(150);
       }
-      await this._strike(target, { grade: timing.grade, mult }, 1, false,
-        { pierce: timing.grade === 'perfect' });
-      if (timing.grade === 'miss') this._log('The meteor grazes wide — too much weight, too little window.');
     } else {
       const maxHits = CONFIG.battle.comboHits;
       let bestPerfect = null;
@@ -537,6 +565,7 @@ export class BattleSystem {
   async _strike(target, timing, baseMult, silent = false, opts = {}) {
     const { pierce = false } = opts;
     let dmg = this._playerAtk() * timing.mult * baseMult * (0.92 + this.rng() * 0.16);
+    if (this._openingNow > 0) dmg *= 1 + this._openingNow;   // the marked opening pays off
     if (timing.grade === 'perfect' && run.hasSynergy('high_noon')) dmg *= 1.2;
     let crit = false;
     let luck = run.stats.luck || 0;
@@ -598,6 +627,10 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     this.abilityCds[ab.id] = ab.cd;
+    // a marked opening sharpens abilities too
+    this._openingNow = this.opening;
+    this.opening = 0;
+    if (this._openingNow > 0) this._log(`The opening you cut — the cast lands +${Math.round(this._openingNow * 100)}% harder!`);
     if (run.flags.abilityToll) {   // the Hollow Chest takes its cut
       run.hp = Math.max(1, run.hp - run.flags.abilityToll);
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${run.flags.abilityToll}`, 'dmg');
@@ -754,6 +787,7 @@ export class BattleSystem {
   _aliveEnemies() { return this.enemies.filter(e => !e.dead); }
 
   async _afterPlayerAction() {
+    this._openingNow = 0;   // the opening is spent with the action
     this._refreshCards();
     if (!this._aliveEnemies().length) return this._victory();
     // extra action (Patient Comet)
@@ -892,6 +926,7 @@ export class BattleSystem {
     }
     this.turn++;
     if (this.hexTurns > 0) this.hexTurns--;
+    if (this.playerRattle > 0) this.playerRattle--;
     if (this.playerChill > 0 && this.rng() < 0.5) this.playerChill--;
     for (const k of Object.keys(this.abilityCds)) this.abilityCds[k] = Math.max(0, this.abilityCds[k] - 1);
     if (this._aliveEnemies().length === 0) return this._victory();
@@ -1017,6 +1052,15 @@ export class BattleSystem {
         }
         // the land fights through its beasts
         if (dmg > 0) this._applyBiomeAffliction(e, dmg);
+        // deep brutes and bosses leave their mark on your hands: a landed
+        // heavy or crushing blow (not perfectly answered) RATTLES you
+        if ((crush || heavy) && dmg > 0 && grade !== 'perfect' && (tier >= 3 || e.boss)) {
+          this.playerRattle = CONFIG.battle.rattle.turns;
+          if (!this._rattleTold) {
+            this._rattleTold = true;
+            this._log('The impact RATTLES your hands — strike bands narrow, markers run wild. Swift Cut stays steady.');
+          }
+        }
       }
       if (hits > 1) { this._refreshCards(); await wait(200); }
     }
