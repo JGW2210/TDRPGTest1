@@ -12,7 +12,7 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES } from './names.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES, SKY_GAZES } from './names.js';
 import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
 import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
@@ -68,8 +68,9 @@ localRig.enabled = false;
 const localView = new LocalView();
 const battle = new BattleSystem(renderer);
 
-let mode = 'world';          // 'world' | 'transition' | 'local' | 'battle' | 'dead'
+let mode = 'world';          // 'world' | 'transition' | 'local' | 'battle' | 'skyEvent' | 'dead'
 let activeScene = 'world';   // 'world' | 'local' | 'battle'
+let skyEvent = null;         // the camera is away with a celestial body (see below)
 let followPlayer = true;
 let dive = null;
 let currentLocalTile = null;
@@ -115,6 +116,7 @@ function refreshHud(tile) {
   ui.setRegion(reg, threatFor(reg));
   ui.setShards(run.shards);
   ui.setStats(run);
+  updateSkyButton(tile);
   audio.setRegionMusic({
     biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
     town: tile.landmark?.type === 'town' || tile.landmark?.type === 'capital',
@@ -297,7 +299,22 @@ function travelTo(target, onArrive = null) {
         }
       }));
       refreshHud(tile);
-      if (tile.vantage && !run.vantageSeen.has(tile.vantage)) speakSky(tile.vantage);
+      // first time beneath a speaking body, the sky arrests you: the rest
+      // of the path is dropped and the camera goes to look
+      if (tile.vantage && !run.vantageSeen.has(tile.vantage)) {
+        player.path = [];
+        player.onDone = null;
+        saveNow(true);
+        const def = skyDefFor(tile);
+        if (def) {
+          const tryStart = () => {
+            if (skyEvent || mode !== 'world') return;   // a battle cut in — next visit calls again
+            if (player.isMoving) { setTimeout(tryStart, 250); return; }
+            startSkyEvent(def);
+          };
+          setTimeout(tryStart, 400);
+        }
+      }
       if ((tile.seamHint || tile.isletHint != null) && !seamNudged.has(keyOf(tile.q, tile.r))) {
         seamNudged.add(keyOf(tile.q, tile.r));
         ui.toast('✸ The shore HUMS beneath your feet — something folded waits in the void. A star-charge detonated here would answer it.', true);
@@ -334,31 +351,167 @@ function revealRegionMemory(tile) {
   ui.toast(`The Meridian Compass charts ${reg.name} into memory.`, true);
 }
 
-// Standing beneath a celestial body earns its attention, once per run.
-function speakSky(voiceId) {
-  const voice = SKY_VOICES.find(v => v.id === voiceId);
-  if (!voice) return;
-  run.vantageSeen.add(voiceId);
-  voice.lines.forEach((line, i) => {
-    setTimeout(() => ui.toast(`☄ <b>${voice.name}</b>: “${line}”`, true), 500 + i * 2800);
-  });
-  if (voice.gift) {
-    setTimeout(() => {
-      if (voice.gift.shards) {
-        const got = run.gainShards(voice.gift.shards);
-        ui.toast(`☄ Something small falls from the sky into your hand. (+${got} ☆)`, true);
-      }
-      if (voice.gift.boon) {
-        run.addBoon(voice.gift.boon);
-        ui.toast(`☄ <b>${voice.gift.boon.name}</b> settles over you like weather.`, true);
-      }
-      refreshHud(player.tile);
-      saveNow(true);
-    }, 500 + voice.lines.length * 2800);
+// ---------------------------------------------- the speaking sky (events) ---
+// Standing beneath a celestial body, the camera leaves your shoulder and
+// goes to look at it. Dialogue advances only on a click, so it can be read;
+// the rig is locked away for the duration and handed back afterwards.
+// Voices (vantage hexes) summon you the first time and gift once per run;
+// the wandering worlds' bodies wait to be beheld at will. Either kind can
+// be replayed from the ☄ button whenever you stand in the right place.
+
+// skyEvent (declared with the mode state above):
+//   { def, idx, phase: 'out'|'hold'|'back', t, dur, from, to, backFrom, drift }
+
+function skyDefFor(tile) {
+  if (tile.vantage) {
+    const v = SKY_VOICES.find(v => v.id === tile.vantage);
+    if (v) return { id: v.id, name: v.name, lines: v.lines, gift: v.gift, voice: true };
+  }
+  if (tile.region >= 100 && tile.region < 200) {
+    const satId = world.satellites[tile.region - 100]?.def.id;
+    const gz = SKY_GAZES.find(s => s.id === satId);
+    if (gz) return { id: gz.id, name: gz.name, lines: gz.lines, gift: null, voice: false };
+  }
+  return null;
+}
+
+function updateSkyButton(tile) {
+  const btn = document.getElementById('btn-skyview');
+  const def = mode === 'world' && !skyEvent ? skyDefFor(tile) : null;
+  if (def) {
+    btn.textContent = `☄ behold ${def.name.split(',')[0]}`;
+    btn.classList.remove('hidden');
   } else {
-    saveNow(true);
+    btn.classList.add('hidden');
   }
 }
+
+function startSkyEvent(def) {
+  if (skyEvent || mode !== 'world' || player.isMoving) return;
+  const body = worldView.skyBodies?.[def.id];
+  if (!body) return;
+  mode = 'skyEvent';
+  document.body.classList.add('in-skyevent');
+  worldRig.enabled = false;
+  worldRig.velocity.set(0, 0, 0);
+  worldRig.tween = null;
+  worldView.setHighlight(null);
+  ui.tooltip(null);
+  audio.sfxReveal?.();
+  const from = {
+    pos: worldCamera.position.clone(),
+    look: worldRig.focus.clone().add(new THREE.Vector3(0, 0.5, 0)),
+  };
+  const B = new THREE.Vector3(body.x, body.y, body.z);
+  const dir = worldCamera.position.clone().sub(B);
+  dir.y = 0;
+  if (dir.lengthSq() < 1) dir.set(1, 0, 0);
+  dir.normalize();
+  const frame = body.frame || 14;
+  const to = {
+    pos: B.clone().addScaledVector(dir, frame).add(new THREE.Vector3(0, frame * 0.24, 0)),
+    look: B.clone(),
+  };
+  skyEvent = { def, idx: 0, phase: 'out', t: 0, dur: 1.7, from, to, backFrom: null, drift: 0 };
+  updateSkyButton(player.tile);
+}
+
+function showSkyLine() {
+  const se = skyEvent;
+  const el = document.getElementById('skyevent');
+  el.classList.remove('hidden');
+  document.getElementById('se-name').textContent = se.def.name;
+  const lineEl = document.getElementById('se-line');
+  lineEl.textContent = '“' + se.def.lines[se.idx] + '”';
+  lineEl.classList.remove('reveal');
+  void lineEl.offsetWidth;
+  lineEl.classList.add('reveal');
+  document.getElementById('se-hint').textContent =
+    se.idx < se.def.lines.length - 1 ? 'click to continue ▸' : 'click to look away ▸';
+}
+
+function advanceSkyEvent() {
+  const se = skyEvent;
+  if (!se || se.phase !== 'hold') return;
+  se.idx++;
+  if (se.idx < se.def.lines.length) {
+    audio.sfxHop?.();
+    showSkyLine();
+    return;
+  }
+  // the dialogue is done: first hearings of a voice leave a gift
+  document.getElementById('skyevent').classList.add('hidden');
+  if (se.def.voice && !run.vantageSeen.has(se.def.id)) {
+    run.vantageSeen.add(se.def.id);
+    const gift = se.def.gift;
+    if (gift?.shards) {
+      const got = run.gainShards(gift.shards);
+      ui.toast(`☄ Something small falls from the sky into your hand. (+${got} ☆)`, true);
+    }
+    if (gift?.boon) {
+      run.addBoon(gift.boon);
+      ui.toast(`☄ <b>${gift.boon.name}</b> settles over you like weather.`, true);
+    }
+    saveNow(true);
+  }
+  se.phase = 'back';
+  se.t = 0;
+  se.dur = 1.3;
+  se.backFrom = { pos: worldCamera.position.clone(), look: se.to.look.clone() };
+}
+
+function endSkyEvent() {
+  skyEvent = null;
+  document.body.classList.remove('in-skyevent');
+  mode = 'world';
+  worldRig.enabled = true;
+  worldRig.apply();
+  refreshHud(player.tile);
+}
+
+// driven from the main loop while the camera is away with the sky
+function updateSkyEvent(dt) {
+  const se = skyEvent;
+  if (!se) return;
+  const ease = k => k * k * (3 - 2 * k);
+  if (se.phase === 'out') {
+    se.t += dt / se.dur;
+    const k = ease(Math.min(1, se.t));
+    worldCamera.position.lerpVectors(se.from.pos, se.to.pos, k);
+    const look = se.from.look.clone().lerp(se.to.look, k);
+    worldCamera.lookAt(look);
+    if (se.t >= 1) {
+      se.phase = 'hold';
+      showSkyLine();
+    }
+  } else if (se.phase === 'hold') {
+    // a slow, reverent drift while the body speaks
+    se.drift += dt;
+    const off = se.to.pos.clone().sub(se.to.look);
+    off.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.sin(se.drift * 0.35) * 0.1);
+    worldCamera.position.copy(se.to.look).add(off);
+    worldCamera.lookAt(se.to.look);
+  } else if (se.phase === 'back') {
+    se.t += dt / se.dur;
+    const k = ease(Math.min(1, se.t));
+    worldCamera.position.lerpVectors(se.backFrom.pos, se.from.pos, k);
+    const look = se.backFrom.look.clone().lerp(se.from.look, k);
+    worldCamera.lookAt(look);
+    if (se.t >= 1) endSkyEvent();
+  }
+}
+
+document.getElementById('skyevent').addEventListener('click', advanceSkyEvent);
+window.addEventListener('keydown', e => {
+  if (skyEvent && skyEvent.phase === 'hold' && (e.code === 'Space' || e.code === 'Enter')) {
+    e.preventDefault();
+    advanceSkyEvent();
+  }
+});
+document.getElementById('btn-skyview').addEventListener('click', () => {
+  const def = skyDefFor(player.tile);
+  if (def) startSkyEvent(def);
+});
 
 function engageRoamer(pack) {
   const who = pack.species?.n || 'A prowling foe';
@@ -464,6 +617,7 @@ async function enterLocal(tile) {
   activeScene = 'local';
   mode = 'local';
   currentLocalTile = tile;
+  updateSkyButton(tile);
   ui.setExploring(tile.name + (sites.length ? '' : ' — nothing stirs here'));
   ui.setHint(LOCAL_HINT);
   ui.showReturn(true);
@@ -1218,7 +1372,7 @@ window.addEventListener('keydown', e => {
     else if (mode === 'local') exitLocal();
     else if (mode === 'world' || mode === 'battle') toggleMenu(true);
   }
-  if (e.code === 'KeyI' && mode !== 'battle') ui.toggleInventory(run);
+  if (e.code === 'KeyI' && mode !== 'battle' && mode !== 'skyEvent') ui.toggleInventory(run);
 });
 
 window.addEventListener('resize', () => {
@@ -1273,6 +1427,11 @@ window.__vael = {
     return !!site;
   },
   smite: () => { for (const e of battle.enemies || []) if (!e.dead) e.hp = 1; },
+  get skyEventState() {
+    return skyEvent ? { id: skyEvent.def.id, phase: skyEvent.phase, idx: skyEvent.idx } : null;
+  },
+  startSkyEvent: () => { const def = skyDefFor(player.tile); if (def) startSkyEvent(def); return !!def; },
+  advanceSkyEvent,
   shopOffers: (q, r) => {
     const t = world.tiles.get(q + ',' + r);
     if (!t) return null;
@@ -1318,7 +1477,8 @@ function loop() {
     localView.update(dt, localCamera);
     if (localView.scene) renderer.render(localView.scene, localCamera);
   } else {
-    worldRig.update(dt);
+    worldRig.update(dt);           // no-ops while a sky event holds the camera
+    updateSkyEvent(dt);
     worldView.update(dt, worldCamera);
     player.layerY = worldView.layer.position.y;
     player.update(dt, worldCamera, worldRig.focus);

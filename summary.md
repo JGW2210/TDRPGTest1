@@ -220,6 +220,29 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    deep crushes): pack wins 100/94/88/91/78/73%, hp-lost 24→65% —
    same band as round 12, so the enemy curve stands. BUILD is 13.
 
+14. **Speaking-sky cinematics round** (branch reset from main; direct
+   user instructions): sky-voice toasts replaced by **cinematic sky
+   events** — on first arrival at a vantage hex the rest of the path is
+   dropped and the camera detaches (rig disabled: no pan/zoom/orbit/keys),
+   flies out to frame the celestial body (positions recorded in
+   `world3d.skyBodies` = {x,y,z,frame} for giant/third_sister/
+   ferry_lantern/door_ajar/luna/rubidus/viridian), holds with a slow
+   reverent drift, and shows a **click-through dialogue** (`#skyevent`
+   overlay: speaker name, line, pulsing hint; click or Space/Enter
+   advances — one line per click so it can be read); after the last
+   line the once-per-run gift fires (vantageSeen set at END now, not
+   start) and the camera tweens home, rig re-enabled. Chrome hides via
+   `body.in-skyevent` (hud/controls/hint/menu). **Re-trigger**: a
+   pulsing `#btn-skyview` ("☄ behold <name>") shows in #controls
+   whenever standing on a vantage hex (replay, no second gift) — and on
+   any satellite tile, where the wandering worlds' bodies get quieter
+   **SKY_GAZES** (names.js: 3 lines each for luna/rubidus/viridian, no
+   gift, never auto — view-at-will only, per user direction). mode
+   machine gains 'skyEvent' (all click/tooltip/Esc/KeyI paths guarded);
+   `updateSkyEvent(dt)` drives the out/hold/back phases from the main
+   loop. Debug: `__vael.skyEventState/startSkyEvent()/advanceSkyEvent()`.
+   BUILD is 14.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -555,7 +578,7 @@ act(siteId,label), shopOffers(q,r)`.
   older saves are discarded on load. Worldgen changed again for identical
   seeds (quadrant climates, erosion, water web, islets), by design.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 13. Without the bump, live players keep stale
+  release** — currently 14. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
