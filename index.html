@@ -4,10 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vaeldrift — the Shattered Meridian</title>
-  <link rel="stylesheet" href="css/style.css" />
-  <script type="importmap">
-    { "imports": { "three": "./vendor/three.module.js" } }
+  <script>
+    // Cache-buster: bump BUILD each release and every module re-fetches
+    // fresh — the import map below rewrites all internal imports to
+    // versioned URLs, so stale browser caches can never mix old and new.
+    window.BUILD = '10';
+    (() => {
+      const mods = [
+        'audio', 'battle', 'cameraRig', 'config', 'hex', 'items', 'localview',
+        'main', 'meta', 'monsters', 'names', 'player', 'rng', 'roamers', 'run',
+        'save', 'textures', 'ui', 'world3d', 'worldgen',
+      ];
+      const imports = { three: './vendor/three.module.js?v=' + window.BUILD };
+      for (const m of mods) imports['./src/' + m + '.js'] = './src/' + m + '.js?v=' + window.BUILD;
+      const im = document.createElement('script');
+      im.type = 'importmap';
+      im.textContent = JSON.stringify({ imports });
+      document.currentScript.after(im);
+    })();
   </script>
+  <link rel="stylesheet" href="css/style.css?v=10" />
 </head>
 <body>
   <div id="app"></div>
@@ -20,6 +36,7 @@
   </div>
 
   <div id="fade"></div>
+  <div id="scrims"></div>
 
   <header id="hud">
     <div class="hud-title">VAELDRIFT <span class="hud-runes">ᚨᛟᚱᚢᛗ</span></div>
@@ -32,15 +49,13 @@
     <div class="hud-consum" id="hud-consum"></div>
   </header>
 
-  <aside id="legend"></aside>
+  <button id="btn-menu" title="The wanderer's menu (Esc)">ᛟ menu</button>
 
   <div id="controls">
-    <button id="btn-inventory" title="Your items, abilities and synergies (I)">🎒 Inventory</button>
-    <button id="btn-echoes" title="The Constellation of Echoes — feats and permanent unlocks">✴ Echoes</button>
-    <button id="btn-detonate" title="Detonate a star-charge where you stand — sealed hexes crack open">✸ Detonate</button>
-    <button id="btn-recenter" title="Return the camera to your token">◎ Recenter</button>
-    <button id="btn-audio" title="Toggle the music of the spheres">♪</button>
-    <button id="btn-return" class="hidden" title="Rise back to the world map">↩ Return to World Map</button>
+    <button id="btn-inventory" title="Your items, abilities and synergies (I)">🎒 inventory</button>
+    <button id="btn-detonate" title="Detonate a star-charge where you stand — sealed hexes crack open">✸ detonate</button>
+    <button id="btn-recenter" title="Return the camera to your token">◎ recenter</button>
+    <button id="btn-return" class="hidden" title="Rise back to the world map">↩ return to the world</button>
   </div>
 
   <footer id="hint">drag to pan · scroll to zoom · click a hex to travel · click <b>your</b> hex to explore it</footer>
@@ -49,12 +64,14 @@
 
   <div id="modal-scrim" class="hidden">
     <div id="modal">
-      <div id="modal-badge"></div>
-      <h2 id="modal-title"></h2>
-      <div id="modal-sub"></div>
-      <p id="modal-flavor"></p>
-      <div id="modal-extra"></div>
-      <div id="modal-actions"></div>
+      <div class="modal-inner">
+        <div id="modal-badge"></div>
+        <h2 id="modal-title"></h2>
+        <div id="modal-sub"></div>
+        <p id="modal-flavor"></p>
+        <div id="modal-extra"></div>
+        <div id="modal-actions"></div>
+      </div>
     </div>
   </div>
 
@@ -82,6 +99,21 @@
     <div id="echo-summary"></div>
     <div id="echo-list"></div>
   </aside>
+
+  <div id="gamemenu" class="hidden">
+    <div class="gm-rune">ᛟ</div>
+    <div class="gm-title">VAELDRIFT</div>
+    <div class="gm-sub">the Shattered Meridian</div>
+    <nav class="gm-items">
+      <button id="gm-continue">→ return to the meridian</button>
+      <button id="gm-audio">♪ music of the spheres</button>
+      <button id="gm-echoes">✴ constellation of echoes</button>
+      <button id="gm-restart-seed">↻ refold this world <span class="gm-note">the same meridian, the run begun anew</span></button>
+      <button id="gm-newworld">☄ wake in a new world <span class="gm-note">this run is lost; a new meridian is drawn</span></button>
+    </nav>
+    <div id="menu-courts"></div>
+    <div class="gm-build">seed <span id="gm-seed">—</span> · build <span id="gm-buildnum">—</span></div>
+  </div>
 
   <div id="battle" class="hidden">
     <div id="b-title"></div>
@@ -119,6 +151,13 @@
 
   <div id="toasts"></div>
 
-  <script type="module" src="src/main.js"></script>
+  <script>
+    (() => {
+      const boot = document.createElement('script');
+      boot.type = 'module';
+      boot.src = './src/main.js?v=' + window.BUILD;
+      document.body.append(boot);
+    })();
+  </script>
 </body>
 </html>

@@ -1114,17 +1114,63 @@ const bootAudio = () => {
 window.addEventListener('pointerdown', bootAudio, { once: true });
 window.addEventListener('keydown', bootAudio, { once: true });
 
+// ---------------------------------------------------- the wanderer's menu ---
+
+const gm = id => document.getElementById(id);
+let menuOpen = false;
+
+function toggleMenu(open = !menuOpen) {
+  menuOpen = open;
+  gm('gamemenu').classList.toggle('hidden', !open);
+  if (open) {
+    disarmRestarts();
+    updateAudioButton();
+  }
+}
+
+// restart buttons arm on the first click, fire on the second
+function disarmRestarts() {
+  for (const [id, label, note] of [
+    ['gm-restart-seed', '↻ refold this world', 'the same meridian, the run begun anew'],
+    ['gm-newworld', '☄ wake in a new world', 'this run is lost; a new meridian is drawn'],
+  ]) {
+    const b = gm(id);
+    b.classList.remove('armed');
+    b.innerHTML = `${label} <span class="gm-note">${note}</span>`;
+  }
+}
+
+function armOrFire(btn, fire) {
+  if (btn.classList.contains('armed')) { fire(); return; }
+  disarmRestarts();
+  btn.classList.add('armed');
+  btn.innerHTML = 'are you certain? <span class="gm-note">the run will not be saved — press again</span>';
+}
+
+gm('btn-menu').addEventListener('click', () => toggleMenu());
+gm('gm-continue').addEventListener('click', () => toggleMenu(false));
+gm('gm-restart-seed').addEventListener('click', e => armOrFire(e.currentTarget, () => {
+  clearSave(world.seed);
+  location.reload();
+}));
+gm('gm-newworld').addEventListener('click', e => armOrFire(e.currentTarget, () => {
+  clearSave(world.seed);
+  location.href = location.pathname + '?seed=' + Math.floor(Math.random() * 1e6);
+}));
+gm('gm-echoes').addEventListener('click', () => {
+  toggleMenu(false);
+  ui.toggleEchoes(meta);
+});
+
 function updateAudioButton() {
-  document.getElementById('btn-audio').textContent = audio.enabled ? '♪' : '♪̸';
-  document.getElementById('btn-audio').style.opacity = audio.enabled ? 1 : 0.45;
+  gm('gm-audio').textContent = audio.enabled ? '♪ music of the spheres — on' : '♪ music of the spheres — silenced';
 }
 updateAudioButton();
-document.getElementById('btn-audio').addEventListener('click', () => {
+gm('gm-audio').addEventListener('click', () => {
   audio.setEnabled(!audio.enabled);
   updateAudioButton();
 });
 
-document.getElementById('btn-echoes').addEventListener('click', () => ui.toggleEchoes(meta));
 document.getElementById('echo-close').addEventListener('click', () => ui.toggleEchoes(meta, false));
 
 document.getElementById('btn-recenter').addEventListener('click', () => {
@@ -1146,10 +1192,12 @@ document.getElementById('btn-ascend').addEventListener('click', () => {
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape') {
-    if (ui.modalOpen) ui.closeModal();
+    if (menuOpen) toggleMenu(false);
+    else if (ui.modalOpen) ui.closeModal();
     else if (!document.getElementById('inventory').classList.contains('hidden')) ui.toggleInventory(run, false);
     else if (!document.getElementById('echoes').classList.contains('hidden')) ui.toggleEchoes(meta, false);
     else if (mode === 'local') exitLocal();
+    else if (mode === 'world' || mode === 'battle') toggleMenu(true);
   }
   if (e.code === 'KeyI' && mode !== 'battle') ui.toggleInventory(run);
 });

@@ -126,6 +126,26 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    spread across the camera's line of sight; scenery confined behind the
    enemy line (z ≤ −4.6) so nothing occludes a foe.
 
+10. **Cache-buster & game-chrome round** (same branch): index.html now
+   sets `window.BUILD` and builds a dynamic **import map** rewriting
+   `three` + every `./src/*.js` import to `?v=BUILD` URLs — **bump BUILD
+   in index.html (and the css href) every release** or players keep
+   stale modules; a **wanderer's menu** overlay (`#gamemenu`, `#btn-menu`
+   top-right, Esc toggles): continue / music toggle / echoes / *refold
+   this world* (same seed, clearSave+reload) / *wake in a new world*
+   (fresh seed) — both restarts arm-on-first-click, fire-on-second; the
+   Courts legend + seed/build line moved into the menu (the `#legend`
+   box is gone; `ui.init` renders `#menu-courts`, `gm-seed`,
+   `gm-buildnum`); **full de-boxed UI restyle** (css/style.css
+   rewritten): no panels/borders anywhere — corner vignette `#scrims`,
+   text-shadow inscriptions for HUD/controls/hints, soft radial `--softbg`
+   for tooltip/toast/log, site modal is a bottom sheet
+   (`.modal-inner`), inventory/echoes are right-edge gradient sheets,
+   battle uses floating nameplates (targeted = `▸` + glow, slim glowing
+   hp bars) and text-only action words, item reveal is a glow with no
+   card. Audio/echoes buttons live in the menu now (`gm-audio`,
+   `gm-echoes` — old `btn-audio`/`btn-echoes` ids are gone).
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
