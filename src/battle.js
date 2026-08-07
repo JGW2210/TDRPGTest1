@@ -135,16 +135,17 @@ export class BattleSystem {
     rim.position.y = 0.03;
     scene.add(rim);
 
-    // scenery along the back edge
+    // scenery keeps to the back edge, behind the enemy line — the paper foes
+    // must never stand angled behind a tree
     const srng = mulberry32(hash2(team.tier, team.count, 4242) * 0xffffffff | 0);
     for (let i = 0; i < 6; i++) {
-      const a = -0.6 - i * 0.35 + srng() * 0.2;
-      const r = 7.5 + srng() * 2;
       const m = sceneryFor(team.biome, srng);
-      m.position.set(Math.cos(a) * r * -1, 0, Math.sin(a) * r * -1);
-      m.position.x += 4;
+      m.position.set(-5.5 + (i / 5) * 11 + (srng() - 0.5) * 1.4, 0, -4.6 - srng() * 1.6);
+      m.position.x += m.position.x > 0 ? 0 : -0.4;
       scene.add(m);
     }
+    this.accent = '#' + new THREE.Color(biome.accent).getHexString();
+    this.projectiles = [];
 
     // your paper self, painted fresh each battle to match the hoard's marks
     const token = new THREE.Mesh(
@@ -181,11 +182,19 @@ export class BattleSystem {
     if (!team.boss && run.flags.extraFoeChance && this.rng() < run.flags.extraFoeChance) count = Math.min(3, count + 1);
 
     const tier = team.tier ?? 1;
-    const spots = count === 1 ? [[3.4, -1.6]] : count === 2 ? [[2.8, -0.8], [4.4, -2.6]] : [[2.2, -0.3], [3.6, -1.7], [5.0, -3.1]];
+    // spots spread ACROSS the camera's line of sight, so billboarded paper
+    // never stacks one foe behind another
+    const spots = count === 1 ? [[3.4, -1.6]]
+      : count === 2 ? [[2.4, -2.6], [4.6, -0.6]]
+      : [[1.9, -3.1], [3.5, -1.6], [5.1, -0.1]];
     const biome = BIOMES[team.biome] || BIOMES.MEADOW;
 
     this.enemies = spots.map(([x, z], i) => {
-      const spec = team.boss ? { n: team.bossName || 'The Warden', r: 'brute' } : pick(this.rng, roster);
+      // a roamer pack fights as the species its map icon promised
+      const spec = team.boss ? { n: team.bossName || 'The Warden', r: 'brute' }
+        : team.species
+          ? (roster.find(f => f.n === team.species) || { n: team.species, r: team.speciesRole || 'brute' })
+          : pick(this.rng, roster);
       const mods = ROLE_MODS[spec.r] || ROLE_MODS.brute;
       const varr = 0.9 + this.rng() * 0.2;
       let hp = Math.round((13 + 8 * tier) * mods.hp * varr);
@@ -219,6 +228,7 @@ export class BattleSystem {
 
       return {
         id: i, name: spec.n + (count > 1 ? ` ${'ABC'[i]}` : ''), role: spec.r,
+        ranged: !team.boss && spec.r === 'mystic',   // mystics cast; the rest close in
         hp, maxHP: hp, atk, spd, boss: !!team.boss, deity: !!team.deity,
         burn: 0, burnTurns: 0, chill: 0, stun: 0, charging: false, enraged: false,
         mesh, home: mesh.position.clone(), dead: false,
@@ -502,12 +512,20 @@ export class BattleSystem {
     }
     this._log(`✧ ${ab.name}!`);
     const alive = this._aliveEnemies();
+    // casts leave the wanderer's hands as bolts — the paper self stays put
+    const castFrom = () => this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+    const castAt = e => e.mesh.position.clone().add(new THREE.Vector3(0, 1.1, 0));
     if (ab.kind === 'aoe') {
       const timing = await this._startTiming('strike');
-      for (const e of alive) await this._strike(e, timing, ab.mult, true);
+      for (const e of alive) {
+        await this._projectile(castFrom(), castAt(e), '#ffe9a0', { dur: 0.2 });
+        await this._strike(e, timing, ab.mult, true);
+      }
       this._log(`${ab.name} sweeps the field!`);
     } else if (ab.kind === 'burn_all') {
       for (const e of alive) {
+        await this._projectile(castFrom(), castAt(e), '#ff8a3a', { dur: 0.2 });
+        this._burst(castAt(e), 0xff8a3a);
         e.burn = Math.max(e.burn, ab.burn * (run.flags.burnDouble ? 2 : 1));
         e.burnTurns = Math.max(e.burnTurns, 3);
         this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)), '🔥', 'burn');
@@ -516,26 +534,34 @@ export class BattleSystem {
     } else if (ab.kind === 'stun') {
       const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
       if (target) {
+        await this._projectile(castFrom(), castAt(target), '#ffffff', { dur: 0.24 });
+        this._burst(castAt(target), 0xdfe6ff);
         target.stun = 1;
         this._float(target.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)), '✶', 'stun');
         this._log(`${target.name} rings like a bell and forgets its turn.`);
       }
     } else if (ab.kind === 'heal_self') {
       run.hp = Math.min(run.stats.maxHP, run.hp + ab.amount);
+      this._burst(castFrom(), 0x8affc4);
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${ab.amount}`, 'heal');
       audio.sfxHeal();
     } else if (ab.kind === 'weaken_all') {
-      for (const e of alive) e.chill = (e.chill || 0) + ab.atkDown;
+      for (const e of alive) {
+        await this._projectile(castFrom(), castAt(e), '#9fb4ff', { dur: 0.18, size: 0.45 });
+        e.chill = (e.chill || 0) + ab.atkDown;
+      }
       this._log('The foes sag, weakened.');
     } else if (ab.kind === 'smite') {
       const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
       if (target) {
         const timing = await this._startTiming('strike');
+        await this._projectile(castFrom(), castAt(target), '#ffe9a0', { dur: 0.26, size: 0.9, arc: 1.4 });
         await this._strike(target, timing, ab.mult, false);
       }
     } else if (ab.kind === 'gamble') {
       const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
       if (target) {
+        await this._projectile(castFrom(), castAt(target), '#c79bff', { dur: 0.3, arc: 1.6 });
         const mult = this.rng() * 3;
         if (mult < 0.25) this._log('The die comes up hollow — nothing!');
         else await this._strike(target, { grade: mult > 2.2 ? 'perfect' : 'good', mult }, 1, true);
@@ -543,15 +569,18 @@ export class BattleSystem {
     } else if (ab.kind === 'leech') {
       const target = this.enemies[this.targetId]?.dead ? alive[0] : this.enemies[this.targetId];
       if (target) {
+        await this._projectile(castFrom(), castAt(target), '#8affc4', { dur: 0.24 });
         const before = target.hp;
         await this._strike(target, { grade: 'good', mult: ab.mult }, 1, true);
         const dealt = before - Math.max(0, target.hp);
+        await this._projectile(castAt(target), castFrom(), '#8affc4', { dur: 0.28, size: 0.45 });
         run.hp = Math.min(run.stats.maxHP, run.hp + dealt);
         this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${dealt}`, 'heal');
       }
     } else if (ab.kind === 'frenzy') {
       this.frenzyAtk += ab.atkUp;
       run.hp = Math.max(1, run.hp - ab.selfDmg);
+      this._burst(castFrom(), 0xff6a5a);
       this._log(`The drum takes its due — +${ab.atkUp} ATK for this battle.`);
     }
     this._refreshCards();
@@ -568,7 +597,7 @@ export class BattleSystem {
     const dmg = 10 + (this.team.tier || 1) * 2 + (run.flags.chargeDmg || 0);
     this._log(`✸ The star-charge detonates for ${dmg} to all foes!`);
     for (const e of this._aliveEnemies()) {
-      this._burst(e.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)));
+      this._burst(e.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)), 0xff9a4a);
       this._shake(e.mesh);
       this._hurtEnemy(e, dmg, '✸');
     }
@@ -685,6 +714,11 @@ export class BattleSystem {
           continue;
         } else if (move === 1) {
           const drain = 4 + Math.round((this.team.tier || 6) * 0.8);
+          await this._projectile(
+            this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+            e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
+            '#a6ff57', { dur: 0.35, size: 0.5 }
+          );
           run.hp -= drain;
           e.hp = Math.min(e.maxHP, e.hp + drain);
           this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
@@ -707,6 +741,11 @@ export class BattleSystem {
           this._log(`${e.name} re-folds ${ally.name}'s wounds shut.`);
         } else if (tier >= 3 && roll < 0.55) {
           const drain = 3 + Math.round(tier * 0.7);
+          await this._projectile(
+            this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+            e.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+            '#8affc4', { dur: 0.32, size: 0.45 }
+          );
           run.hp -= drain;
           e.hp = Math.min(e.maxHP, e.hp + drain);
           this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
@@ -717,8 +756,14 @@ export class BattleSystem {
           this._log(`${e.name} knots the light around your hands — your timing bands narrow!`);
         } else {
           this._log(`${e.name} hexes you with cold starlight…`);
-          run.hp -= Math.max(1, Math.round(e.atk * 0.5));
-          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${Math.max(1, Math.round(e.atk * 0.5))}`, 'dmg');
+          await this._projectile(
+            e.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+            this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
+            this.accent, { dur: 0.28, size: 0.5 }
+          );
+          const hexDmg = Math.max(1, Math.round(e.atk * 0.5));
+          run.hp -= hexDmg;
+          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${hexDmg}`, 'dmg');
         }
         this._refreshCards();
         await wait(550);
@@ -784,11 +829,21 @@ export class BattleSystem {
     const { heavy = false, crush = false, hits = 1 } = opts;
     const tier = this.team.tier || 1;
     const veil = ['DESERT', 'CRIMSON'].includes(this.team.biome);   // sand hides the bands
+    // mystics cast from where they stand; heavy and crushing blows are
+    // bodily things and always close the distance
+    const ranged = e.ranged && !crush && !heavy;
     this._log(`${e.name}${crush ? '’s CRUSHING blow falls — dodge!'
       : heavy ? ' unleashes the heavy blow!'
-      : hits > 1 ? ` strikes in a flurry of ${hits}!` : ' attacks!'}`);
-    this._tween(e.mesh.position, { x: this.playerHome.x + 1.6, z: this.playerHome.z - 1.0 }, 0.3);
-    await wait(300);
+      : hits > 1 ? (ranged ? ` looses a volley of ${hits}!` : ` strikes in a flurry of ${hits}!`)
+      : ranged ? ' takes aim…' : ' attacks!'}`);
+    if (ranged) {
+      // a gathering flare where the bolt will leave from
+      this._burst(e.mesh.position.clone().add(new THREE.Vector3(0, 1.3, 0)), this.accent);
+      await wait(220);
+    } else {
+      this._tween(e.mesh.position, { x: this.playerHome.x + 1.6, z: this.playerHome.z - 1.0 }, 0.3);
+      await wait(300);
+    }
 
     for (let h = 0; h < hits; h++) {
       if (run.hp <= 0) break;
@@ -799,10 +854,18 @@ export class BattleSystem {
         speed, veil,
         label: crush ? '☄ DODGE!' : hits > 1 ? `Block! (${h + 1}/${hits})` : 'Block!',
       });
+      if (ranged) {
+        await this._projectile(
+          e.mesh.position.clone().add(new THREE.Vector3(0, 1.3, 0)),
+          this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
+          this.accent, { dur: 0.24 }
+        );
+      }
       let dmg = Math.max(1, e.atk - (e.chill || 0)) * perHit * (0.9 + this.rng() * 0.2);
 
       const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
       const passiveDodge = this.rng() * 100 < (run.stats.dodge || 0);
+      const playerPos = () => this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0));
       if (crush && timing.grade === 'perfect') {
         this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'leapt clear!', 'heal');
         this._log('You fold sideways — the blow shatters empty ground!');
@@ -817,17 +880,21 @@ export class BattleSystem {
         if (crush) {
           dmg *= 1.2;   // caught flat-footed under the full weight
           audio.sfxHurt();
+          this._burst(playerPos(), 0xff6a4a);
         } else if (timing.grade === 'perfect') {
           dmg *= CONFIG.battle.blockPerfect;
           this._log('PERFECT block!');
           audio.sfxBlock();
+          this._burst(playerPos(), 0x9fe8ff);
           if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
         } else if (timing.grade === 'good') {
           dmg *= CONFIG.battle.blockGood;
           this._log('Blocked — most of it.');
           audio.sfxBlock();
+          this._burst(playerPos(), 0x9fb4ff);
         } else {
           audio.sfxHurt();
+          this._burst(playerPos(), 0xff8a5a);
         }
         if (this.shieldLeft > 0) { dmg *= 0.5; this.shieldLeft--; }
         if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) dmg += run.flags.waterWeak;
@@ -843,8 +910,12 @@ export class BattleSystem {
       }
       if (hits > 1) { this._refreshCards(); await wait(200); }
     }
-    this._tween(e.mesh.position, { x: e.home.x, z: e.home.z }, 0.3);
-    await wait(320);
+    if (ranged) {
+      await wait(150);
+    } else {
+      this._tween(e.mesh.position, { x: e.home.x, z: e.home.z }, 0.3);
+      await wait(320);
+    }
   }
 
   _applyBiomeAffliction(e, dmg) {
@@ -950,15 +1021,32 @@ export class BattleSystem {
     this.shakes.push({ mesh, t: 0, base: mesh.position.x });
   }
 
-  _burst(pos) {
+  _burst(pos, color = 0xffe9a0) {
     for (const b of this.burstPool) {
       const a = Math.random() * Math.PI * 2;
       b.t = 0;
+      b.sp.material.color.set(color);
       b.sp.position.copy(pos);
       b.vx = Math.cos(a) * (1.2 + Math.random());
       b.vz = Math.sin(a) * (1.2 + Math.random());
       b.vy = 1 + Math.random() * 1.5;
     }
+  }
+
+  // A bolt of light arcing from caster to target — ranged attacks and casts
+  // fire one of these instead of lunging across the stage.
+  _projectile(from, to, color, { size = 0.6, dur = 0.3, arc = 0.9 } = {}) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._shared('bolt', () => makeGlowTexture('#ffffff')),
+      color: new THREE.Color(color), transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    sp.scale.setScalar(size);
+    sp.position.copy(from);
+    this.scene.add(sp);
+    return new Promise(resolve => {
+      this.projectiles.push({ sp, from: from.clone(), to: to.clone(), t: 0, dur, arc, resolve });
+    });
   }
 
   update(dt) {
@@ -1020,6 +1108,29 @@ export class BattleSystem {
       b.sp.position.z += b.vz * dt;
       b.sp.material.opacity = Math.max(0, 0.9 * (1 - b.t));
     }
+
+    // projectiles in flight
+    if (this.projectiles?.length) {
+      for (const p of this.projectiles) {
+        p.t += dt / p.dur;
+        const e = Math.min(1, p.t);
+        p.sp.position.lerpVectors(p.from, p.to, e);
+        p.sp.position.y += Math.sin(e * Math.PI) * p.arc;
+        if (p.t >= 1) {
+          this.scene.remove(p.sp);
+          p.sp.material.dispose();
+          p.resolve();
+        }
+      }
+      this.projectiles = this.projectiles.filter(p => p.t < 1);
+    }
+
+    // the paper stands square to the audience — yaw-billboard every token
+    const face = m => {
+      m.rotation.y = Math.atan2(this.camera.position.x - m.position.x, this.camera.position.z - m.position.z);
+    };
+    if (this.playerMesh && this.state !== 'lost') face(this.playerMesh);
+    for (const e of this.enemies || []) if (!e.dead) face(e.mesh);
   }
 }
 

@@ -9,10 +9,13 @@ const $ = id => document.getElementById(id);
 export const ui = {
   init(world) {
     this.world = world;
-    const legend = $('legend');
-    legend.innerHTML = '<h3>THE CELESTIAL COURTS</h3>' + world.kingdoms.map(k =>
+    // the Courts live in the wanderer's menu now, not a box on the map
+    const courts = $('menu-courts');
+    courts.innerHTML = '<h3>THE CELESTIAL COURTS</h3>' + world.kingdoms.map(k =>
       `<div class="row"><span class="sw" style="background:#${k.color.toString(16).padStart(6, '0')};color:#${k.color.toString(16).padStart(6, '0')}"></span>${k.name}</div>`
     ).join('') + `<div class="row"><span class="sw" style="background:#9aa3cf;color:#9aa3cf"></span>The Driftlands (free)</div>`;
+    $('gm-seed').textContent = world.seed;
+    $('gm-buildnum').textContent = window.BUILD || '—';
 
     $('modal-scrim').addEventListener('click', e => {
       if (e.target === $('modal-scrim')) this.closeModal();

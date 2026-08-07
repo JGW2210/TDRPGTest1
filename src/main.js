@@ -217,7 +217,7 @@ dom.addEventListener('pointermove', e => {
         `<div class="tt-biome">${lm ? lm.type + ' · ' : ''}${biomeName(tile)} · ${reg.name}</div>` +
         `<div class="tt-king" style="color:${kHex}">${k ? k.name : 'The Driftlands'}</div>` +
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
-        (worldView.roamerOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#ff9a5a">⚔ a hunting pack prowls here</div>' : '') +
+        (roamers.at(tile) && tile.fogState >= 2 ? `<div class="tt-extra" style="color:#ff9a5a">⚔ ${roamers.at(tile).species?.n || 'a hunting pack'} prowls here — step onto its hex to give battle</div>` : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
         (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ the void beside this shore hums — something folded waits</div>' : '') +
         (tile.isletHint != null && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#d8ffb0">❂ a thin hum in the void — something small and stubborn holds on out there</div>' : '') +
@@ -352,10 +352,14 @@ function speakSky(voiceId) {
 }
 
 function engageRoamer(pack) {
-  ui.toast(`⚔ ${pack.count > 1 ? 'A hunting pack falls' : 'A prowling foe falls'} upon you!`);
+  const who = pack.species?.n || 'A prowling foe';
+  ui.toast(`⚔ ${who}${pack.count > 1 ? ' and its pack fall' : ' falls'} upon you!`);
   startBattle({
-    team: { biome: pack.biome, tier: pack.tier, count: pack.count, roamerId: pack.id },
-    title: pack.count > 1 ? 'The Hunting Pack' : 'The Prowler',
+    team: {
+      biome: pack.biome, tier: pack.tier, count: pack.count, roamerId: pack.id,
+      species: pack.species?.n, speciesRole: pack.species?.r,
+    },
+    title: pack.species ? pack.species.n + (pack.count > 1 ? ' Pack' : '') : 'The Prowler',
     onWin: () => {
       roamers.kill(pack.id);
       announceFeats(meta.bump(s => { s.packs = (s.packs || 0) + 1; }));
@@ -1110,17 +1114,63 @@ const bootAudio = () => {
 window.addEventListener('pointerdown', bootAudio, { once: true });
 window.addEventListener('keydown', bootAudio, { once: true });
 
+// ---------------------------------------------------- the wanderer's menu ---
+
+const gm = id => document.getElementById(id);
+let menuOpen = false;
+
+function toggleMenu(open = !menuOpen) {
+  menuOpen = open;
+  gm('gamemenu').classList.toggle('hidden', !open);
+  if (open) {
+    disarmRestarts();
+    updateAudioButton();
+  }
+}
+
+// restart buttons arm on the first click, fire on the second
+function disarmRestarts() {
+  for (const [id, label, note] of [
+    ['gm-restart-seed', '↻ refold this world', 'the same meridian, the run begun anew'],
+    ['gm-newworld', '☄ wake in a new world', 'this run is lost; a new meridian is drawn'],
+  ]) {
+    const b = gm(id);
+    b.classList.remove('armed');
+    b.innerHTML = `${label} <span class="gm-note">${note}</span>`;
+  }
+}
+
+function armOrFire(btn, fire) {
+  if (btn.classList.contains('armed')) { fire(); return; }
+  disarmRestarts();
+  btn.classList.add('armed');
+  btn.innerHTML = 'are you certain? <span class="gm-note">the run will not be saved — press again</span>';
+}
+
+gm('btn-menu').addEventListener('click', () => toggleMenu());
+gm('gm-continue').addEventListener('click', () => toggleMenu(false));
+gm('gm-restart-seed').addEventListener('click', e => armOrFire(e.currentTarget, () => {
+  clearSave(world.seed);
+  location.reload();
+}));
+gm('gm-newworld').addEventListener('click', e => armOrFire(e.currentTarget, () => {
+  clearSave(world.seed);
+  location.href = location.pathname + '?seed=' + Math.floor(Math.random() * 1e6);
+}));
+gm('gm-echoes').addEventListener('click', () => {
+  toggleMenu(false);
+  ui.toggleEchoes(meta);
+});
+
 function updateAudioButton() {
-  document.getElementById('btn-audio').textContent = audio.enabled ? '♪' : '♪̸';
-  document.getElementById('btn-audio').style.opacity = audio.enabled ? 1 : 0.45;
+  gm('gm-audio').textContent = audio.enabled ? '♪ music of the spheres — on' : '♪ music of the spheres — silenced';
 }
 updateAudioButton();
-document.getElementById('btn-audio').addEventListener('click', () => {
+gm('gm-audio').addEventListener('click', () => {
   audio.setEnabled(!audio.enabled);
   updateAudioButton();
 });
 
-document.getElementById('btn-echoes').addEventListener('click', () => ui.toggleEchoes(meta));
 document.getElementById('echo-close').addEventListener('click', () => ui.toggleEchoes(meta, false));
 
 document.getElementById('btn-recenter').addEventListener('click', () => {
@@ -1142,10 +1192,12 @@ document.getElementById('btn-ascend').addEventListener('click', () => {
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape') {
-    if (ui.modalOpen) ui.closeModal();
+    if (menuOpen) toggleMenu(false);
+    else if (ui.modalOpen) ui.closeModal();
     else if (!document.getElementById('inventory').classList.contains('hidden')) ui.toggleInventory(run, false);
     else if (!document.getElementById('echoes').classList.contains('hidden')) ui.toggleEchoes(meta, false);
     else if (mode === 'local') exitLocal();
+    else if (mode === 'world' || mode === 'battle') toggleMenu(true);
   }
   if (e.code === 'KeyI' && mode !== 'battle') ui.toggleInventory(run);
 });
