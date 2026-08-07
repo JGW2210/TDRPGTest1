@@ -106,6 +106,26 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    satboss thrones, nebula swirl + islet models; beacons pulse and dim
    with fog via `dimmables`).
 
+9. **Pack & battle-feel round** (same branch; direct user instructions, no
+   poll): roamer packs carry a **species sealed at spawn** (`r.species`
+   from FOES via hash2(q,r,55); map icon = battle foe; `engageRoamer`
+   passes `team.species`/`speciesRole`, battle names/titles/tooltip use
+   it); **speed ratio** per pack (`r.speed` = 0.35 + 0.14·tier + 0.12 if
+   swift ± jitter, clamp 0.25–1.35; accumulator `r.acc`, max 2 steps per
+   player hop, serialized) — tier-0 lumbers at ⅓ pace, tier-5+ matches or
+   outruns you; **contact = same hex only** (adjacent packs no longer
+   ambush; hunters may step onto your tile, you onto theirs); battle
+   **ranged vs melee**: mystics (`e.ranged`) cast biome-accent bolts via
+   `_projectile(from,to,color,{dur,size,arc})` (promise-based, advanced
+   in update()) with no lunge — heavy/crush blows still close in; player
+   abilities fire typed bolts/bursts (aoe gold, burn orange, stun white,
+   weaken pale blue, smite big gold, gamble purple, leech green
+   both ways, heal/frenzy self-bursts), colored `_burst(pos, color)`
+   impacts (perfect block ice-blue, hit red-orange); **billboarded paper**
+   (player + living foes yaw-face the camera every frame) and enemy spots
+   spread across the camera's line of sight; scenery confined behind the
+   enemy line (z ≤ −4.6) so nothing occludes a foe.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.

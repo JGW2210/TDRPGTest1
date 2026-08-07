@@ -217,7 +217,7 @@ dom.addEventListener('pointermove', e => {
         `<div class="tt-biome">${lm ? lm.type + ' · ' : ''}${biomeName(tile)} · ${reg.name}</div>` +
         `<div class="tt-king" style="color:${kHex}">${k ? k.name : 'The Driftlands'}</div>` +
         (worldView.traderOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra">a wandering trader rests here</div>' : '') +
-        (worldView.roamerOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#ff9a5a">⚔ a hunting pack prowls here</div>' : '') +
+        (roamers.at(tile) && tile.fogState >= 2 ? `<div class="tt-extra" style="color:#ff9a5a">⚔ ${roamers.at(tile).species?.n || 'a hunting pack'} prowls here — step onto its hex to give battle</div>` : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
         (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ the void beside this shore hums — something folded waits</div>' : '') +
         (tile.isletHint != null && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#d8ffb0">❂ a thin hum in the void — something small and stubborn holds on out there</div>' : '') +
@@ -352,10 +352,14 @@ function speakSky(voiceId) {
 }
 
 function engageRoamer(pack) {
-  ui.toast(`⚔ ${pack.count > 1 ? 'A hunting pack falls' : 'A prowling foe falls'} upon you!`);
+  const who = pack.species?.n || 'A prowling foe';
+  ui.toast(`⚔ ${who}${pack.count > 1 ? ' and its pack fall' : ' falls'} upon you!`);
   startBattle({
-    team: { biome: pack.biome, tier: pack.tier, count: pack.count, roamerId: pack.id },
-    title: pack.count > 1 ? 'The Hunting Pack' : 'The Prowler',
+    team: {
+      biome: pack.biome, tier: pack.tier, count: pack.count, roamerId: pack.id,
+      species: pack.species?.n, speciesRole: pack.species?.r,
+    },
+    title: pack.species ? pack.species.n + (pack.count > 1 ? ' Pack' : '') : 'The Prowler',
     onWin: () => {
       roamers.kill(pack.id);
       announceFeats(meta.bump(s => { s.packs = (s.packs || 0) + 1; }));

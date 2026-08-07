@@ -1292,8 +1292,9 @@ export class WorldView {
 
   _roamerTexture(r) {
     const dread = r.tier >= 3;
+    // the pack's species is sealed at spawn — this icon IS the fight
     const roster = FOES[r.biome] || FOES.MEADOW;
-    const spec = roster[(hash2(r.q, r.r, 55) * roster.length) | 0];
+    const spec = r.species || roster[(hash2(r.q, r.r, 55) * roster.length) | 0];
     const key = r.biome + ':' + spec.n + (dread ? ':d' : '');
     if (!this._roamerTex[key]) {
       const base = '#' + new THREE.Color((BIOMES[r.biome] || BIOMES.MEADOW).color)
