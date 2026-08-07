@@ -74,6 +74,38 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    boss Vhal-Suthek (tier 7, crush/siphon/flurry rotation) and an
    alternative ending screen (`#ending`, `ui.showEnding`).
 
+8. **Archipelago round** (branch `claude/game-map-visual-thematic-wu6dph`;
+   poll held — user picked Quadrant climates, a custom "archipelago joined
+   by narrow shallows rivers, still warden-gated", ALL FOUR void-flare
+   packs, and monumental multi-hex landmarks):
+   **quadrant climates** (temp gradient ×1.45 with less noise, east
+   mountain bias, `home` damping ≤ cDist 13 keeps the start vale
+   meadow/forest — 0 impure home tiles over 40 seeds), **speckle purge**
+   pass 3.2 (2-iteration majority filter, volcano/crater exempt);
+   **archipelago erosion** pass 2.5 (clumped fbm coast-gnawing, 2
+   thresholds in `CONFIG.archipelago`, riftWidth 1.7→2.1) + **pass 6.8**
+   (start relocates into region 0's largest fragment — without this the
+   connectivity cull could drown the world, seed 21); causeways restyled
+   as **Warded Shallows** (water-colored ROAD biome, height 0.55, gold
+   ward accent; all sealing logic untouched) + **pass 6.9 water web**
+   (BFS river-joins from each channel mouth to nearest SEA within 7);
+   **3 forgotten islets** per world (pass 10.5: hermit trader / wreck
+   battle+cache / observatory ASTRAL pedestal from `names.ISLETS`, biome
+   ISLET, hidden `isletHidden` clusters + folded footbridges, seam on
+   `bridge[0].isletSeam`, shore glows `isletHint`, revealed by detonate →
+   `world.revealIslet(i)`, feat `islefinder`, save v4 `revealedIslets`);
+   world3d: **rift debris fields** (instanced plates/rocks/slabs on ~16%
+   of void hexes + tumbling spinner meshes), **island undersides** (root
+   cones per region/satellite, ≤60 coastal stalactites, stardust-fall
+   planes), **sky weather** (aurora ribbons over 2 largest tundra sweeps,
+   volcano ember plumes, 3-pool shooting stars, 5 drifting cloud
+   shadows), **monumental landmarks** (walled capital city-mounds with
+   banners + kingdom beacon, towns with 5 houses/windmill/chimney smoke,
+   biome-carved dungeon facades [colossus/tree/ziggurat/fangs/ice
+   vault/geode/barrow], gate arches with keystones, shrine rune-rings,
+   satboss thrones, nebula swirl + islet models; beacons pulse and dim
+   with fog via `dimmables`).
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -101,8 +133,10 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 ## Architecture (src/)
 
 - `config.js` — tunables: mapRadius 45, vision 4/rim 6, hop timings,
-  region params (count 10, seedSpacing 15, riftWidth 1.7), secrets (26),
-  battle timing windows/multipliers, camera bounds. Seed via `?seed=`.
+  region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
+  (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
+  minLandGap, maxBridge), battle timing windows/multipliers, camera
+  bounds. Seed via `?seed=`.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
@@ -161,10 +195,11 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   (+seamfinder/changed/thrice_changed/the_other_end) with `check(m)`
   predicates; `bump(fn)` mutates stats, returns newly completed feats +
   items unlocked. `unlockedIds` = core + earned.
-- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v3**:
+- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v4**:
   saveRun/loadRun/clearSave/applySave. Saved: items(ids), consumables,
   shards, hp, shrineHeals, **boons, shrineBoons, vantageSeen,
-  revealedBridges** (applySave replays `world.revealBridge` +
+  revealedBridges, revealedIslets** (applySave replays
+  `world.revealBridge`/`world.revealIslet` +
   `worldView.revealHiddenTiles`), roamer state, cleared/gates/secrets/
   visited, explored fog, player pos. The Wound re-opens on load from
   `mutationCount >= 3` (main.js), not a save field. Older saves discarded.
@@ -299,9 +334,16 @@ act(siteId,label), shopOffers(q,r)`.
   crush ×1.2, band half-widths, flurry chances) are theory-tuned only —
   human playtesting will likely want the first-bar speeds eased or the
   crush telegraph lengthened.
-- Save VERSION is now 3 (round 7) — v2 saves are discarded on load.
-  Worldgen changed for identical seeds (rivers, sealing, satellites), so
-  this is by design.
+- Save VERSION is now 4 (round 8: archipelago worldgen + revealedIslets) —
+  older saves are discarded on load. Worldgen changed again for identical
+  seeds (quadrant climates, erosion, water web, islets), by design.
+- Round-8 worldgen is suite-verified (scratchpad worldgen-suite.mjs
+  pattern: 40 seeds, 0 leaks / 0 lost regions / 3 islets each / islets
+  reachable post-reveal / 0 impure home tiles). Visuals verified by
+  headless screenshots only — debris density, beacon/aurora/cloud opacity
+  and landmark scale may want a taste pass on a real GPU.
+- ISLET biome: FOES.ISLET reuses BRIDGE species (haunt/remora) so no new
+  monster art was needed; MUSIC falls back to MEADOW (no ISLET entry).
 - Round-7 numbers untested by humans: mutation stat swings, deity
   hp ×2.6×1.6 at tier 7, wound-battle counts, bargain prices, water-pack
   density (≈11-16/world), nebula reward rates. The worldgen suite +

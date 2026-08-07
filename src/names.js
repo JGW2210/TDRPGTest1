@@ -17,8 +17,9 @@ export const BIOMES = {
   TUNDRA:  { name: 'Pale Expanse',    color: 0xb9d2e4, accent: 0xeaf7ff, deco: 'shard'  },
   SEA:     { name: 'Astral Shallows', color: 0x2b3a78, accent: 0x6f9bff, deco: 'sea'    },
   CRYSTAL: { name: 'Prism Fields',    color: 0x6d4a94, accent: 0xd79bff, deco: 'crystal'},
-  ROAD:    { name: 'Warded Causeway', color: 0x7d7460, accent: 0xf0c46a, deco: null     },
+  ROAD:    { name: 'Warded Shallows', color: 0x33619e, accent: 0xf0c46a, deco: null     },
   BRIDGE:  { name: 'Star-Bridge',     color: 0x4a5aa8, accent: 0x9fe8ff, deco: null     },
+  ISLET:   { name: 'Forgotten Islet', color: 0x4a5a7e, accent: 0xd8ffb0, deco: 'shard'  },
   LUNAR:   { name: 'Lunar Shale',     color: 0xc8c8de, accent: 0xf2f2ff, deco: 'shard'  },
   CRIMSON: { name: 'Crimson Waste',   color: 0x9e4a3c, accent: 0xff9a6a, deco: 'cactus' },
   VERDANT: { name: 'Verdant Drift',   color: 0x3c8a5e, accent: 0x8affc4, deco: 'crystal'},
@@ -49,6 +50,32 @@ export const SATELLITES = [
     biome: 'VERDANT',
     angle: 2.6,
     boss: { name: 'Rootmother of the Long Fall', flavor: 'A garden that learned to hunt during ten thousand years of falling. Its orbit is a stalk; its flowers are patient.' },
+  },
+];
+
+// ------------------------------------------------------ forgotten islets ---
+// Tiny worlds adrift in the void, each holding on out of sheer stubbornness.
+// A folded footbridge waits beside the nearest shore; a star-charge on the
+// humming shore unfurls it.
+
+export const ISLETS = [
+  {
+    id: 'hermit',
+    name: 'The Hermit’s Ledger',
+    sub: 'a lamplit rock that keeps accounts',
+    flavor: 'One hut, one lamp, one very long ledger. The hermit has been tallying what the world owes the void, and the margin notes are getting personal.',
+  },
+  {
+    id: 'wreck',
+    name: 'Wreck of the Vainglory',
+    sub: 'a sky-ship that argued with gravity',
+    flavor: 'The Vainglory set out to circle the Meridian in nine days. The void kept the ship; the cargo manifest survives, and so does some of the cargo.',
+  },
+  {
+    id: 'observatory',
+    name: 'The Sundered Observatory',
+    sub: 'still watching, out of habit',
+    flavor: 'Half an observatory, torn loose in the Shattering, its great brass eye still tracking a star that no longer rises. The astronomers left in a hurry. Their instruments did not.',
   },
 ];
 
@@ -101,6 +128,7 @@ export const FOES = {
   CRIMSON: [{ n: 'Rust Hound', r: 'swift' }, { n: 'Oxide Shambler', r: 'brute' }, { n: 'Dust Chorister', r: 'mystic' }],
   VERDANT: [{ n: 'Seed Sentinel', r: 'guard' }, { n: 'Vine Lasher', r: 'swift' }, { n: 'Bloom Horror', r: 'brute' }],
   SECRET:  [{ n: 'Hoard Mimic', r: 'brute' }],
+  ISLET:   [{ n: 'Bridge Haunt', r: 'mystic' }, { n: 'Star Remora', r: 'swift' }],
   WOUND:   [{ n: 'Meridian Leech', r: 'swift' }, { n: 'Unfolded Pilgrim', r: 'mystic' }, { n: 'The Choir Below', r: 'brute' }],
 };
 
