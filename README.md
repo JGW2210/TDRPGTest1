@@ -31,18 +31,26 @@ Explore your pocket, gather relics, then challenge a Warden to break into
 the next pocket. Die anywhere and the world burns: new seed, nothing kept.
 
 - **Battles** — Pokémon-style dioramas: your paper token front-left, foes
-  back-right on a biome-styled stage. Menu turns (strike / abilities /
-  items / flee) with **Paper-Mario timing**: click as the marker crosses
-  the gold band to strike true, or to block incoming blows. Roles (brute,
-  swift, mystic, guard), burn/chill/stun statuses, telegraphed heavy blows,
+  back-right on a biome-styled stage. Three attack stances with
+  **Paper-Mario timing** — every bar *coalesces* into view before its
+  marker flies, and the stronger the stance the harder it reads: Swift Cut
+  (generous, grants poise), Star Strike (a 3-bar chain), Meteor Edge
+  (knife-thin, pierces wards and interrupts wind-ups). Blocking is a
+  **falling-note rhythm**: shapes descend three lanes, press A / S / D as
+  each crosses the hit-line — flurries fall as note runs, crushing blows as
+  one wide shape you leap, and spiked **trap shapes** thread the pattern in
+  the deep (spring one and the feint bites). Brace to slow the storm and
+  riposte. Roles (brute, swift, mystic, guard), burn/chill/stun statuses,
   enraging bosses.
 - **Items** — Binding-of-Isaac-style blind draws from rune pedestals, boss
-  drops, and shops. **150 relics** in biome-linked pools across four
+  drops, and shops. **~200 relics** in biome-linked pools across four
   visible rarities (Common / Uncommon / Rare / Astral, power-budgeted by
   tier), many with downsides (+HP but slower, +dodge but less real,
-  +shards but louder). Draw weights shift by source and region depth. Tag
-  pairs ignite **synergies** (ember+glass → burning crits; sun+moon →
-  Eclipse; bloom+water → Verdance…). Your build *is* your level — no XP.
+  +shards but louder), each with a **painted sigil-icon** in the pack menu
+  beside a portrait of your wanderer as the hoard re-inks them. Draw
+  weights shift by source and region depth. Tag pairs ignite **synergies**
+  (ember+glass → burning crits; sun+moon → Eclipse; bloom+water →
+  Verdance…). Your build *is* your level — no XP.
 - **The Constellation of Echoes** — persistent, cross-run progression:
   ~60 relics are in the pools from the start; the other 90 unlock forever
   through 20 feats (fell a deep Warden, stand on all three wandering

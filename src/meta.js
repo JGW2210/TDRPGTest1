@@ -30,7 +30,7 @@ export const FEATS = [
   { id: 'islefinder', name: 'Uncharted', desc: 'Reach a forgotten islet no map admits to', check: m => (m.stats.islets || 0) >= 1, unlocks: 4 },
   { id: 'changed', name: 'Changed', desc: 'Carry a cosmic mutation', check: m => (m.stats.mutations || 0) >= 1, unlocks: 4 },
   { id: 'thrice_changed', name: 'Thrice-Changed', desc: 'Tear open the Wound in the Meridian', check: m => !!m.stats.woundOpened, unlocks: 5 },
-  { id: 'the_other_end', name: 'The Other End', desc: 'Close the Wound: defeat what waits inside', check: m => !!m.stats.woundClosed, unlocks: 6 },
+  { id: 'the_other_end', name: 'The Other End', desc: 'Close the Wound: defeat what waits inside', check: m => !!m.stats.woundClosed, unlocks: 8 },
 ];
 
 class Meta {

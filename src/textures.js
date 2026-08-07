@@ -2,6 +2,8 @@
 
 import * as THREE from 'three';
 import { paintSpecies, paintBoss } from './monsters.js';
+import { RARITY, SETS } from './items.js';
+import { BIOMES } from './names.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -159,6 +161,12 @@ const SET_LOOK = {
 };
 
 export function makePlayerTexture(appearance = null) {
+  return toTexture(paintPlayerCanvas(appearance));
+}
+
+// The raw canvas, for DOM use — the pack menu shows the wanderer as the
+// hoard has re-inked them, matching the token on the map exactly.
+export function paintPlayerCanvas(appearance = null) {
   const [c, g] = canvas(256, 320);
   g.translate(128, 160);
   const ap = appearance || { tagCounts: {}, completeSets: [], grand: [], itemCount: 0 };
@@ -572,7 +580,7 @@ export function makePlayerTexture(appearance = null) {
     g.stroke();
   }
 
-  return toTexture(c);
+  return c;
 }
 
 function glowDot(g, x, y, r, color) {
@@ -580,6 +588,352 @@ function glowDot(g, x, y, r, color) {
   g.shadowColor = color; g.shadowBlur = 10;
   g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
   g.shadowBlur = 0;
+}
+
+// -------------------------------------------------------------- item icons ---
+// Every relic paints its own sigil-tile at runtime: a rarity-rimmed rune-hex,
+// a glyph for what the relic does, pips for the sets it feeds, and a crown
+// notch in its home pool's color. Viewed in the pack, the shop, the reveal.
+
+const POOL_TINT = { ANY: '#9aa3cf', BOSS: '#ff9f7a', ASTRAL: '#f0c46a', MUTATION: '#a6ff57' };
+
+function poolTint(pool) {
+  const b = BIOMES[pool];
+  if (b && typeof b.accent === 'number') return '#' + b.accent.toString(16).padStart(6, '0');
+  return POOL_TINT[pool] || '#9aa3cf';
+}
+
+// what the tile shows: mutations and abilities first, then the relic's most
+// distinctive mechanic, then its heaviest stat
+function iconKindFor(item) {
+  if (item.mutation) return 'mutation';
+  if (item.ability) {
+    return {
+      aoe: 'burst', burn_all: 'flame', stun: 'bell', heal_self: 'droplet',
+      weaken_all: 'snow', smite: 'burst', gamble: 'die', leech: 'droplet', frenzy: 'drum',
+    }[item.ability.kind] || 'burst';
+  }
+  const f = item.flags || {};
+  if (f.reviveOnce) return 'moon';
+  if (f.heavyPlus || f.interruptGood) return 'meteor';
+  if (f.noteSlow) return 'notes';
+  if (f.trapWard) return 'trapward';
+  if (f.chainKeeper) return 'chain';
+  if (f.riposte) return 'parry';
+  if (f.gatherCalm) return 'orb';
+  if (f.poiseful || f.dodgePlus || f.firstStrikeDodge) return 'swoosh';
+  if (f.veilSight || f.seeIntent || f.crackSense || f.visionPlus) return 'eye';
+  if (f.burnOnHit || f.burnDouble) return 'flame';
+  if (f.chillOnHit) return 'snow';
+  if (f.thorns) return 'spikes';
+  if (f.stunOnPerfect) return 'bell';
+  if (f.blockHeal || f.shieldHits || f.firstHitHalved) return 'shield';
+  if (f.perfectHeal || f.killHeal || f.afterBattleHeal || f.dewPotency) return 'droplet';
+  if (f.executeBonus || f.doubleStrike) return 'sword';
+  if (f.extraActionEvery) return 'hourglass';
+  if (f.perfectShard || f.killShard) return 'coin';
+  if (f.fastTravel || f.fleeSure) return 'wing';
+  if (f.firstHitPerfect || f.critShatter || f.perfectEcho) return 'star';
+  if (f.houndStrike || f.chargeDmg || f.chargeDropBonus) return 'burst';
+  const s = item.stats || {};
+  const w = [
+    ['sword', (s.atk || 0) * 3], ['heart', (s.maxHP || 0)], ['wing', (s.spd || 0) * 2.5],
+    ['star', (s.luck || 0) * 0.9], ['swoosh', (s.dodge || 0) * 0.9], ['coin', (s.shardGain || 0) * 0.4],
+    ['hourglass', (s.timingBonus || 0) * 8], ['shield', (s.blockBonus || 0) * 8],
+  ].sort((a, b) => b[1] - a[1]);
+  return w[0][1] > 0 ? w[0][0] : 'star';
+}
+
+function paintGlyph(g, kind, ink, glow) {
+  g.strokeStyle = ink;
+  g.fillStyle = ink;
+  g.lineWidth = 2.6;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.shadowColor = glow;
+  g.shadowBlur = 5;
+  const star = (r0, r1, points = 5) => {
+    g.beginPath();
+    for (let p = 0; p < points * 2; p++) {
+      const a = -Math.PI / 2 + (p / (points * 2)) * Math.PI * 2;
+      const rr = p % 2 === 0 ? r0 : r1;
+      p === 0 ? g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr) : g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+  };
+  switch (kind) {
+    case 'sword': {
+      g.save(); g.rotate(-Math.PI / 4);
+      g.beginPath();
+      g.moveTo(0, -15); g.lineTo(3, -10); g.lineTo(3, 5); g.lineTo(-3, 5); g.lineTo(-3, -10);
+      g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(-8, 6); g.lineTo(8, 6); g.stroke();
+      g.beginPath(); g.moveTo(0, 6); g.lineTo(0, 14); g.stroke();
+      g.restore();
+      break;
+    }
+    case 'parry': {
+      for (const s of [-1, 1]) {
+        g.save(); g.rotate(s * Math.PI / 4);
+        g.beginPath(); g.moveTo(0, -14); g.lineTo(0, 8); g.stroke();
+        g.beginPath(); g.moveTo(-5, 5); g.lineTo(5, 5); g.stroke();
+        g.restore();
+      }
+      break;
+    }
+    case 'heart': {
+      g.beginPath();
+      g.moveTo(0, 12);
+      g.bezierCurveTo(-16, 0, -12, -12, -4, -10);
+      g.bezierCurveTo(-1, -9, 0, -6, 0, -4);
+      g.bezierCurveTo(0, -6, 1, -9, 4, -10);
+      g.bezierCurveTo(12, -12, 16, 0, 0, 12);
+      g.fill();
+      break;
+    }
+    case 'wing': {
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.moveTo(-12, -6 + i * 6);
+        g.quadraticCurveTo(4, -10 + i * 6, 13, -2 + i * 6);
+        g.stroke();
+      }
+      break;
+    }
+    case 'star': star(13, 5.5); g.fill(); break;
+    case 'swoosh': {
+      g.beginPath(); g.arc(0, 2, 11, Math.PI * 0.15, Math.PI * 1.1); g.stroke();
+      g.beginPath(); g.moveTo(-13, -8); g.lineTo(-5, -8); g.stroke();
+      g.beginPath(); g.moveTo(-10, -13); g.lineTo(-2, -13); g.stroke();
+      break;
+    }
+    case 'coin': {
+      g.beginPath(); g.arc(0, 0, 12, 0, Math.PI * 2); g.stroke();
+      star(6.5, 2.8); g.fill();
+      break;
+    }
+    case 'hourglass': {
+      g.beginPath(); g.moveTo(-9, -12); g.lineTo(9, -12); g.stroke();
+      g.beginPath(); g.moveTo(-9, 12); g.lineTo(9, 12); g.stroke();
+      g.beginPath();
+      g.moveTo(-7, -11); g.lineTo(7, -11); g.lineTo(-7, 11); g.lineTo(7, 11); g.closePath();
+      g.stroke();
+      break;
+    }
+    case 'shield': {
+      g.beginPath();
+      g.moveTo(0, -13);
+      g.quadraticCurveTo(10, -11, 12, -8);
+      g.quadraticCurveTo(12, 6, 0, 13);
+      g.quadraticCurveTo(-12, 6, -12, -8);
+      g.quadraticCurveTo(-10, -11, 0, -13);
+      g.closePath(); g.fill();
+      break;
+    }
+    case 'flame': {
+      g.beginPath();
+      g.moveTo(0, 13);
+      g.bezierCurveTo(-11, 8, -9, -2, -3, -6);
+      g.bezierCurveTo(-4, -1, -1, 0, 1, -13);
+      g.bezierCurveTo(7, -6, 10, 2, 7, 7);
+      g.bezierCurveTo(5, 10, 3, 12, 0, 13);
+      g.fill();
+      break;
+    }
+    case 'snow': {
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * 12, Math.sin(a) * 12); g.stroke();
+        g.beginPath();
+        g.moveTo(Math.cos(a) * 8 + Math.cos(a + 2.1) * 4, Math.sin(a) * 8 + Math.sin(a + 2.1) * 4);
+        g.lineTo(Math.cos(a) * 8, Math.sin(a) * 8);
+        g.lineTo(Math.cos(a) * 8 + Math.cos(a - 2.1) * 4, Math.sin(a) * 8 + Math.sin(a - 2.1) * 4);
+        g.stroke();
+      }
+      break;
+    }
+    case 'spikes': {
+      for (const dx of [-9, 0, 9]) {
+        g.beginPath();
+        g.moveTo(dx - 4, 10); g.lineTo(dx, dx === 0 ? -12 : -5); g.lineTo(dx + 4, 10);
+        g.closePath(); g.fill();
+      }
+      break;
+    }
+    case 'droplet': {
+      g.beginPath();
+      g.moveTo(0, -13);
+      g.bezierCurveTo(8, -2, 10, 3, 10, 6);
+      g.bezierCurveTo(10, 12, 5, 15, 0, 15);
+      g.bezierCurveTo(-5, 15, -10, 12, -10, 6);
+      g.bezierCurveTo(-10, 3, -8, -2, 0, -13);
+      g.fill();
+      break;
+    }
+    case 'eye': {
+      g.beginPath();
+      g.moveTo(-13, 0); g.quadraticCurveTo(0, -12, 13, 0); g.quadraticCurveTo(0, 12, -13, 0);
+      g.closePath(); g.stroke();
+      g.beginPath(); g.arc(0, 0, 4.5, 0, Math.PI * 2); g.fill();
+      break;
+    }
+    case 'die': {
+      g.beginPath(); g.roundRect(-11, -11, 22, 22, 4); g.stroke();
+      for (const [px, py] of [[-5, -5], [0, 0], [5, 5]]) {
+        g.beginPath(); g.arc(px, py, 2.2, 0, Math.PI * 2); g.fill();
+      }
+      break;
+    }
+    case 'burst': {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        g.beginPath();
+        g.moveTo(Math.cos(a) * 4, Math.sin(a) * 4);
+        g.lineTo(Math.cos(a) * (i % 2 ? 10 : 14), Math.sin(a) * (i % 2 ? 10 : 14));
+        g.stroke();
+      }
+      g.beginPath(); g.arc(0, 0, 3, 0, Math.PI * 2); g.fill();
+      break;
+    }
+    case 'notes': {
+      // three falling shapes over a hit-line: the block-lanes in miniature
+      for (const [dx, dy] of [[-9, -11], [0, -3], [9, 5]]) {
+        g.beginPath(); g.roundRect(dx - 5, dy - 3, 10, 6, 2.5); g.fill();
+      }
+      g.beginPath(); g.moveTo(-13, 13); g.lineTo(13, 13); g.stroke();
+      break;
+    }
+    case 'meteor': {
+      g.beginPath(); g.arc(5, 5, 7, 0, Math.PI * 2); g.fill();
+      for (const [ox, oy] of [[-2, -13], [-9, -8], [-13, -1]]) {
+        g.beginPath(); g.moveTo(ox, oy); g.lineTo(2, 2); g.stroke();
+      }
+      break;
+    }
+    case 'moon': {
+      g.beginPath(); g.arc(0, 0, 11, Math.PI * 0.32, Math.PI * 1.68); g.stroke();
+      g.beginPath(); g.arc(5, 0, 8, Math.PI * 0.45, Math.PI * 1.55, true); g.stroke();
+      break;
+    }
+    case 'bell': {
+      g.beginPath();
+      g.moveTo(-9, 7);
+      g.quadraticCurveTo(-9, -9, 0, -11);
+      g.quadraticCurveTo(9, -9, 9, 7);
+      g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(-12, 8); g.lineTo(12, 8); g.stroke();
+      g.beginPath(); g.arc(0, 12, 2.5, 0, Math.PI * 2); g.fill();
+      break;
+    }
+    case 'drum': {
+      g.beginPath(); g.ellipse(0, -6, 12, 5, 0, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(-12, -6); g.lineTo(-12, 8); g.stroke();
+      g.beginPath(); g.moveTo(12, -6); g.lineTo(12, 8); g.stroke();
+      g.beginPath(); g.ellipse(0, 8, 12, 5, 0, 0, Math.PI); g.stroke();
+      break;
+    }
+    case 'chain': {
+      g.beginPath(); g.ellipse(-6, -3, 7, 5, 0.5, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.ellipse(6, 4, 7, 5, 0.5, 0, Math.PI * 2); g.stroke();
+      break;
+    }
+    case 'trapward': {
+      star(11, 5, 5); g.stroke();
+      g.beginPath(); g.moveTo(-13, 13); g.lineTo(13, -13); g.stroke();
+      break;
+    }
+    case 'orb': {
+      const grad = g.createRadialGradient(0, 0, 1, 0, 0, 13);
+      grad.addColorStop(0, ink);
+      grad.addColorStop(0.5, glow + '99');
+      grad.addColorStop(1, glow + '00');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(0, 0, 13, 0, Math.PI * 2); g.fill();
+      break;
+    }
+    case 'mutation': {
+      g.beginPath();
+      for (let i = 0; i <= 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const r = 11 + Math.sin(a * 3) * 3;
+        i === 0 ? g.moveTo(Math.cos(a) * r, Math.sin(a) * r) : g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.closePath(); g.stroke();
+      for (const [px, py] of [[-4, -3], [4, -2], [0, 5]]) {
+        g.beginPath(); g.arc(px, py, 2.4, 0, Math.PI * 2); g.fill();
+      }
+      break;
+    }
+    default: star(13, 5.5); g.fill();
+  }
+  g.shadowBlur = 0;
+}
+
+const ICON_CACHE = new Map();
+
+export function makeItemIconURL(item) {
+  if (ICON_CACHE.has(item.id)) return ICON_CACHE.get(item.id);
+  const [c, g] = canvas(64, 64);
+  const rar = RARITY[item.rarity] || RARITY.c;
+  const seed = [...item.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  g.translate(32, 32);
+  g.rotate(((seed % 7) - 3) * 0.02);
+
+  // the tile: a rune-hex rimmed in the rarity's light
+  const hex = r => {
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (i / 6) * Math.PI * 2;
+      i === 0 ? g.moveTo(Math.cos(a) * r, Math.sin(a) * r) : g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    g.closePath();
+  };
+  hex(29);
+  g.fillStyle = '#0d1026';
+  g.fill();
+  // faint inner facet lines, seeded per relic
+  g.save();
+  hex(27); g.clip();
+  g.strokeStyle = rar.color + '2c';
+  g.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const a = ((seed >> (i * 4)) % 12) * (Math.PI / 6);
+    g.beginPath();
+    g.moveTo(Math.cos(a) * 27, Math.sin(a) * 27);
+    g.lineTo(Math.cos(a + Math.PI) * 27, Math.sin(a + Math.PI) * 27);
+    g.stroke();
+  }
+  g.restore();
+  hex(28);
+  g.strokeStyle = rar.color;
+  g.lineWidth = 2.4;
+  g.shadowColor = rar.color; g.shadowBlur = 6;
+  g.stroke();
+  g.shadowBlur = 0;
+  // the home pool's color sits in the crown notch
+  g.strokeStyle = poolTint(item.pool);
+  g.lineWidth = 3;
+  g.beginPath(); g.arc(0, 0, 25, -Math.PI / 2 - 0.45, -Math.PI / 2 + 0.45); g.stroke();
+
+  // the deed itself
+  g.save();
+  paintGlyph(g, iconKindFor(item), item.rarity === 'm' ? '#c8ff9a' : '#e8ebff', rar.color);
+  g.restore();
+
+  // set pips along the hem
+  const tags = (item.tags || []).slice(0, 3);
+  tags.forEach((t, i) => {
+    const def = SETS[t];
+    if (!def) return;
+    g.fillStyle = def.color;
+    g.shadowColor = def.color; g.shadowBlur = 4;
+    g.beginPath(); g.arc((i - (tags.length - 1) / 2) * 9, 21, 2.6, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0;
+  });
+
+  const url = c.toDataURL();
+  ICON_CACHE.set(item.id, url);
+  return url;
 }
 
 export function makeTraderTexture() {

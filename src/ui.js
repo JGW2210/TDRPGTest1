@@ -3,6 +3,7 @@
 import { RARITY, SETS } from './items.js';
 import { FEATS } from './meta.js';
 import { BIOMES } from './names.js';
+import { makeItemIconURL, paintPlayerCanvas } from './textures.js';
 
 const $ = id => document.getElementById(id);
 
@@ -74,6 +75,8 @@ export const ui = {
     const canDew = run.consumables.dew > 0 && run.hp < s.maxHP;
     const canFeather = run.consumables.feather > 0;
     $('inv-stats').innerHTML =
+      // the wanderer as the hoard has re-inked them — same paint as the token
+      `<img id="inv-portrait" alt="" src="${paintPlayerCanvas(run.appearance).toDataURL()}" />` +
       `❤ HP <b>${run.hp} / ${s.maxHP}</b> &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
       `✧ crit <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
       `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>` +
@@ -103,8 +106,9 @@ export const ui = {
       ? run.items.map(it => {
         const rar = RARITY[it.rarity] || RARITY.c;
         return `<div class="inv-item" style="border-color:${rar.color}55">` +
+          `<img class="inv-icon" alt="" src="${makeItemIconURL(it)}" /><div>` +
           `<span class="pool" style="color:${rar.color}">${rar.name.toUpperCase()} · ${it.pool}</span><br>` +
-          `<b>${it.name}</b><br><span class="fx">${it.desc}</span></div>`;
+          `<b>${it.name}</b><br><span class="fx">${it.desc}</span></div></div>`;
       }).join('')
       : '<div class="inv-item" style="opacity:0.6">Your pack holds only lint and resolve. Seek the waiting pedestals.</div>';
   },
@@ -123,6 +127,7 @@ export const ui = {
       : item.pool === 'ASTRAL' ? 'A GIFT FROM THE DEEP SKY' : 'THE PEDESTAL TURNS ITS GIFT OVER';
     $('ic-kicker').innerHTML = `<span style="color:${rar.color}">✧ ${rar.name.toUpperCase()} ✧</span><br>${sourceLine}`;
     $('itemcard').style.borderColor = rar.color;
+    $('ic-icon').src = makeItemIconURL(item);
     $('ic-name').style.color = rar.color;
     $('ic-name').textContent = item.name;
     $('ic-desc').textContent = item.desc;

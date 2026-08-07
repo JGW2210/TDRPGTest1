@@ -161,6 +161,42 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    timing 216, player plate 152, menu 74vw with tighter wrap gap) —
    verified with 7 buttons (3 abilities + charge + dew). BUILD is 11.
 
+12. **Combat & items revamp round** (branch `claude/combat-items-revamp-yasfvv`;
+   direct user instructions, no poll): **three attack stances** — Swift Cut
+   (0.85×, slow wide bar, perfect grants POISE: next enemy phase's notes
+   fall 15% slower / windows +25%), Star Strike (the 3-bar chain,
+   unchanged), Meteor Edge (2.6× on perfect from a knife-thin fast bar;
+   perfect pierces guard-plates/wards outright and INTERRUPTS a charging
+   foe; good 1.2×, miss 0.3×) — plus **Brace** (skip attack: windows ×1.5,
+   notes 28% slower, perfect blocks riposte for 60% ATK); every strike bar
+   now has an **energy-coalescing fade-in** (gather mote sits where the
+   gold band will be, track fades in via `--gather`, marker launches after
+   `opts.gather` seconds — harder stances gather faster); **blocking is a
+   guitar-hero lane minigame** (`_blockRun` in battle.js, `#b-lanes` DOM):
+   shapes fall down 3 lanes, pressed with A/S/D (pointer = nearest-shape
+   fallback), graded perfect/good/miss by |Δt| from the hit-line; single
+   blows fall as 1–3 notes by tier, flurries as one note per swing,
+   crushes as one wide any-key shape with a dodge-thin window; **trap
+   shapes** (spiked, red) thread patterns at tier ≥2 — pressing one costs
+   0.5× the foe's ATK as unblockable chip; notes fade in over 30% of the
+   fall and the desert sand-veil swallows them near the line; **~40 new
+   relics** (200 ordinary total) keyed to the new systems via flags
+   noteSlow/riposte/trapWard/chainKeeper/heavyPlus/gatherCalm/dodgePlus/
+   poiseful/interruptGood/veilSight; **painted item icons**
+   (`makeItemIconURL` in textures.js: rarity-rimmed rune-hex, mechanic
+   glyph, set pips, pool crown-notch) shown in pack/shop/reveal-card, and
+   an **appearance portrait** (`paintPlayerCanvas`) atop the pack sheet;
+   **rebalance**: enemy curve now gently quadratic
+   (`CONFIG.battle.enemy` = hp 13+7t+0.35t², atk 2.4+1.45t+0.09t²) tuned
+   by Monte-Carlo (scratchpad `balance_sim*.mjs`) to a wanderer with ~70%
+   of prior areas' relics and 60% perfect / 30% good rates:
+   pack-win ≈100/96/89/90/80/73% over tiers 1-6 (sim excludes brace/
+   interrupt/consumables so real play sits a notch easier);
+   `expectedPower(tier)` refit to 14+8·tier (measured farm-power ≈22+7t —
+   at target farm every tier reads "even", underfarm reads dire);
+   `the_other_end` feat unlocks 6→8 so all 125 locked relics stay
+   reachable. BUILD is 12.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -200,7 +236,9 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `config.js` — tunables: mapRadius 45, vision 4/rim 6, hop timings,
   region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
   (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
-  minLandGap, maxBridge), battle timing windows/multipliers, camera
+  minLandGap, maxBridge), battle: `enemy` quadratic stat curve,
+  `timing` (incl. `gather`), `attacks` (swift/star/heavy stance tuning),
+  `lanes` (fall/lead/windows/spacing/trapWin/fadePortion), camera
   bounds. Seed via `?seed=`.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
@@ -250,13 +288,17 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   anchors** (4 vantage hexes) → lazy `getSites()` (+nebula/deity/whisper/
   wound_battle/islet branches).
   `revealSecret/revealBridge(i)/revealIslet(i)/revealWound()`.
-- `items.js` — 150 ordinary items + **8 MUTATION items** (rarity 'm',
+- `items.js` — **200 ordinary items** + **8 MUTATION items** (rarity 'm',
   pool MUTATION, `mutation: true`, excluded from `drawItem`; drawn only
   via `drawMutation(rng, ownedIds)`). `drawItem(rng, pool, ownedIds,
   {source, tier, unlocked})` — source weights + tier shifts; shop table
   is harsh (62/28/9/1). RARITY colors (+m sickly green). **SETS** (7
   tags, need 3-4) + **SYNERGIES** (7 set + 6 grand two-set). CONSUMABLES
-  (charge/dew/feather; dew heals 12, halved by `dewMuted`).
+  (charge/dew/feather; dew heals 12, halved by `dewMuted`). Round-12
+  combat-rhythm flags (~40 relics): noteSlow, riposte, trapWard,
+  chainKeeper, heavyPlus, gatherCalm, dodgePlus, poiseful, interruptGood,
+  veilSight — all read by battle.js; rarity totals 46c/65u/62r/19a,
+  still one astral per biome pool.
 - `run.js` — singleton `run`: items + **boons** → recomputed stats/flags/
   abilities/set-synergies, hp, shards, consumables, cleared/opened/
   revealed sets, `power` score, `shrineHeals`, **shrineBoons/vantageSeen
@@ -310,7 +352,13 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `textures.js` — canvas art: **player texture is appearance-driven**
   (`makePlayerTexture(run.appearance)`: tag marks → set crowns/halos/
   recolors → grand-synergy transformations → mutation overrides, full
-  eldritch form at 3+); `makeEnemyTexture({species, bossKind, role,...})`
+  eldritch form at 3+; raw canvas via `paintPlayerCanvas` for the pack
+  portrait); **item sigil-icons** — `makeItemIconURL(item)` (cached data
+  URLs): rarity-rimmed rune-hex tile, mechanic glyph chosen by
+  `iconKindFor` (mutation > ability kind > distinctive flag > heaviest
+  stat; ~25 hand-path glyphs), set pips, pool crown-notch (imports RARITY/
+  SETS from items.js + BIOMES from names.js — no cycles);
+  `makeEnemyTexture({species, bossKind, role,...})`
   delegates to monsters.js, parametric role bodies remain as fallback;
   trader/mystery sprites, nebula, rune rings, mist, glow, labels.
 - `monsters.js` — **the bestiary**: `paintSpecies(g, slug, o)` — 39
@@ -349,27 +397,42 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `battle.js` — BattleSystem: own scene (stage hex + rim + scenery
   confined **behind the enemy line** at z ≤ −4.6, player front-left at
   (−4.4, 2.9), 1-3 foes spread **across the camera's line of sight**),
-  DOM overlay (#battle: nameplates/menu/log/timing/floats). Player + live
-  foes **yaw-billboard to the camera** every frame. `team.species` (from
-  roamer packs) fixes the whole team to that species; otherwise rolled
-  from the biome roster. **Ranged vs melee**: mystics (`e.ranged`) cast
-  biome-accent bolts via `_projectile(from,to,color,{dur,size,arc})`
-  (promise-based, advanced in update()) with no lunge — heavy/crush blows
-  always close in; player abilities fire typed bolts/bursts (burn orange,
-  stun white, smite big gold, gamble purple, leech green both ways,
-  heal/frenzy self-bursts), colored `_burst(pos,color)` impacts (perfect
-  block ice-blue, landed hit red-orange). Flow: intro → playerMenu → act
-  (timing promise) → enemyPhase (burn/stun/charge/telegraph, block
-  timing) → repeat. Enemy stats: hp 13+8t, atk 2.5+1.8t, role mods; boss
-  ×2.6 hp ×1.2 atk, enrages <50%. Handles all item flags/ability kinds
-  (aoe, burn_all, stun, heal_self, weaken_all, smite, gamble, leech,
-  frenzy). **Role specials**: swift flurries (2-3 bars), mystic
-  hex/siphon/mend, guard ward-ally/self-shell, brutes+bosses charge into
-  crushes (dodge-only bars) at tier ≥2; **deity rotates crush/siphon/
-  flurry** (hp ×2.6×1.6, atk ×1.2×1.15). Biome afflictions on hit:
-  volcano burns, tundra chills (marker speeds up), sea leeches, desert
-  veils bands, WOUND burns+chills. Mutation flags honored: abilityToll,
-  dewMuted, drylandAche, heavyGait (in main), noFirstDodge (in run).
+  DOM overlay (#battle: nameplates/menu/log/timing/lanes/floats). Player +
+  live foes **yaw-billboard to the camera** every frame. `team.species`
+  (from roamer packs) fixes the whole team to that species; otherwise
+  rolled from the biome roster. **Three stances** via
+  `_playerAttack(kind)`: swift (poise on perfect; `poiseful` widens),
+  star (3-bar chain; `chainKeeper` saves one slip), heavy (Meteor Edge —
+  perfect = 2.6+`heavyPlus`, pierces guard/ward, interrupts charging foes;
+  `interruptGood` extends to goods) + **`_brace()`** (windows ×1.5, notes
+  slower, perfect-block riposte 60% ATK; `riposte` flag adds flat).
+  **Strike bars gather first**: `_startTiming` opens in `timingPhase
+  'gather'` (orb over the future band, track fades via `--gather`,
+  `opts.gather` scaled by `gatherCalm`), then 'live'. **Blocks are the
+  lane minigame**: `_blockRun({swings,tier,crush,speed,veil})` builds
+  notes (1-3/swing by tier; flurries 1/swing; crush = one wide any-key
+  shape) + traps (tier ≥2, chance 0.18+0.09t), returns per-swing grades +
+  trapsHit; input via A/S/D keydown (`_lanePress`) or pointer
+  (`_lanePointer` nearest-shape); `noteSlow`/brace/poise slow the fall,
+  `blockBonus`/hex/eclipse scale windows, `dodgePlus` widens crush leaps,
+  `trapWard` forgives springs, sprung traps chip 0.5× foe ATK.
+  **Headless-test knobs**: `battle.strikeAutoplay`/`laneAutoplay =
+  {p,g}` pre-roll grades and press at the matching moment.
+  **Ranged vs melee**: mystics (`e.ranged`) cast biome-accent bolts via
+  `_projectile(from,to,color,{dur,size,arc})` with no lunge — heavy/crush
+  blows always close in; player abilities fire typed bolts/bursts,
+  colored `_burst(pos,color)` impacts. Flow: intro → playerMenu → act
+  (timing promise) → enemyPhase (burn/stun/charge/telegraph, lane run) →
+  repeat. Enemy stats from `CONFIG.battle.enemy` (13+7t+0.35t² hp,
+  2.4+1.45t+0.09t² atk), role mods; boss ×2.6 hp ×1.2 atk, enrages <50%.
+  Handles all item flags/ability kinds. **Role specials**: swift flurries
+  (2-3 notes), mystic hex/siphon/mend, guard ward-ally/self-shell,
+  brutes+bosses charge into crushes at tier ≥2; **deity rotates crush/
+  siphon/flurry** (hp ×2.6×1.6, atk ×1.2×1.15). Biome afflictions on hit:
+  volcano burns, tundra chills (notes fall faster), sea leeches, desert
+  sand-veil swallows notes/zones near the line (`veilSight` negates),
+  WOUND burns+chills. Mutation flags honored: abilityToll, dewMuted,
+  drylandAche, heavyGait (in main), noFirstDodge (in run).
   Species/bossKind passed to the texture painter. Rewards → shards/drops
   (dew 5%); revive (Lunar Grace); audio hooks.
 - `localview.js` — diorama builder: platform, site markers by type
@@ -378,11 +441,12 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `ui.js` — DOM singleton `ui`: HUD (location/region+threat/stats/
   consumables — `setRegion(region, threat)` renders a colored
   calm/even/dire/deadly skull with the scaled tier), tooltip, site modal
-  (+`modalOutcome`), item card (rarity colors), inventory (+consumable
-  Use buttons via `inventoryHandlers`), Echoes panel, death screen (takes
-  meta), toasts, fades. `init` renders the Courts into the menu
-  (`#menu-courts`) + `gm-seed`/`gm-buildnum` — the old `#legend` box is
-  gone.
+  (+`modalOutcome`), item card (rarity colors + `#ic-icon` sigil),
+  inventory (`#inv-portrait` appearance portrait, per-item `.inv-icon`
+  sigils, consumable Use buttons via `inventoryHandlers`), Echoes panel,
+  death screen (takes meta), toasts, fades. `init` renders the Courts
+  into the menu (`#menu-courts`) + `gm-seed`/`gm-buildnum` — the old
+  `#legend` box is gone. Shop rows get `.ware-icon` sigils (main.js).
 - `main.js` — wiring: mode machine ('world'|'transition'|'local'|'battle'|
   'dead'), activeScene render switch, travel (gate-blocked A*, fast hops
   >7 or fastTravel flag; **each hop steps the roamers** — engagement
@@ -447,15 +511,21 @@ act(siteId,label), shopOffers(q,r)`.
   sink prices, and role-special chances are all fresh and untested by
   human play — expect a tuning pass. Boss ×2.6/×1.2 was softened once
   already.
-- Round-6 combat numbers (comboMult 0.5, missMult 0.5, blockPerfect 0.15,
-  crush ×1.2, band half-widths, flurry chances) are theory-tuned only —
-  human playtesting will likely want the first-bar speeds eased or the
-  crush telegraph lengthened.
+- Round-12 combat feel is untested by humans: lane fall speed (1.25s),
+  press windows (±0.07/±0.17s), trap density, gather durations, stance
+  band scales, and the Monte-Carlo-tuned enemy curve all follow the
+  sim (scratchpad `balance_sim_lib.mjs` — rebuild from round-12 history
+  if needed), which deliberately excludes brace/interrupt/consumable
+  play. If real players find even-tier fights too hot, ease `atkT`
+  first; if too cold, raise `hpQ`/`atkQ` before touching linear terms.
+  Headless caveat: at ~2 fps the marker can step clear over the Meteor
+  band in one frame — heavy perfects need direct `_resolveTiming`
+  injection in tests (60 fps humans are unaffected).
 - Save VERSION is now 4 (round 8: archipelago worldgen + revealedIslets) —
   older saves are discarded on load. Worldgen changed again for identical
   seeds (quadrant climates, erosion, water web, islets), by design.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 11. Without the bump, live players keep stale
+  release** — currently 12. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
