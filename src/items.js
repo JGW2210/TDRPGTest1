@@ -7,7 +7,8 @@
 // flag keys are read by the battle engine / world systems. Combat-rhythm
 // flags (round 12): noteSlow (block-shapes fall slower), riposte (perfect
 // blocks strike back), trapWard (traps forgiven per battle), chainKeeper
-// (chain-saves per battle), heavyPlus (Meteor Edge perfect bonus),
+// (chain-saves per battle), heavyPlus (bonus spread across the Meteor Edge
+// chain), openingPlus (Swift Cut openings buff the next attack harder),
 // gatherCalm (energy coalesces longer — easier reads), dodgePlus (wider
 // crush leap-window), poiseful (good Swift Cuts grant poise), interruptGood
 // (good Meteors interrupt), veilSight (the sand-veil cannot hide timing).
@@ -72,7 +73,7 @@ export const ITEMS = [
     flavor: 'The hive keeps 4/4. The honey keeps the metronome.' }),
   I('harvest_bell', 'MEADOW', 'u', 'Harvest Bell', {
     stats: { atk: 1 }, tags: ['sun'], flags: { heavyPlus: 0.3 },
-    desc: '+1 ATK. A perfect Meteor Edge lands +0.3× harder.',
+    desc: '+1 ATK. A fully perfect Meteor Edge chain lands +0.3× harder.',
     flavor: 'Rung once at cutting time. Everything that stands, falls.' }),
 
   // ════════════════════════════════════════════════════════ FOREST (14) ═══
@@ -127,8 +128,8 @@ export const ITEMS = [
     desc: '+5% dodge. The first trap-shape you spring each battle fizzles.',
     flavor: 'It grew back after every deadfall. It knows the click by heart.' }),
   I('woodpecker_tempo', 'FOREST', 'u', 'Woodpecker’s Tempo', {
-    stats: { spd: 1 }, tags: ['bloom'], flags: { poiseful: true },
-    desc: '+1 SPD. A good Swift Cut settles your stance as surely as a perfect (poise).',
+    stats: { spd: 1 }, tags: ['bloom'], flags: { poiseful: true, openingPlus: 0.15 },
+    desc: '+1 SPD. A good Swift Cut counts as perfect (poise + opening), and your openings hit +15% harder.',
     flavor: 'Four beats to the bark, none of them wasted.' }),
   I('deadfall_lesson', 'FOREST', 'r', 'The Deadfall’s Lesson', {
     stats: {}, tags: ['bloom'], flags: { trapWard: 1, riposte: 3 },
@@ -179,7 +180,7 @@ export const ITEMS = [
     flavor: 'Shed mid-shriek, caught mid-fall, worn mid-legend.' }),
   I('ram_gauntlet', 'MOUNTAIN', 'u', 'Ram-Horn Gauntlet', {
     stats: { atk: 1, spd: -1 }, tags: [], flags: { heavyPlus: 0.4 },
-    desc: '+1 ATK, −1 SPD. A perfect Meteor Edge lands +0.4× harder.',
+    desc: '+1 ATK, −1 SPD. A fully perfect Meteor Edge chain lands +0.4× harder.',
     flavor: 'The ram apologizes to nothing below the treeline.' }),
   I('ledge_chalk', 'MOUNTAIN', 'c', 'Ledge-Walker’s Chalk', {
     core: true, stats: { spd: 1 }, tags: [], flags: { dodgePlus: 1 },
@@ -243,7 +244,7 @@ export const ITEMS = [
     flavor: 'The forge breathes in. The steel remembers the beat.' }),
   I('brand_iron', 'VOLCANO', 'u', 'Smith’s Branding Iron', {
     stats: { atk: 1 }, tags: ['ember'], flags: { heavyPlus: 0.35 },
-    desc: '+1 ATK. A perfect Meteor Edge lands +0.35× harder.',
+    desc: '+1 ATK. A fully perfect Meteor Edge chain lands +0.35× harder.',
     flavor: 'It leaves the same mark on iron, oak and reputations.' }),
   I('slag_counter', 'VOLCANO', 'r', 'Counterweight of Slag', {
     stats: { spd: -1 }, tags: ['ember'], flags: { riposte: 4 },
@@ -310,7 +311,7 @@ export const ITEMS = [
     flavor: 'The dunes march to it, a grain at a time.' }),
   I('viper_patience', 'DESERT', 'r', 'The Viper’s Patience', {
     stats: { spd: -1 }, tags: [], flags: { heavyPlus: 0.5 },
-    desc: '−1 SPD. A perfect Meteor Edge lands +0.5× harder.',
+    desc: '−1 SPD. A fully perfect Meteor Edge chain lands +0.5× harder.',
     flavor: 'Hours of stillness, priced into one motion.' }),
 
   // ════════════════════════════════════════════════════════ TUNDRA (14) ═══
@@ -360,8 +361,8 @@ export const ITEMS = [
     desc: 'Block-shapes fall 10% slower.',
     flavor: 'Winter’s glockenspiel. Play gently or wear it.' }),
   I('long_white_stance', 'TUNDRA', 'r', 'Stance of the Long White', {
-    stats: { blockBonus: 1 }, tags: ['moon'], flags: { poiseful: true },
-    desc: 'Block windows 30% wider; a good Swift Cut grants poise.',
+    stats: { blockBonus: 1 }, tags: ['moon'], flags: { poiseful: true, openingPlus: 0.15 },
+    desc: 'Block windows 30% wider; a good Swift Cut counts as perfect, and your openings hit +15% harder.',
     flavor: 'The stillness between snowfalls, taught as footwork.' }),
   I('sleet_visor', 'TUNDRA', 'c', 'Sleet Visor', {
     core: true, stats: { maxHP: 3 }, tags: ['moon'], flags: { dodgePlus: 1 },
@@ -612,8 +613,8 @@ export const ITEMS = [
     desc: '+2 ATK, +4 max HP, −4% dodge.',
     flavor: 'Bold, punishing, notes of regret and juniper.' }),
   I('clockwork_tick', 'ANY', 'r', 'Clockwork Cricket', {
-    stats: { timingBonus: 1, spd: 1 }, tags: [],
-    desc: 'Timing multipliers +0.15, +1 SPD. It chirps exactly on the beat.',
+    stats: { timingBonus: 1, spd: 1 }, tags: [], flags: { openingPlus: 0.1 },
+    desc: 'Timing multipliers +0.15, +1 SPD, and your Swift Cut openings hit +10% harder.',
     flavor: 'Wind it and the whole world keeps better time.' }),
   I('gamblers_iou', 'ANY', 'u', 'A Gambler’s IOU', {
     stats: { luck: 14, shardGain: -20 }, tags: [],
@@ -628,8 +629,8 @@ export const ITEMS = [
     desc: '+4% crit, +8% shard finds.',
     flavor: 'Hears where the shards fell and what they said on the way down.' }),
   I('practice_sword', 'ANY', 'u', 'Practice Sword (Graduated)', {
-    stats: { atk: 1, timingBonus: 1 }, tags: [],
-    desc: '+1 ATK, timing multipliers +0.15.',
+    stats: { atk: 1, timingBonus: 1 }, tags: [], flags: { openingPlus: 0.1 },
+    desc: '+1 ATK, timing multipliers +0.15, and your Swift Cut openings hit +10% harder.',
     flavor: 'Wood that studied. Wood that passed.' }),
   I('shoulder_gargoyle', 'ANY', 'u', 'Pocket Gargoyle', {
     stats: { maxHP: 5 }, tags: [], flags: { thorns: 2 },
@@ -686,7 +687,7 @@ export const ITEMS = [
     flavor: 'They have caught worse than knives. They have caught opinions.' }),
   I('held_warhorn', 'ANY', 'r', 'Warhorn of the Held Breath', {
     stats: {}, tags: [], flags: { interruptGood: true, heavyPlus: 0.25 },
-    desc: 'A good Meteor Edge interrupts a gathering blow; perfect Meteors land +0.25× harder.',
+    desc: 'A good Meteor Edge interrupts a gathering blow; a fully perfect Meteor chain lands +0.25× harder.',
     flavor: 'Blown at the top of the charge, or never.' }),
 
   // ═════════════════════════════════════════════════════════ BOSS (14) ═══
@@ -746,7 +747,7 @@ export const ITEMS = [
     flavor: 'A thousand years at one gate teaches you every rhythm that can approach it.' }),
   I('gatecrusher', 'BOSS', 'r', 'The Gatecrusher’s Memory', {
     stats: { atk: 1, spd: -1 }, tags: [], flags: { heavyPlus: 0.6 },
-    desc: '+1 ATK, −1 SPD. A perfect Meteor Edge lands +0.6× harder.',
+    desc: '+1 ATK, −1 SPD. A fully perfect Meteor Edge chain lands +0.6× harder.',
     flavor: 'Somewhere, a door is still falling.' }),
 
   // ═══════════════════════════════════════════════════════ ASTRAL (17) ═══
@@ -817,7 +818,7 @@ export const ITEMS = [
     flavor: 'Between one tick and the next, room was made. You keep what fits.' }),
   I('comet_hammer', 'ASTRAL', 'a', 'Hammerfall of the Comet', {
     stats: { atk: 2 }, tags: ['sun'], flags: { heavyPlus: 0.8 },
-    desc: '+2 ATK. A perfect Meteor Edge lands +0.8× harder.',
+    desc: '+2 ATK. A fully perfect Meteor Edge chain lands +0.8× harder.',
     flavor: 'Aim like a millennium. Land like the end of one.' }),
 
   // ═════════════════════════════════════════════════════ MUTATIONS (8) ═══

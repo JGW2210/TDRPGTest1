@@ -197,6 +197,29 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    `the_other_end` feat unlocks 6→8 so all 125 locked relics stay
    reachable. BUILD is 12.
 
+13. **Stance rebalance round** (same branch; direct user feedback after
+   play — Meteor felt dominant, and "I want a real challenge"):
+   **Meteor Edge is a 3-bar chain** (`A.heavy.hits` 3): each perfect
+   lands 1.5× (+`heavyPlus`/3 per bar, full chain = old desc value),
+   pierces + interrupts per bar; good keeps the chain at 0.6×; a miss
+   grazes at 0.25× and SHATTERS it — skill ceiling 4.5×, EV at 60% skill
+   ≈ Star Strike (star keeps proc-frequency/echo/thimble/chainKeeper
+   advantages); **Swift Cut is a setup move**: a perfect (or good with
+   `poiseful`) marks an **OPENING** — next attack/ability action ×(1 +
+   0.35 + `openingPlus`), spent on use, shown as a status chip (new
+   `openingPlus` flag on woodpecker_tempo/long_white_stance/
+   clockwork_tick/practice_sword); **Rattled debuff**: a landed,
+   non-perfect heavy/crush from a tier ≥3 foe or any boss sets
+   `playerRattle` (`CONFIG.battle.rattle`: bands ×0.75, marker ×1.15,
+   2 turns) — strike bars only, lanes untouched; swift's wide band
+   stays playable, which is the intended counterplay; **global
+   speed-up** ("real challenge"): timing.travel 0.85→0.72, gathers
+   trimmed (0.45/0.5/0.45/0.3), lanes.fall 1.25→1.05, lead 0.38,
+   spacing 0.36, goodWin 0.17→0.15. Sim re-run with the new stance
+   policy (meteor default, swift-when-rattled, openings, rattle from
+   deep crushes): pack wins 100/94/88/91/78/73%, hp-lost 24→65% —
+   same band as round 12, so the enemy curve stands. BUILD is 13.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -237,9 +260,10 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
   (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
   minLandGap, maxBridge), battle: `enemy` quadratic stat curve,
-  `timing` (incl. `gather`), `attacks` (swift/star/heavy stance tuning),
-  `lanes` (fall/lead/windows/spacing/trapWin/fadePortion), camera
-  bounds. Seed via `?seed=`.
+  `timing` (incl. `gather`; travel 0.72 — fast), `attacks` (swift incl.
+  `opening` / star / heavy incl. `hits`/`ramp`/`shrinkRamp`), `lanes`
+  (fall/lead/windows/spacing/trapWin/fadePortion), `rattle`
+  (shrink/speed/turns), camera bounds. Seed via `?seed=`.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
@@ -401,11 +425,17 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   live foes **yaw-billboard to the camera** every frame. `team.species`
   (from roamer packs) fixes the whole team to that species; otherwise
   rolled from the biome roster. **Three stances** via
-  `_playerAttack(kind)`: swift (poise on perfect; `poiseful` widens),
-  star (3-bar chain; `chainKeeper` saves one slip), heavy (Meteor Edge —
-  perfect = 2.6+`heavyPlus`, pierces guard/ward, interrupts charging foes;
-  `interruptGood` extends to goods) + **`_brace()`** (windows ×1.5, notes
-  slower, perfect-block riposte 60% ATK; `riposte` flag adds flat).
+  `_playerAttack(kind)`: swift (poise + OPENING on perfect — next
+  attack/ability ×(1+0.35+`openingPlus`), spent via `_openingNow`;
+  `poiseful` lets goods count), star (3-bar chain; `chainKeeper` saves
+  one slip), heavy (Meteor Edge — 3-bar chain, perfect = 1.5 +
+  `heavyPlus`/3 per bar, pierces guard/ward + interrupts charging foes
+  per bar, good 0.6 keeps the chain, miss 0.25 shatters it;
+  `interruptGood` extends interrupts to goods) + **`_brace()`** (windows
+  ×1.5, notes slower, perfect-block riposte 60% ATK; `riposte` flag adds
+  flat). **Rattled** (`playerRattle`, set by a landed non-perfect
+  heavy/crush from tier ≥3 foes or bosses): strike bands ×0.75 + marker
+  ×1.15 for 2 turns — lanes unaffected, swift stays the steady option.
   **Strike bars gather first**: `_startTiming` opens in `timingPhase
   'gather'` (orb over the future band, track fades via `--gather`,
   `opts.gather` scaled by `gatherCalm`), then 'live'. **Blocks are the
@@ -525,7 +555,7 @@ act(siteId,label), shopOffers(q,r)`.
   older saves are discarded on load. Worldgen changed again for identical
   seeds (quadrant climates, erosion, water web, islets), by design.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 12. Without the bump, live players keep stale
+  release** — currently 13. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,

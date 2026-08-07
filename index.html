@@ -8,7 +8,7 @@
     // Cache-buster: bump BUILD each release and every module re-fetches
     // fresh — the import map below rewrites all internal imports to
     // versioned URLs, so stale browser caches can never mix old and new.
-    window.BUILD = '12';
+    window.BUILD = '13';
     (() => {
       const mods = [
         'audio', 'battle', 'cameraRig', 'config', 'hex', 'items', 'localview',
@@ -23,7 +23,7 @@
       document.currentScript.after(im);
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
 </head>
 <body>
   <div id="app"></div>
