@@ -106,52 +106,68 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
-- `names.js` — all lore tables: BIOMES (14 incl. ROAD/BRIDGE/LUNAR/CRIMSON/
-  VERDANT/SECRET), KINGDOMS, SATELLITES (luna/rubidus/viridian + bosses),
-  CELESTIALS (sky landmarks), FOES rosters (roles: brute/swift/mystic/
-  guard), wardenName, regionName, site/flavor generators.
+- `names.js` — all lore tables: BIOMES (15 incl. ROAD/BRIDGE/LUNAR/CRIMSON/
+  VERDANT/SECRET/**WOUND**), KINGDOMS, SATELLITES (luna/rubidus/viridian +
+  bosses), CELESTIALS (sky landmarks), FOES rosters (roles: brute/swift/
+  mystic/guard; +WOUND roster), `speciesSlug(name)` for art lookup,
+  wardenName, regionName, site/flavor generators, **BARGAINS** (5 sacrifice
+  events), **SHRINE_BOONS** (5 commune offers), **SKY_VOICES** (4 celestial
+  dialogues + gifts), **NEBULA_NAMES/nebulaSites**, **DEITY/WOUND_WHISPERS**.
+  `makeSide` rolls bargains at 0.62-0.8.
 - `worldgen.js` — deterministic passes: terrain fields → jittered-voronoi
-  region pockets (border band → void rifts, `barrierBest` per pair) →
-  biomes → satellites (axial coords beyond rim) → star-bridges (hexLine
-  from best shore) → causeway selection (**MST + 3 extras, start-region
-  penalized**) → gate tiles with tier/warden → connectivity BFS →
-  kingdoms/towns/dungeons/shrines → sealed secrets (void tiles, same-region
-  neighbors only, crackHint on neighbors) → **regional site budgets**
-  (pass 12: ~5-9 sites per region — 1-2 pedestals, 1 trader, 1-2 caches,
-  2-4 events — flagged `t.hasSite`/`t.siteKind`; satellites get 3;
-  everything else is empty wilderness, ~73 budget tiles map-wide) →
-  **roamer spawns** (pass 13: `world.roamerSpawns`, 2-4 packs/region ≥6
-  from start) → lazy `getSites()` (landmark tiles themed sets; budget
-  tiles resolve by `siteKind`; shrine site carries 'Offer Star-Shards';
-  ROAD/BRIDGE and plain wilderness are empty). `revealSecret(tile)`
-  mutates a void tile into land.
-- `items.js` — **exactly 150 items** (10/biome ×8, 43 ANY, 12 BOSS,
-  15 ASTRAL; **42c/48u/43r/17a** after the smoothing retag — every biome
-  pool now holds exactly one astral; 55 `core`). `drawItem(rng, pool,
-  ownedIds, {source, tier, unlocked})` — source weights (pedestal/boss/
-  secret/shop/astral) + tier shifts toward rare; falls back
-  rarity→pool→any. RARITY colors. SYNERGIES (6, tag-pair). CONSUMABLES
-  (charge/dew/feather).
-- `run.js` — singleton `run`: items → recomputed stats/flags/abilities/
-  synergies, hp, shards, consumables, cleared/opened/revealed sets,
-  `power` score, `shrineHeals` (escalating paid-heal counter). Synergy
-  stat effects applied in `_recompute`.
+  region pockets (border band → void rifts, `barrierBest` per pair —
+  **recorded even on natural-void tiles**) → biomes → **pass 3.5 rivers**
+  (2-4 winding SEA rivers out of the big lakes, region-confined; nebula
+  landmarks inside the 2 largest lakes) → satellites (**radius-5 ragged
+  discs**, `keepComponent` prunes fragments, satboss tier 5) → **pass 4.6
+  the Wound** (radius-4 hidden region 200, deity + whisper landmarks) →
+  causeway selection (**validity checked BEFORE union-find**; dist ≤12
+  then relaxed ≤26 for still-cut components; zero-width rifts stand the
+  warden on a boundary land tile; `carvedInfo` stored per gate) →
+  **pass 6.5 rift seal** (rule 1 land-land, rule 2 road-side-entry;
+  causeway-mouth anchors protected with spendable counts) → **pass 6.75
+  re-anchor repair** (BFS from each mouth to its region's largest
+  fragment, never stepping beside foreign land) → connectivity BFS
+  (regions ≥100 exempt) → **pass 7.5 hidden star-bridges** (carved
+  post-seal from surviving shores; `t.hiddenBridge`, seam = first tile,
+  `shore.seamHint`; wound bridge likewise via `woundHidden`) →
+  kingdoms/towns/dungeons/shrines → sealed secrets → site budgets
+  (satellites get 7 kinds incl. trader; wound gets pedestal/cache/2
+  wound_battles/side) → roamer spawns (satellites tier 5 ×3; **water
+  packs** on post-seal SEA components, tier = region+1) → **pass 14 sky
+  anchors** (4 vantage hexes) → lazy `getSites()` (+nebula/deity/whisper/
+  wound_battle branches). `revealSecret/revealBridge(i)/revealWound()`.
+- `items.js` — 150 ordinary items + **8 MUTATION items** (rarity 'm',
+  pool MUTATION, `mutation: true`, excluded from `drawItem`; drawn only
+  via `drawMutation(rng, ownedIds)`). `drawItem(rng, pool, ownedIds,
+  {source, tier, unlocked})` — source weights + tier shifts; shop table
+  is harsh (62/28/9/1). RARITY colors (+m sickly green). **SETS** (7
+  tags, need 3-4) + **SYNERGIES** (7 set + 6 grand two-set). CONSUMABLES
+  (charge/dew/feather; dew heals 12, halved by `dewMuted`).
+- `run.js` — singleton `run`: items + **boons** → recomputed stats/flags/
+  abilities/set-synergies, hp, shards, consumables, cleared/opened/
+  revealed sets, `power` score, `shrineHeals`, **shrineBoons/vantageSeen
+  Sets, woundOpen flag, mutationCount, addBoon/removeItem**, `appearance`
+  + `appearanceSig` (tags/sets/grand/mutations drive the texture
+  painter). `noFirstDodge` strips firstStrikeDodge in recompute.
 - `roamers.js` — `RoamerSystem`: packs from `world.roamerSpawns`; one
   `step(playerTile)` per player hop — aggro ≤3 hexes steps toward you,
-  else 55% random drift, region-locked, blocked by landmarks/gates/
-  BRIDGE. Contact (dist ≤1) returns the pack → battle. `kill` → 34-hop
-  respawn ≥8 from player; `calm` after flee (loses scent 4 hops).
-  `serialize/restore` for saves. Hooks `onMove/onRespawn` drive world3d
-  sprites.
-- `meta.js` — singleton `meta`, localStorage `vaeldrift_meta`: 20 FEATS
-  with `check(m)` predicates; `bump(fn)` mutates stats, returns newly
-  completed feats + items unlocked (in authored order via `_unlockNext`).
-  `unlockedIds` = core + earned.
-- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v2**:
-  saveRun/loadRun/clearSave/applySave (both now take the RoamerSystem).
-  Saved: items(ids), consumables, shards, hp, shrineHeals, roamer state,
-  cleared/gates/secrets/visited, explored fog, player pos. v1 saves are
-  discarded. Death clears.
+  else 55% random drift, region-locked, blocked by landmarks/gates.
+  **Water packs (`r.water`) step only on SEA tiles; land packs avoid
+  BRIDGE.** Contact (dist ≤1) returns the pack → battle. `kill` → 34-hop
+  respawn ≥8 from player; `calm` after flee. `serialize/restore`.
+  Hooks `onMove/onRespawn` drive world3d sprites.
+- `meta.js` — singleton `meta`, localStorage `vaeldrift_meta`: **26 FEATS**
+  (+seamfinder/changed/thrice_changed/the_other_end) with `check(m)`
+  predicates; `bump(fn)` mutates stats, returns newly completed feats +
+  items unlocked. `unlockedIds` = core + earned.
+- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v3**:
+  saveRun/loadRun/clearSave/applySave. Saved: items(ids), consumables,
+  shards, hp, shrineHeals, **boons, shrineBoons, vantageSeen,
+  revealedBridges** (applySave replays `world.revealBridge` +
+  `worldView.revealHiddenTiles`), roamer state, cleared/gates/secrets/
+  visited, explored fog, player pos. The Wound re-opens on load from
+  `mutationCount >= 3` (main.js), not a save field. Older saves discarded.
 - `audio.js` — singleton `audio`. 5 drone voices (2 saws + triangle →
   lowpass → gain → stereo panner w/ slow drift), MUSIC table per biome:
   root midi + chord trio a/b/c (cycle a→b→a→c every ~14s, 5s morph; c is
@@ -171,24 +187,28 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   Battle: interval-driven kick patterns (taiko for boss) on percBus.
   ~20 sfx methods. Init on first gesture; `♪` toggle persisted
   (`vaeldrift_audio`).
-- `textures.js` — canvas art: player/trader/enemy(parametric)/mystery
-  sprites, nebula, rune rings, mist, glow, labels (`userData.w/h`).
+- `textures.js` — canvas art: **player texture is appearance-driven**
+  (`makePlayerTexture(run.appearance)`: tag marks → set crowns/halos/
+  recolors → grand-synergy transformations → mutation overrides, full
+  eldritch form at 3+); `makeEnemyTexture({species, bossKind, role,...})`
+  delegates to monsters.js, parametric role bodies remain as fallback;
+  trader/mystery sprites, nebula, rune rings, mist, glow, labels.
+- `monsters.js` — **the bestiary**: `paintSpecies(g, slug, o)` — 39
+  hand-authored species painters keyed by `speciesSlug(name)` — and
+  `paintBoss(g, kind, o)` for warden/keeper/guardian/champion/
+  sat_luna/sat_rubidus/sat_viridian/deity portraits. Shared helper kit
+  (blobPath/glowEye/teeth/wing/legs/runeOrbit).
 - `world3d.js` — WorldView: `layer` group (breathes) holds instanced
-  tiles/rings/mist-caps/decos/glints + landmark groups (capital, town,
-  dungeon, shrine, **gate** w/ tier barrier, satboss) + traders +
-  highlight. `renderTiles = land + secrets` (secrets hidden until
-  revealed → `revealSecretTile` pops them in). Fog states 0-3 recolor
-  instances; glints mark unresolved-site hexes; crack sprites on
-  secret-adjacent tiles (state 3, or state ≥1 with `crackSense` flag);
-  `visionPlus` flag widens fog radii (reads `run.flags`). Glints come
-  from `t.hasSite` (budget tiles) + secrets. `attachRoamers(sys)` builds
-  fog-aware pack sprites (enemy texture tinted by biome, red-eyed at
-  tier ≥ 3), hop-animates on `onMove`, snaps on `onRespawn`;
-  `roamerOnTile` feeds the tooltip. Base group:
-  nebula disc, 4 rune rings, dust, starfield, sun. `_buildCelestials`:
-  per-satellite planet bodies (moon/ringed rust/comet-tail), 4
-  constellations + 2 shattermoons over void spots, ringed giant at
-  angle −1.0 beyond rim, orbiting comet w/ 12-sprite tail. TIER_COLORS
+  tiles/rings/mist-caps/decos/glints + landmark groups + traders +
+  highlight. `renderTiles = land + secrets + hidden bridge/wound tiles`
+  (all hidden until revealed; `revealSecretTile` / staggered
+  `revealHiddenTiles(arr)` pop them in). Fog states 0-3 recolor
+  instances; crack sprites (gold) + **seam/vantage sprites** (blue/white,
+  state ≥2); `visionPlus` widens fog radii. Roamer sprites now use
+  species art (`_roamerTexture` picks from the biome roster).
+  `_buildCelestials`: satellite planet bodies, constellations,
+  shattermoons, ringed giant, comet, **+ Third Sister moon, Ferry
+  Lantern, Door Ajar at `world.skyAnchors` positions**. TIER_COLORS
   exported.
 - `player.js` — paper token: yaw-billboard + parallax lean, hop tween
   (hopTime overridable), squash/stretch, burst pool, `layerY` rides the
@@ -202,12 +222,15 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   timing) → repeat. Enemy stats: hp 13+8t, atk 2.5+1.8t, role mods; boss
   ×2.6 hp ×1.2 atk, enrages <50%. Handles all item flags/ability kinds
   (aoe, burn_all, stun, heal_self, weaken_all, smite, gamble, leech,
-  frenzy). **Role specials** (tier ≥ 2): swift 35% second strike at ×0.5,
-  guard rune-walls weakest ally (next hit ×0.55, chip `◈warded`), mystic
-  50/50 timing hex (`hexTurns` = 2, perfect band ×0.55, player chip
-  'hexed') vs starlight chip damage; non-boss brutes enrage <40% HP
-  (+25% ATK). Rewards → shards/drops; revive (Lunar Grace); audio hooks.
-  `body.in-battle` hides map UI chrome.
+  frenzy). **Role specials**: swift flurries (2-3 bars), mystic
+  hex/siphon/mend, guard ward-ally/self-shell, brutes+bosses charge into
+  crushes (dodge-only bars) at tier ≥2; **deity rotates crush/siphon/
+  flurry** (hp ×2.6×1.6, atk ×1.2×1.15). Biome afflictions on hit:
+  volcano burns, tundra chills (marker speeds up), sea leeches, desert
+  veils bands, WOUND burns+chills. Mutation flags honored: abilityToll,
+  dewMuted, drylandAche, heavyGait (in main), noFirstDodge (in run).
+  Species/bossKind passed to the texture painter. Rewards → shards/drops
+  (dew 5%); revive (Lunar Grace); audio hooks.
 - `localview.js` — diorama builder: platform, site markers by type
   (battle/trader/pedestal/cache/ruins/etc.), cleared sites dimmed,
   billboards face camera, pick via invisible hitboxes.
@@ -237,9 +260,12 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 
 `mode, playerTile, isMoving, run, world, battle, view, meta, audio,
 roamers, powerTier(), announceFeats, pickAt(x,y), travel(q,r),
-warp(q,r) (instant, saves; does NOT step roamers),
-lookAt(x,z,dist), testBattle(tier,biome,boss), smite() (all enemies →1hp),
-give(itemId), openGateAt(q,r), detonate(), localSites(), act(siteId,label)`.
+warp(q,r) (instant, saves; does NOT step roamers), lookAt(x,z,dist),
+testBattle(tier,biome,boss,extra) (extra merges into team — e.g.
+{deity:true, bossKind:'deity', count:1}), smite() (all enemies →1hp),
+give(itemId) (routes mutation count → openWound), openGateAt(q,r),
+detonate() (also unfurls an adjacent bridge seam), localSites(),
+act(siteId,label), shopOffers(q,r)`.
 
 ## Testing approach
 
@@ -294,11 +320,13 @@ give(itemId), openGateAt(q,r), detonate(), localSites(), act(siteId,label)`.
 
 ## Next-step candidates (floated to user, none committed)
 
-- By-ear audio tuning pass (most likely next, needs user feedback)
-- Satellite-specific mechanics (low gravity, rust storms)
-- Balance pass on tiers/timing windows with human playtesting
+- By-ear audio tuning pass (needs user feedback)
+- Balance pass with human playtesting (combat numbers, mutation costs,
+  deity difficulty, bargain prices)
+- Deity phase 2 / Wound music+audio identity (WOUND has no MUSIC entry
+  yet — falls back by biome default)
+- A mutation-cleansing shrine (mutations are currently permanent)
 - Optional "lite" render mode for weak GPUs
-- More battle variety (enemy specials per role/biome)
 
 ## Conventions
 
