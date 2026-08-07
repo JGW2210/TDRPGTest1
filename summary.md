@@ -187,6 +187,16 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 
 ## Architecture (src/)
 
+- `index.html` / `css/style.css` — **cache-buster**: an inline script sets
+  `window.BUILD` and builds a dynamic import map rewriting `three` + every
+  `./src/*.js` import to `?v=BUILD`; a second inline script loads
+  `src/main.js?v=BUILD`. **Bump BUILD (and the css href version) on every
+  release** or live players keep stale modules. Also hosts the wanderer's
+  menu markup (`#gamemenu`, `#btn-menu`) and the `#scrims` vignette layer.
+  The stylesheet is fully de-boxed: no panels/borders — corner vignettes,
+  text-shadow inscriptions, soft radial `--softbg` backings, bottom-sheet
+  site modal, right-edge gradient sheets for inventory/echoes, floating
+  battle nameplates, text-only buttons.
 - `config.js` — tunables: mapRadius 45, vision 4/rim 6, hop timings,
   region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
   (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
@@ -195,37 +205,51 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
-- `names.js` — all lore tables: BIOMES (15 incl. ROAD/BRIDGE/LUNAR/CRIMSON/
-  VERDANT/SECRET/**WOUND**), KINGDOMS, SATELLITES (luna/rubidus/viridian +
-  bosses), CELESTIALS (sky landmarks), FOES rosters (roles: brute/swift/
-  mystic/guard; +WOUND roster), `speciesSlug(name)` for art lookup,
+- `names.js` — all lore tables: BIOMES (16 incl. ROAD ["Warded Shallows",
+  water-styled]/BRIDGE/LUNAR/CRIMSON/VERDANT/SECRET/**WOUND**/**ISLET**),
+  KINGDOMS, SATELLITES (luna/rubidus/viridian + bosses), **ISLETS** (3
+  forgotten-islet defs: hermit/wreck/observatory), CELESTIALS (sky
+  landmarks), FOES rosters (roles: brute/swift/mystic/guard; +WOUND and
+  ISLET rosters — ISLET reuses BRIDGE species so no new art),
+  `speciesSlug(name)` for art lookup,
   wardenName, regionName, site/flavor generators, **BARGAINS** (5 sacrifice
   events), **SHRINE_BOONS** (5 commune offers), **SKY_VOICES** (4 celestial
   dialogues + gifts), **NEBULA_NAMES/nebulaSites**, **DEITY/WOUND_WHISPERS**.
   `makeSide` rolls bargains at 0.62-0.8.
-- `worldgen.js` — deterministic passes: terrain fields → jittered-voronoi
-  region pockets (border band → void rifts, `barrierBest` per pair —
-  **recorded even on natural-void tiles**) → biomes → **pass 3.5 rivers**
-  (2-4 winding SEA rivers out of the big lakes, region-confined; nebula
-  landmarks inside the 2 largest lakes) → satellites (**radius-5 ragged
-  discs**, `keepComponent` prunes fragments, satboss tier 5) → **pass 4.6
-  the Wound** (radius-4 hidden region 200, deity + whisper landmarks) →
-  causeway selection (**validity checked BEFORE union-find**; dist ≤12
-  then relaxed ≤26 for still-cut components; zero-width rifts stand the
-  warden on a boundary land tile; `carvedInfo` stored per gate) →
-  **pass 6.5 rift seal** (rule 1 land-land, rule 2 road-side-entry;
-  causeway-mouth anchors protected with spendable counts) → **pass 6.75
-  re-anchor repair** (BFS from each mouth to its region's largest
-  fragment, never stepping beside foreign land) → connectivity BFS
-  (regions ≥100 exempt) → **pass 7.5 hidden star-bridges** (carved
-  post-seal from surviving shores; `t.hiddenBridge`, seam = first tile,
-  `shore.seamHint`; wound bridge likewise via `woundHidden`) →
-  kingdoms/towns/dungeons/shrines → sealed secrets → site budgets
+- `worldgen.js` — deterministic passes: terrain fields (**quadrant
+  climates**: strong N/S temp gradient, east mountain bias, radial `home`
+  damping keeps the start vale meadow/forest) → jittered-voronoi region
+  pockets (border band → void rifts, `barrierBest` per pair — **recorded
+  even on natural-void tiles**) → **pass 2.5 archipelago erosion**
+  (clumped fbm coast-gnawing, ragged islands) → biomes → **pass 3.2
+  speckle purge** (majority filter; volcano/crater exempt) → **pass 3.5
+  rivers** (2-4 winding SEA rivers out of the big lakes, region-confined;
+  nebula landmarks inside the 2 largest lakes) → satellites (**radius-5
+  ragged discs**, `keepComponent` prunes fragments, satboss tier 5) →
+  **pass 4.6 the Wound** (radius-4 hidden region 200, deity + whisper
+  landmarks) → causeway selection (**validity checked BEFORE union-find**;
+  dist ≤12 then relaxed ≤26 for still-cut components; zero-width rifts
+  stand the warden on a boundary land tile; `carvedInfo` stored per gate;
+  causeways are water-styled **Warded Shallows**) → **pass 6.5 rift seal**
+  (rule 1 land-land, rule 2 road-side-entry; causeway-mouth anchors
+  protected with spendable counts) → **pass 6.75 re-anchor repair** (BFS
+  from each mouth to its region's largest fragment, never stepping beside
+  foreign land) → **pass 6.8 start replant** (start moves into region 0's
+  largest fragment or the connectivity cull drowns the world) → **pass
+  6.9 water web** (river-joins from each channel mouth to nearest SEA
+  within 7) → connectivity BFS (regions ≥100 exempt) → **pass 7.5 hidden
+  star-bridges** (carved post-seal from surviving shores; `t.hiddenBridge`,
+  seam = first tile, `shore.seamHint`; wound bridge likewise via
+  `woundHidden`) → kingdoms/towns/dungeons/shrines → sealed secrets →
+  **pass 10.5 forgotten islets** (3 hidden void clusters + folded
+  footbridges; `isletHidden`/`isletBridge`/`isletSeam`, shore glows
+  `isletHint`; leak-proof: bridges touch no foreign land) → site budgets
   (satellites get 7 kinds incl. trader; wound gets pedestal/cache/2
   wound_battles/side) → roamer spawns (satellites tier 5 ×3; **water
   packs** on post-seal SEA components, tier = region+1) → **pass 14 sky
   anchors** (4 vantage hexes) → lazy `getSites()` (+nebula/deity/whisper/
-  wound_battle branches). `revealSecret/revealBridge(i)/revealWound()`.
+  wound_battle/islet branches).
+  `revealSecret/revealBridge(i)/revealIslet(i)/revealWound()`.
 - `items.js` — 150 ordinary items + **8 MUTATION items** (rarity 'm',
   pool MUTATION, `mutation: true`, excluded from `drawItem`; drawn only
   via `drawMutation(rng, ownedIds)`). `drawItem(rng, pool, ownedIds,
@@ -239,17 +263,23 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   Sets, woundOpen flag, mutationCount, addBoon/removeItem**, `appearance`
   + `appearanceSig` (tags/sets/grand/mutations drive the texture
   painter). `noFirstDodge` strips firstStrikeDodge in recompute.
-- `roamers.js` — `RoamerSystem`: packs from `world.roamerSpawns`; one
-  `step(playerTile)` per player hop — aggro ≤3 hexes steps toward you,
-  else 55% random drift, region-locked, blocked by landmarks/gates.
-  **Water packs (`r.water`) step only on SEA tiles; land packs avoid
-  BRIDGE.** Contact (dist ≤1) returns the pack → battle. `kill` → 34-hop
+- `roamers.js` — `RoamerSystem`: packs from `world.roamerSpawns`. Each
+  pack's **species is sealed at spawn** (`r.species` from FOES via
+  hash2(q,r,55) — the map icon IS the battle foe) and each has a
+  **speed ratio** (`r.speed` = 0.35 + 0.14·tier + 0.12 if swift ± jitter,
+  clamp 0.25–1.35; fractional accumulator `r.acc`, max 2 steps per player
+  hop, serialized): tier-0 lumbers at ⅓ pace, tier-5+ matches or outruns
+  the player. One `step(playerTile)` per hop — aggro ≤3 hexes hunts
+  toward you, else 55% random drift per earned move, region-locked,
+  blocked by landmarks/gates. **Water packs (`r.water`) step only on SEA
+  tiles; land packs avoid BRIDGE.** **Contact = same hex only** (a hunter
+  stepping onto your tile, or you onto theirs) → battle. `kill` → 34-hop
   respawn ≥8 from player; `calm` after flee. `serialize/restore`.
   Hooks `onMove/onRespawn` drive world3d sprites.
-- `meta.js` — singleton `meta`, localStorage `vaeldrift_meta`: **26 FEATS**
-  (+seamfinder/changed/thrice_changed/the_other_end) with `check(m)`
-  predicates; `bump(fn)` mutates stats, returns newly completed feats +
-  items unlocked. `unlockedIds` = core + earned.
+- `meta.js` — singleton `meta`, localStorage `vaeldrift_meta`: **25 FEATS**
+  (incl. seamfinder/islefinder/changed/thrice_changed/the_other_end) with
+  `check(m)` predicates; `bump(fn)` mutates stats, returns newly completed
+  feats + items unlocked. `unlockedIds` = core + earned.
 - `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v4**:
   saveRun/loadRun/clearSave/applySave. Saved: items(ids), consumables,
   shards, hp, shrineHeals, **boons, shrineBoons, vantageSeen,
@@ -290,25 +320,46 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   (blobPath/glowEye/teeth/wing/legs/runeOrbit).
 - `world3d.js` — WorldView: `layer` group (breathes) holds instanced
   tiles/rings/mist-caps/decos/glints + landmark groups + traders +
-  highlight. `renderTiles = land + secrets + hidden bridge/wound tiles`
-  (all hidden until revealed; `revealSecretTile` / staggered
+  highlight. `renderTiles = land + secrets + hidden bridge/wound/islet
+  tiles` (all hidden until revealed; `revealSecretTile` / staggered
   `revealHiddenTiles(arr)` pop them in). Fog states 0-3 recolor
-  instances; crack sprites (gold) + **seam/vantage sprites** (blue/white,
-  state ≥2); `visionPlus` widens fog radii. Roamer sprites now use
-  species art (`_roamerTexture` picks from the biome roster).
-  `_buildCelestials`: satellite planet bodies, constellations,
-  shattermoons, ringed giant, comet, **+ Third Sister moon, Ferry
-  Lantern, Door Ajar at `world.skyAnchors` positions**. TIER_COLORS
-  exported.
+  instances; crack sprites (gold) + **seam/vantage/islet sprites**
+  (blue/white/pale-green, state ≥2); `visionPlus` widens fog radii.
+  Roamer sprites use the pack's sealed species (`_roamerTexture` reads
+  `r.species`). **Monumental landmarks** (`_buildLandmarks`): walled
+  capital city-mounds w/ banners + kingdom sky-beacon, towns w/ windmill
+  (lmSpinners) + chimney smoke (smokePuffs), biome-carved dungeon facades
+  (colossus/tree/ziggurat/fangs/ice vault/geode/barrow), gate arches w/
+  spinning keystones, shrine rune-rings, satboss thrones, nebula swirl,
+  hand-built islet models (hidden groups `g.visible=false` until reveal);
+  beacons pulse and dim with fog via `dimmables`. **Round-8 environment
+  builders**: `_buildDebris` (instanced rift plates/rocks/slabs + tumbling
+  spinner meshes), `_buildUndersides` (root cones per region/satellite,
+  coastal stalactites, stardust falls), `_buildWeather` (aurora ribbons
+  over 2 largest tundra sweeps, volcano ember plumes, 3-pool shooting
+  stars, drifting cloud shadows). `_buildCelestials`: satellite planet
+  bodies, constellations, shattermoons, ringed giant, comet, **+ Third
+  Sister moon, Ferry Lantern, Door Ajar at `world.skyAnchors` positions**.
+  TIER_COLORS exported.
 - `player.js` — paper token: yaw-billboard + parallax lean, hop tween
   (hopTime overridable), squash/stretch, burst pool, `layerY` rides the
   breathing layer, depthTest:false.
 - `cameraRig.js` — pan(grab-point)/wheel-zoom/right-drag-orbit + inertia,
   keyboard pan, panTo tween, `wasDrag`/`dragMode` consumed by main.
-- `battle.js` — BattleSystem: own scene (stage hex + rim + scenery,
-  player front-left at (−4.4, 2.9), 1-3 foes back-right), DOM overlay
-  (#battle: cards/menu/log/timing/floats). Flow: intro → playerMenu →
-  act (timing promise) → enemyPhase (burn/stun/charge/telegraph, block
+- `battle.js` — BattleSystem: own scene (stage hex + rim + scenery
+  confined **behind the enemy line** at z ≤ −4.6, player front-left at
+  (−4.4, 2.9), 1-3 foes spread **across the camera's line of sight**),
+  DOM overlay (#battle: nameplates/menu/log/timing/floats). Player + live
+  foes **yaw-billboard to the camera** every frame. `team.species` (from
+  roamer packs) fixes the whole team to that species; otherwise rolled
+  from the biome roster. **Ranged vs melee**: mystics (`e.ranged`) cast
+  biome-accent bolts via `_projectile(from,to,color,{dur,size,arc})`
+  (promise-based, advanced in update()) with no lunge — heavy/crush blows
+  always close in; player abilities fire typed bolts/bursts (burn orange,
+  stun white, smite big gold, gamble purple, leech green both ways,
+  heal/frenzy self-bursts), colored `_burst(pos,color)` impacts (perfect
+  block ice-blue, landed hit red-orange). Flow: intro → playerMenu → act
+  (timing promise) → enemyPhase (burn/stun/charge/telegraph, block
   timing) → repeat. Enemy stats: hp 13+8t, atk 2.5+1.8t, role mods; boss
   ×2.6 hp ×1.2 atk, enrages <50%. Handles all item flags/ability kinds
   (aoe, burn_all, stun, heal_self, weaken_all, smite, gamble, leech,
@@ -326,10 +377,12 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   billboards face camera, pick via invisible hitboxes.
 - `ui.js` — DOM singleton `ui`: HUD (location/region+threat/stats/
   consumables — `setRegion(region, threat)` renders a colored
-  calm/even/dire/deadly skull with the scaled tier),
-  legend, tooltip, site modal (+`modalOutcome`), item card (rarity
-  colors), inventory (+consumable Use buttons via `inventoryHandlers`),
-  Echoes panel, death screen (takes meta), toasts, fades.
+  calm/even/dire/deadly skull with the scaled tier), tooltip, site modal
+  (+`modalOutcome`), item card (rarity colors), inventory (+consumable
+  Use buttons via `inventoryHandlers`), Echoes panel, death screen (takes
+  meta), toasts, fades. `init` renders the Courts into the menu
+  (`#menu-courts`) + `gm-seed`/`gm-buildnum` — the old `#legend` box is
+  gone.
 - `main.js` — wiring: mode machine ('world'|'transition'|'local'|'battle'|
   'dead'), activeScene render switch, travel (gate-blocked A*, fast hops
   >7 or fastTravel flag; **each hop steps the roamers** — engagement
@@ -341,10 +394,17 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   `startGauntlet` (2 fights + Keeper → boss draw), site action handler
   (battles/pedestals/caches/shop `renderShop` with paid ↻ restock row
   at escalating cost/mystery/rumors/'Offer Star-Shards' shrine full-heal
-  at 10+6·n ☆; shop markup ×(1+items·0.04)), detonate,
-  save/load boot + `saveNow` throttle, meta event bumps + `announceFeats`,
-  audio boot on first gesture + `setRegionMusic` in `refreshHud`, buttons
-  (inventory/echoes/detonate/recenter/audio/return), Esc handling, loop.
+  at 10+6·n ☆; shop markup ×(1+items·0.04)), **detonate keyed off hint
+  tiles** (`seamHint`/`isletHint` on the player's tile OR any neighbor
+  reveals the matching satellite bridge / islet footbridge; legacy
+  seam-tile check as fallback; a one-time toast nudges on stepping onto
+  a humming shore), `engageRoamer` (species-named toasts/titles,
+  passes `team.species`), save/load boot + `saveNow` throttle, meta event
+  bumps + `announceFeats`, audio boot on first gesture + `setRegionMusic`
+  in `refreshHud`, buttons (inventory/detonate/recenter/return), the
+  **wanderer's menu** (`toggleMenu`, Esc opens/closes; music toggle +
+  echoes moved here; *refold this world* = clearSave+reload, *wake in a
+  new world* = fresh seed — both arm-on-first-click), loop.
 
 ## Debug API (window.__vael) — used by all Playwright tests
 
@@ -352,9 +412,11 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 roamers, powerTier(), announceFeats, pickAt(x,y), travel(q,r),
 warp(q,r) (instant, saves; does NOT step roamers), lookAt(x,z,dist),
 testBattle(tier,biome,boss,extra) (extra merges into team — e.g.
-{deity:true, bossKind:'deity', count:1}), smite() (all enemies →1hp),
+{deity:true, bossKind:'deity', count:1} or {species:'Star-Drowned
+Siren', speciesRole:'mystic'}), smite() (all enemies →1hp),
 give(itemId) (routes mutation count → openWound), openGateAt(q,r),
-detonate() (also unfurls an adjacent bridge seam), localSites(),
+detonate() (unfurls bridges/islets from hint tiles, opens secrets),
+revealIslet(i) (world + view + fog + save), localSites(),
 act(siteId,label), shopOffers(q,r)`.
 
 ## Testing approach
@@ -392,18 +454,25 @@ act(siteId,label), shopOffers(q,r)`.
 - Save VERSION is now 4 (round 8: archipelago worldgen + revealedIslets) —
   older saves are discarded on load. Worldgen changed again for identical
   seeds (quadrant climates, erosion, water web, islets), by design.
-- Round-8 worldgen is suite-verified (scratchpad worldgen-suite.mjs
-  pattern: 40 seeds, 0 leaks / 0 lost regions / 3 islets each / islets
-  reachable post-reveal / 0 impure home tiles). Visuals verified by
-  headless screenshots only — debris density, beacon/aurora/cloud opacity
-  and landmark scale may want a taste pass on a real GPU.
+- **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
+  release** — currently 11. Without the bump, live players keep stale
+  modules despite the import-map cache-buster.
+- The worldgen suite (rebuild in scratchpad each session; pattern in
+  round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
+  3 islets each, satellite shores hinted + walkable, satellite bosses /
+  wound deity / islets reachable post-reveal, every secret openable from
+  a crack-hinted neighbor, 0 impure home tiles. Keep it green.
+- Round 8-11 visuals verified by headless screenshots only — debris
+  density, beacon/aurora/cloud opacity, landmark scale, and the de-boxed
+  UI's scrim/text-shadow strengths may want a taste pass on a real GPU.
+- Roamer speed ratios (0.35–1.35) and battle projectile pacing
+  (0.2–0.35s flights) are theory-tuned, untested by human play.
 - ISLET biome: FOES.ISLET reuses BRIDGE species (haunt/remora) so no new
   monster art was needed; MUSIC falls back to MEADOW (no ISLET entry).
 - Round-7 numbers untested by humans: mutation stat swings, deity
   hp ×2.6×1.6 at tier 7, wound-battle counts, bargain prices, water-pack
-  density (≈11-16/world), nebula reward rates. The worldgen suite +
-  Playwright smokes (scratchpad: worldgen-suite.mjs, smoke.mjs,
-  smoke3.mjs) verify structure, not feel.
+  density (≈11-16/world), nebula reward rates. Suites verify structure,
+  not feel.
 - The deity is one phase; a phase-2 (adds/board-clear) was floated but
   not built. Mutations cannot be removed once taken (no cleansing
   shrine yet).
@@ -418,10 +487,12 @@ act(siteId,label), shopOffers(q,r)`.
 ## Next-step candidates (floated to user, none committed)
 
 - By-ear audio tuning pass (needs user feedback)
-- Balance pass with human playtesting (combat numbers, mutation costs,
-  deity difficulty, bargain prices)
+- Balance pass with human playtesting (combat numbers, roamer speeds,
+  mutation costs, deity difficulty, bargain prices)
+- GPU taste pass on round 8-11 visuals (debris/beacon/aurora/scrim
+  intensities)
 - Deity phase 2 / Wound music+audio identity (WOUND has no MUSIC entry
-  yet — falls back by biome default)
+  yet — falls back by biome default; ISLET likewise)
 - A mutation-cleansing shrine (mutations are currently permanent)
 - Optional "lite" render mode for weak GPUs
 
@@ -436,3 +507,4 @@ act(siteId,label), shopOffers(q,r)`.
 - Commit style: imperative summary + detailed body; Co-Authored-By Claude
   trailer; no model IDs in artifacts. Push with `-u origin <branch>`.
 - PR + merge only when the user asks (they have each round).
+- Every release: bump `window.BUILD` + the css `?v=` in index.html.
