@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 3; // v3: boons, shrine boons, sky voices, revealed bridges; older saves discarded
+const VERSION = 4; // v4: archipelago worldgen + revealed islets; older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -21,6 +21,7 @@ export function saveRun(world, player, worldView, roamers = null) {
       shrineBoons: [...run.shrineBoons],
       vantageSeen: [...run.vantageSeen],
       revealedBridges: world.satellites.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
+      revealedIslets: world.islets.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       roamers: roamers ? roamers.serialize() : null,
       reviveUsed: run.reviveUsed,
       bossesDown: run.bossesDown,
@@ -69,6 +70,12 @@ export function applySave(data, world, worldView, roamers = null) {
   for (const idx of data.revealedBridges || []) {
     if (world.revealBridge(idx)) {
       worldView.revealHiddenTiles(world.satellites[idx].bridgeTiles);
+    }
+  }
+  for (const idx of data.revealedIslets || []) {
+    if (world.revealIslet(idx)) {
+      const isl = world.islets[idx];
+      worldView.revealHiddenTiles([...isl.bridgeTiles, ...isl.tiles]);
     }
   }
   if (roamers && data.roamers) roamers.restore(data.roamers);

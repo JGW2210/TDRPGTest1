@@ -22,13 +22,24 @@ export const CONFIG = {
   regions: {
     count: 10,            // target region pockets
     seedSpacing: 15,      // min hex distance between region seeds
-    riftWidth: 1.7,       // voronoi-border band converted to void rift
+    riftWidth: 2.1,       // voronoi-border band converted to void rift
+  },
+
+  archipelago: {
+    erosion: [0.60, 0.66],// coastal-erosion noise thresholds (two passes)
+    riverJoinDist: 7,     // how far a channel mouth reaches for a river join
   },
 
   secrets: {
     count: 26,            // sealed hexes hidden in the void
     pedestalChance: 0.55, // what a secret holds: item pedestal…
     cacheChance: 0.3,     // …or a shard cache (else consumables)
+  },
+
+  islets: {
+    count: 3,             // forgotten islets hidden out in the void
+    minLandGap: 3,        // islets keep this far from any shore
+    maxBridge: 8,         // longest folded footbridge to an islet
   },
 
   battle: {

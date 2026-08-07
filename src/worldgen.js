@@ -10,7 +10,7 @@ import { keyOf, axialToWorld, worldToAxial, discCoords, neighborsOf, hexDist, he
 import {
   BIOMES, KINGDOMS, DRIFTLAND_TOWNS, SATELLITES, dungeonName, wildName, regionName, wardenName,
   makeBattle, makeTrader, makeSide, capitalSites, townSites, dungeonSites,
-  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS,
+  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS, ISLETS,
 } from './names.js';
 
 const angleDiff = (a, b) => {
@@ -58,17 +58,31 @@ export function generateWorld(seed) {
       if (h < p) { t.void = true; continue; }
     }
 
+    // Quadrant climates: the four Courts pull the weather to their compass
+    // points — deserts gather south, tundra north, high stone east (the
+    // volcano keeps the west) — while the world's heart stays a gentle vale.
     let elev = fbm(t.x * 0.045, t.z * 0.045, seed + 101, 5);
     const angle = Math.atan2(t.z, t.x);
     const eastness = Math.max(0, Math.cos(angle));
-    const midband = Math.exp(-((t.cDist / R - 0.55) ** 2) / 0.06);
-    elev = elev * 0.82 + 0.22 * eastness * midband;
+    const midband = Math.exp(-((t.cDist / R - 0.55) ** 2) / 0.09);
+    elev = elev * 0.72 + 0.34 * eastness * midband;
     elev *= 1 - 0.35 * Math.max(0, (t.cDist / R - 0.85) / 0.15);
 
+    let moist = fbm(t.x * 0.055, t.z * 0.055, seed + 202, 4);
+    let temp = (t.z / maxZ) * 1.45 + (fbm(t.x * 0.07, t.z * 0.07, seed + 303, 3) - 0.5) * 0.38;
+
+    // the homeland: no glass dunes or glacier bleeding into Starfall Vale
+    const home = t.cDist <= 4 ? 1 : Math.max(0, 1 - (t.cDist - 4) / 9);
+    if (home > 0) {
+      temp *= 1 - 0.8 * home;
+      moist += (0.5 - moist) * 0.55 * home;
+      elev += (0.42 - elev) * 0.5 * home;
+    }
+
     t.elev = elev;
-    t.moist = fbm(t.x * 0.055, t.z * 0.055, seed + 202, 4);
-    t.temp = (t.z / maxZ) * 1.15 + (fbm(t.x * 0.07, t.z * 0.07, seed + 303, 3) - 0.5) * 0.55;
-    t.crystalN = fbm(t.x * 0.11, t.z * 0.11, seed + 404, 3);
+    t.moist = moist;
+    t.temp = temp;
+    t.crystalN = fbm(t.x * 0.11, t.z * 0.11, seed + 404, 3) + eastness * 0.03;
   }
 
   // ---- pass 2: region seeds and jittered voronoi pockets -------------------
@@ -112,6 +126,28 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 2.5: archipelago erosion ---------------------------------------
+  // The rifts alone leave the pockets reading as slabs. Clumped noise gnaws
+  // at every coastline — bays, fjords, ragged headlands — so each region
+  // reads as a true island in the web, not a tile of a broken plate.
+  {
+    const thresholds = CONFIG.archipelago.erosion;
+    for (let pass = 0; pass < thresholds.length; pass++) {
+      const doomed = [];
+      for (const t of list) {
+        if (t.void || t.cDist <= 6) continue;
+        const coastal = neighborsOf(t.q, t.r).some(([q, r]) => {
+          const n = tiles.get(keyOf(q, r));
+          return !n || n.void;
+        });
+        if (!coastal) continue;
+        const n = fbm(t.x * 0.14 + pass * 9.1, t.z * 0.14 - pass * 7.3, seed + 2600 + pass, 3);
+        if (n > thresholds[pass]) doomed.push(t);
+      }
+      for (const t of doomed) t.void = true;
+    }
+  }
+
   // ---- pass 3: biomes on surviving land ------------------------------------
   let volcano = null, volScore = -Infinity;
   for (const t of list) {
@@ -138,6 +174,36 @@ export function generateWorld(seed) {
     else if (t.moist > 0.565) t.biome = 'FOREST';
     else t.biome = 'MEADOW';
     applyHeight(t, seed, volcano);
+  }
+
+  // ---- pass 3.2: speckle purge ---------------------------------------------
+  // A lone desert hex in a meadow (or one meadow tile high in the tundra) is
+  // noise, not terrain. Any tile out of step with its neighbourhood adopts
+  // the local majority, so biomes arrive as contiguous sweeps.
+  {
+    const purgeable = new Set(['MEADOW', 'FOREST', 'MOUNTAIN', 'DESERT', 'TUNDRA', 'CRYSTAL', 'SEA', 'VOLCANO']);
+    for (let iter = 0; iter < 2; iter++) {
+      const changes = [];
+      for (const t of list) {
+        if (t.void || !purgeable.has(t.biome)) continue;
+        if (t.cDist <= 4) continue;                                     // crater ring stands
+        if (hexDist(t.q, t.r, volcano.q, volcano.r) <= 2) continue;     // the volcano stands
+        const counts = {};
+        let same = 0, n = 0;
+        for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+          const nb = tiles.get(keyOf(nq, nr));
+          if (!nb || nb.void) continue;
+          n++;
+          counts[nb.biome] = (counts[nb.biome] || 0) + 1;
+          if (nb.biome === t.biome) same++;
+        }
+        if (n < 3 || same >= 2) continue;
+        const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+        if (top[1] >= 3 && purgeable.has(top[0])) changes.push([t, top[0]]);
+      }
+      for (const [t, b] of changes) { t.biome = b; applyHeight(t, seed, volcano); }
+      if (!changes.length) break;
+    }
   }
 
   // ---- pass 3.5: shallows-rivers and nebulas -------------------------------
@@ -573,6 +639,91 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 6.8: plant the start on solid ground ---------------------------
+  // Erosion and sealing can shatter the home region into fragments. The
+  // start must stand in the largest one — the fragment the causeway mouths
+  // re-anchor to — or the connectivity cull keeps only a splinter of the
+  // world and drowns the rest.
+  {
+    const comps = [];
+    const seen = new Set();
+    for (const t of list) {
+      if (t.void || t.region !== 0) continue;
+      const k0 = keyOf(t.q, t.r);
+      if (seen.has(k0)) continue;
+      const comp = [t];
+      seen.add(k0);
+      for (let i = 0; i < comp.length; i++) {
+        for (const [nq, nr] of neighborsOf(comp[i].q, comp[i].r)) {
+          const k = keyOf(nq, nr);
+          const n = tiles.get(k);
+          if (n && !n.void && n.region === 0 && !seen.has(k)) { seen.add(k); comp.push(n); }
+        }
+      }
+      comps.push(comp);
+    }
+    comps.sort((a, b) => b.length - a.length);
+    const body = comps[0] || [];
+    if (body.length && !body.includes(start)) {
+      let best = null, bestScore = -Infinity;
+      for (const t of body) {
+        if (t.gate || t.landmark || t.biome === 'ROAD' || t.biome === 'BRIDGE') continue;
+        if (!['MEADOW', 'FOREST', 'CRYSTAL', 'DESERT', 'TUNDRA'].includes(t.biome)) continue;
+        const s = (t.biome === 'MEADOW' ? 2 : 1) - Math.abs(t.cDist - 6) * 0.15 + hash2(t.q, t.r, seed + 11);
+        if (s > bestScore) { bestScore = s; best = t; }
+      }
+      start = best || body.find(t => !t.gate && !t.landmark) || body[0];
+    }
+  }
+
+  // ---- pass 6.9: the water web ---------------------------------------------
+  // The crossings are shallows now, not stone: where a channel meets a
+  // region's shore, a narrow star-river is carved inland to the nearest
+  // waters, so lake, river and warded crossing read as one glowing web.
+  {
+    const JOIN = CONFIG.archipelago.riverJoinDist;
+    for (const g of gates) {
+      const info = g.gate.carvedInfo;
+      for (const [idx, regId] of [[0, info.a], [info.keys.length - 1, info.b]]) {
+        const mouth = tiles.get(info.keys[idx]);
+        if (!mouth) continue;
+        const seen = new Set(), parent = new Map(), queue = [];
+        for (const [nq, nr] of neighborsOf(mouth.q, mouth.r)) {
+          const n = tiles.get(keyOf(nq, nr));
+          if (n && !n.void && n.region === regId && !n.gate
+            && n.biome !== 'ROAD' && n.biome !== 'BRIDGE') {
+            queue.push(n);
+            seen.add(keyOf(n.q, n.r));
+          }
+        }
+        let found = null;
+        while (queue.length && !found) {
+          const cur = queue.shift();
+          if (cur.biome === 'SEA') { found = cur; break; }
+          if (hexDist(cur.q, cur.r, mouth.q, mouth.r) >= JOIN) continue;
+          for (const [nq, nr] of neighborsOf(cur.q, cur.r)) {
+            const k = keyOf(nq, nr);
+            if (seen.has(k)) continue;
+            const n = tiles.get(k);
+            if (!n || n.void || n.region !== regId || n.gate || n.landmark || n.secret) continue;
+            if (n.biome === 'ROAD' || n.biome === 'BRIDGE') continue;
+            seen.add(k);
+            parent.set(k, cur);
+            queue.push(n);
+          }
+        }
+        if (!found) continue;
+        for (let node = found; node; node = parent.get(keyOf(node.q, node.r))) {
+          if (node.biome !== 'SEA' && !node.landmark
+            && hexDist(node.q, node.r, start.q, start.r) >= 2) {
+            node.biome = 'SEA';
+            applyHeight(node, seed, volcano);
+          }
+        }
+      }
+    }
+  }
+
   // ---- pass 7: connectivity (gates count as passable) ----------------------
   // The outer worlds (satellites, the Wound) join the graph later via their
   // bridges, so the cull leaves everything beyond region 100 alone.
@@ -766,6 +917,92 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 10.5: forgotten islets -----------------------------------------
+  // Tiny worlds adrift in the rifts, holding on out of stubbornness. Each
+  // hides until a star-charge on the humming shore unfurls its folded
+  // footbridge — then a hermit, a wreck, or half an observatory waits.
+  const islets = [];
+  {
+    const cands = list
+      .filter(t => t.void && !t.secret && !t.hiddenBridge && !t.woundHidden
+        && t.cDist > 8 && t.cDist < R - 1)
+      .sort((a, b) => hash2(b.q, b.r, seed + 5100) - hash2(a.q, a.r, seed + 5100));
+    const landWithin = (q, r, d) => {
+      for (const [dq, dr] of discCoords(d)) {
+        const n = tiles.get(keyOf(q + dq, r + dr));
+        if (n && !n.void) return true;
+      }
+      return false;
+    };
+    // two sweeps: strict placement first, then a relaxed one so every world
+    // gets its full complement of islets even when the rifts run narrow
+    for (const [gap, spacing] of [[CONFIG.islets.minLandGap, 10], [2, 7]]) {
+    for (const anchor of cands) {
+      if (islets.length >= CONFIG.islets.count) break;
+      if (anchor.isletHidden || anchor.isletBridge != null) continue;
+      if (landWithin(anchor.q, anchor.r, gap)) continue;
+      if (islets.some(o => hexDist(o.anchor.q, o.anchor.r, anchor.q, anchor.r) < spacing)) continue;
+      // the islet: the anchor and a ragged handful of its void neighbours
+      const clusterTiles = [anchor];
+      for (const [nq, nr] of neighborsOf(anchor.q, anchor.r)) {
+        const t = tiles.get(keyOf(nq, nr));
+        if (!t || !t.void || t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden) continue;
+        if (hash2(nq, nr, seed + 5200) < 0.6) clusterTiles.push(t);
+      }
+      if (clusterTiles.length < 3) continue;
+      // the nearest honest shore holds the seam
+      let shore = null, sd = Infinity;
+      for (const t of land) {
+        if (t.region >= 100 || t.landmark || t.gate || t.seamHint || t.vantage) continue;
+        if (t.biome === 'ROAD' || t.biome === 'BRIDGE') continue;
+        const d = hexDist(t.q, t.r, anchor.q, anchor.r);
+        if (d < sd) { sd = d; shore = t; }
+      }
+      if (!shore || sd > CONFIG.islets.maxBridge) continue;
+      // the folded footbridge: pure void the whole way, touching no land —
+      // a revealed span must never hand out a free crossing between regions
+      const line = hexLine(shore.q, shore.r, anchor.q, anchor.r);
+      const bridge = [];
+      let ok = true;
+      for (const { q, r } of line) {
+        const t = tiles.get(keyOf(q, r));
+        if (!t) { ok = false; break; }
+        if (t === shore || clusterTiles.includes(t)) continue;
+        if (!t.void || t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden) { ok = false; break; }
+        const bad = neighborsOf(q, r).some(([fq, fr]) => {
+          const f = tiles.get(keyOf(fq, fr));
+          return f && !f.void && (f.region !== shore.region
+            || f.biome === 'ROAD' || f.biome === 'BRIDGE' || f.gate);
+        });
+        if (bad) { ok = false; break; }
+        bridge.push(t);
+      }
+      if (!ok || !bridge.length) continue;
+
+      const def = ISLETS[islets.length];
+      for (const t of clusterTiles) {
+        t.isletHidden = true;
+        t.biome = 'ISLET';
+        t.region = shore.region;
+        t.elev = 0.5 + hash2(t.q, t.r, seed + 5300) * 0.2;
+        applyHeight(t, seed, volcano);
+      }
+      anchor.landmark = { type: 'islet', name: def.name, islet: islets.length };
+      for (const t of bridge) {
+        t.isletHidden = true;
+        t.isletBridge = islets.length;
+        t.biome = 'BRIDGE';
+        t.region = shore.region;
+        t.elev = 0.3;
+        applyHeight(t, seed, volcano);
+      }
+      bridge[0].isletSeam = true;   // detonate beside this to unfurl
+      shore.isletHint = islets.length;
+      islets.push({ def, tiles: clusterTiles, bridgeTiles: bridge, anchor, shore, revealed: false });
+    }
+    }
+  }
+
   // ---- pass 11: wandering traders ------------------------------------------
   const traders = [];
   {
@@ -788,7 +1025,7 @@ export function generateWorld(seed) {
     const brng = mulberry32((seed ^ 0x5173) >>> 0);
     for (const reg of regions) {
       const cands = reg.tiles
-        .filter(t => placeable(t) && !t.crackHint
+        .filter(t => placeable(t) && !t.crackHint && t.isletHint == null
           && !settlements.some(s => hexDist(t.q, t.r, s.q, s.r) < 2)
           && hexDist(t.q, t.r, start.q, start.r) >= 2)
         .sort((a, b) => hash2(b.q, b.r, seed + 93) - hash2(a.q, a.r, seed + 93));
@@ -906,7 +1143,8 @@ export function generateWorld(seed) {
     a.z = Math.sin(a.angle) * worldR * a.dist;
     let best = null, bd = Infinity;
     for (const t of land) {
-      if (t.landmark || t.region >= 100 || t.biome === 'BRIDGE' || t.gate || t.siteKind) continue;
+      if (t.landmark || t.region >= 100 || t.biome === 'BRIDGE' || t.gate || t.siteKind
+        || t.seamHint || t.isletHint != null) continue;
       const d = (t.x - a.x) ** 2 + (t.z - a.z) ** 2;
       if (d < bd) { bd = d; best = t; }
     }
@@ -916,7 +1154,7 @@ export function generateWorld(seed) {
   // ---- names ---------------------------------------------------------------
   for (const t of land) {
     if (t.landmark) t.name = t.landmark.name;
-    else if (t.biome === 'ROAD') t.name = 'Warded Causeway';
+    else if (t.biome === 'ROAD') t.name = 'Warded Shallows';
     else if (t.biome === 'BRIDGE') t.name = 'Star-Bridge';
     else t.name = wildName(mulberry32(Math.floor(hash2(t.q, t.r, seed + 81) * 0xffffffff)), t.biome);
   }
@@ -924,6 +1162,10 @@ export function generateWorld(seed) {
   for (const sat of satellites) for (const t of sat.bridgeTiles) t.name = 'Star-Bridge';
   for (const t of wound.bridgeTiles) t.name = 'A Bridge of Scar-Tissue';
   for (const t of wound.tiles) t.name = t.landmark ? t.landmark.name : 'The Wound in the Meridian';
+  for (const isl of islets) {
+    for (const t of isl.bridgeTiles) t.name = 'A Folded Footbridge';
+    for (const t of isl.tiles) t.name = t.landmark ? t.landmark.name : isl.def.name;
+  }
 
   // ---- per-hex explorable sites (lazy, deterministic, sparser) -------------
   const siteCache = new Map();
@@ -996,6 +1238,29 @@ export function generateWorld(seed) {
         actions: ['⚔ Answer the Invitation'],
         team: { biome: 'WOUND', tier: 7, count: 1, boss: true, deity: true, bossName: DEITY.name, bossKind: 'deity' },
       }];
+    } else if (lm?.type === 'islet') {
+      const def = ISLETS[lm.islet] || ISLETS[0];
+      if (def.id === 'hermit') {
+        const tr = makeTrader(rng, 3, null);
+        tr.name = 'The Hermit’s Rates';
+        tr.flavor = def.flavor;
+        sites = [tr, makeSide(rng)];
+      } else if (def.id === 'wreck') {
+        const b = battleSite(1);
+        b.name = 'Hold of the Vainglory';
+        b.flavor = 'Something nests in the cargo hold, wearing the captain’s coat. It does not intend to share the salvage.';
+        b.team.count = 2;
+        sites = [b, {
+          type: 'side', subtype: 'cache', name: 'The Vainglory’s Manifest',
+          flavor: 'Three crates survived the argument with gravity. The manifest lists nine. The void kept a healthy commission.',
+          actions: ['Open the Cache'], cacheShards: 20 + Math.floor(rng() * 12) + tier * 5,
+        }];
+      } else {
+        const p = pedestalSite('ASTRAL');
+        p.name = 'The Brass Eye';
+        p.flavor = 'The observatory’s great lens still cups a point of caught starlight. It has been waiting a long time for someone to claim the observation.';
+        sites = [p, makeSide(rng)];
+      }
     } else if (lm?.type === 'whisper') {
       const w = WOUND_WHISPERS.find(x => x.name === lm.name) || WOUND_WHISPERS[0];
       sites = [{
@@ -1066,7 +1331,7 @@ export function generateWorld(seed) {
   return {
     seed, tiles, list, land, start, volcano,
     kingdoms, kingdomById, dungeons, shrines, traders, roamerSpawns,
-    regions, regionOf, gates, satellites, secrets, wound, skyAnchors,
+    regions, regionOf, gates, satellites, secrets, wound, skyAnchors, islets,
     sun: { name: 'Vael, the Undying Sun', flavor: 'The world’s heart, still burning in its crater of sky.' },
     getSites,
     revealSecret(v) {
@@ -1090,6 +1355,19 @@ export function generateWorld(seed) {
         if (!land.includes(t)) land.push(t);
       }
       if (sat.shore) sat.shore.seamHint = null;
+      return true;
+    },
+    // a star-charge on the humming shore unfurls the folded footbridge
+    revealIslet(i) {
+      const isl = islets[i];
+      if (!isl || isl.revealed) return false;
+      isl.revealed = true;
+      for (const t of [...isl.bridgeTiles, ...isl.tiles]) {
+        t.void = false;
+        t.isletHidden = false;
+        if (!land.includes(t)) land.push(t);
+      }
+      if (isl.shore) isl.shore.isletHint = null;
       return true;
     },
     // three mutations, and the world admits what it has been hiding
@@ -1140,9 +1418,10 @@ function applyHeight(t, seed, volcano) {
   if (t.biome === 'SEA') hgt = 0.5;
   if (t.biome === 'MOUNTAIN') hgt += 0.9;
   if (t.biome === 'VOLCANO') hgt += 0.6 + (volcano && t === volcano ? 0.9 : 0);
-  if (t.biome === 'ROAD') hgt = 0.85;
+  if (t.biome === 'ROAD') hgt = 0.55;   // shallows crossings sit low, like fords
   if (t.biome === 'BRIDGE') hgt = 0.4;
   if (t.biome === 'SECRET') hgt = 1.1;
+  if (t.biome === 'ISLET') hgt = 1.0;
   if (t.biome === 'WOUND') hgt += 0.5;
   t.height = hgt;
   t.floatY = (hash2(t.q, t.r, seed + 9) - 0.5) * 0.22;

@@ -198,7 +198,7 @@ dom.addEventListener('pointermove', e => {
       const ready = run.power >= expectedPower(g.tier);
       ui.tooltip(
         `<div class="tt-name">${tile.landmark.name.split(',')[0]}</div>` +
-        `<div class="tt-biome">warded causeway into ${world.regions[g.into].name}</div>` +
+        `<div class="tt-biome">warded shallows crossing into ${world.regions[g.into].name}</div>` +
         `<div class="tt-king" style="color:${c}">${'☠'.repeat(Math.min(5, g.tier))} tier ${g.tier} warden</div>` +
         `<div class="tt-extra">${ready ? 'your power feels equal to this' : 'this ward is beyond your current strength…'} (you: ${run.power} · foe: ~${expectedPower(g.tier)})</div>`,
         e.clientX, e.clientY
@@ -220,6 +220,7 @@ dom.addEventListener('pointermove', e => {
         (worldView.roamerOnTile(tile) && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#ff9a5a">⚔ a hunting pack prowls here</div>' : '') +
         (tile.hasGlint && tile.fogState >= 2 ? '<div class="tt-extra">✦ something glimmers here</div>' : '') +
         (tile.seamHint && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#9fe8ff">✸ the void beside this shore hums — something folded waits</div>' : '') +
+        (tile.isletHint != null && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#d8ffb0">❂ a thin hum in the void — something small and stubborn holds on out there</div>' : '') +
         (tile.vantage && tile.fogState >= 2 ? '<div class="tt-extra" style="color:#dfe6ff">☄ the sky leans close here</div>' : '') +
         extra,
         e.clientX, e.clientY
@@ -381,7 +382,7 @@ function challengeGate(gateTile) {
   ui.openModal({
     type: 'battle', subtype: 'warden',
     name: gateTile.landmark.name,
-    flavor: `The causeway into ${world.regions[g.into].name} is sealed behind folded starlight. The Warden unfolds to meet you — ${'☠'.repeat(Math.min(5, g.tier))} tier ${g.tier}. ` +
+    flavor: `The shallows crossing into ${world.regions[g.into].name} is sealed behind folded starlight. The Warden rises from the star-water to meet you — ${'☠'.repeat(Math.min(5, g.tier))} tier ${g.tier}. ` +
       (ready ? 'Your power feels equal to this.' : 'Your power does not yet feel equal to this. It will let you try anyway.'),
     actions: ['⚔ Challenge the Warden', 'Withdraw'],
   }, {
@@ -1016,8 +1017,24 @@ function detonate() {
     .map(([q, r]) => world.tiles.get(keyOf(q, r)));
   const secret = neighbors.find(t => t && t.secret);
   const seam = neighbors.find(t => t && t.hiddenBridge && t.bridgeSeam);
+  const isleSeam = neighbors.find(t => t && t.isletHidden && t.isletSeam);
   player.burstNow?.();
   audio.sfxDetonate();
+  if (isleSeam) {
+    const idx = isleSeam.isletBridge;
+    const isl = world.islets[idx];
+    world.revealIslet(idx);
+    worldView.revealHiddenTiles([...isl.bridgeTiles, ...isl.tiles]);
+    if (isl.shore?.seamSprite) isl.shore.seamSprite.material.opacity = 0;
+    worldView.updateFog(player.tile, { animate: false });
+    audio.sfxReveal();
+    audio.sfxGate();
+    ui.toast('✸ The blast finds the hum in the shore — a folded footbridge shakes itself out over the void!', true);
+    ui.toast(`❂ <b>${isl.def.name}</b> — ${isl.def.sub} — drifts within reach.`, true);
+    announceFeats(meta.bump(s => { s.islets = (s.islets || 0) + 1; }));
+    saveNow(true);
+    return;
+  }
   if (seam) {
     const satIdx = seam.region - 100;
     const sat = world.satellites[satIdx];
@@ -1167,6 +1184,13 @@ window.__vael = {
     startBattle({ team: { biome, tier, count: 2, boss, ...extra }, title: extra.bossName || 'Test Battle' }),
   openGateAt: (q, r) => { const t = world.tiles.get(q + ',' + r); if (t?.gate) challengeGate(t); },
   detonate,
+  revealIslet: i => {
+    const isl = world.islets[i];
+    if (!isl || !world.revealIslet(i)) return;
+    worldView.revealHiddenTiles([...isl.bridgeTiles, ...isl.tiles]);
+    worldView.updateFog(player.tile, { animate: false });
+    saveNow(true);
+  },
   lookAt: (x, z, dist) => { worldRig.panTo({ x, z }, { instant: true }); if (dist) { worldRig.dist = dist; worldRig.apply(); } },
   localSites: () => currentLocalTile
     ? sitesFor(currentLocalTile).map(s => ({ id: s.id, name: s.name, type: s.type, actions: s.actions, cleared: s.cleared }))
@@ -1237,7 +1261,7 @@ function loop() {
       ui.toast(`The run continues — welcome back to <b>${player.tile.name}</b>.`, true);
     } else {
       ui.toast(`You wake in <b>${world.start.name}</b>, beneath the light of ${world.sun.name}.`, true);
-      ui.toast('The rifts are sealed by warded causeways. Grow strong, then challenge the wardens.', true);
+      ui.toast('The islands are joined only by narrow warded shallows. Grow strong, then challenge the wardens at the fords.', true);
     }
   }
 }
