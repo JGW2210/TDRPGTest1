@@ -1141,6 +1141,59 @@ const BOSSES = {
     // whisper-runes falling out of it
     runeOrbit(g, ['ᛉ', 'ᛟ', 'ᚦ', 'ᛞ'], o.accent, 100, o.seed);
   },
+  deity2(g, o) {
+    // the second act: Vhal-Suthek torn wider — the tear is most of it now
+    g.fillStyle = '#050208';
+    g.strokeStyle = o.accent; g.lineWidth = 7;
+    g.shadowColor = o.accent; g.shadowBlur = 26;
+    g.beginPath();
+    g.moveTo(0, -104);
+    g.bezierCurveTo(52, -62, 46, 0, 22, 52);
+    g.bezierCurveTo(12, 80, -12, 80, -22, 52);
+    g.bezierCurveTo(-46, 0, -52, -62, 0, -104);
+    g.closePath(); g.fill(); g.stroke();
+    // the seam splits at the crown — a second, smaller tear opening inside
+    g.strokeStyle = o.accent; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, -104); g.lineTo(-14, -60); g.moveTo(0, -104); g.lineTo(16, -66); g.stroke();
+    g.shadowBlur = 0;
+    // the ring of eyes, doubled and drifting outward
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + o.seed;
+      const rr = 88 + (i % 2) * 14;
+      const x = Math.cos(a) * rr, y = -12 + Math.sin(a) * 70;
+      glowEye(g, x, y, i % 3 === 0 ? 7 : 4, o.eye);
+    }
+    // tendrils no longer reach — they hang, gravity finally admitted
+    g.strokeStyle = '#2a1030'; g.lineWidth = 7; g.lineCap = 'round';
+    for (const [ex, sag] of [[-88, 96], [-52, 108], [-16, 112], [24, 108], [62, 100], [92, 88]]) {
+      g.beginPath();
+      g.moveTo(ex * 0.35, 30);
+      g.bezierCurveTo(ex * 0.6, sag * 0.5, ex * 0.9, sag * 0.85, ex, sag);
+      g.stroke();
+    }
+    // the inverted star, cracked in two — both halves still burning
+    g.fillStyle = o.eye; g.shadowColor = o.eye; g.shadowBlur = 22;
+    for (const [dx, rot] of [[-9, -0.3], [11, 0.35]]) {
+      g.save();
+      g.translate(dx, -20); g.rotate(rot);
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+        const rr = i % 2 === 0 ? 13 : 5;
+        g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      g.closePath(); g.fill();
+      g.restore();
+    }
+    g.shadowBlur = 0;
+    // the whisper-runes spill instead of orbiting
+    g.fillStyle = o.accent; g.globalAlpha = 0.85;
+    g.font = '19px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    ['ᛉ', 'ᛟ', 'ᚦ', 'ᛞ', 'ᛗ'].forEach((ch, i) => {
+      g.fillText(ch, -60 + i * 30, 96 + (i % 2) * 14);
+    });
+    g.globalAlpha = 1;
+  },
 
   // ═══ THE CRASH GUARDIANS: one elite per fallen visitor ═══
   visitor_iron_seed(g, o) {

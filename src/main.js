@@ -12,7 +12,7 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem, fmtV } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS, VISITORS } from './names.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS, VISITORS, CRASH_NOTICES } from './names.js';
 import { drawItem, drawMutation, CONSUMABLES, RARITY, ITEMS } from './items.js';
 import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
@@ -118,9 +118,10 @@ function refreshHud(tile) {
   ui.setStats(run);
   updateSkyButton(tile);
   audio.setRegionMusic({
-    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    biome: musicBiomeFor(tile, reg), tier: reg.tier, id: reg.id, seed: world.seed,
     town: tile.landmark?.type === 'town' || tile.landmark?.type === 'capital',
   });
+  audio.setVisitorHum(visitorHumFor(tile));
   announceFeats(meta.bump(s => {
     s.maxItems = Math.max(s.maxItems, run.items.length);
     s.maxShards = Math.max(s.maxShards, run.shards);
@@ -376,9 +377,15 @@ function skyDefFor(tile) {
   if (!sp) return null;
   const questReady = sp.quest && run.keepsakes.includes(sp.quest.token) && !run.questsDone.has(sp.id);
   const n = run.skyChats[sp.id] || 0;
+  let lines = questReady ? sp.quest.payoff : sp.sets[n % sp.sets.length];
+  // three of the sky's voices notice what fell: one extra line, in worlds
+  // that hold craters (never folded into a quest payoff)
+  if (!questReady && CRASH_NOTICES[sp.id] && world.crashes?.length) {
+    lines = [...lines, CRASH_NOTICES[sp.id]];
+  }
   return {
     id: sp.id, name: sp.name,
-    lines: questReady ? sp.quest.payoff : sp.sets[n % sp.sets.length],
+    lines,
     gift: sp.gift, voice: !!sp.summons, grants: sp.grants,
     quest: questReady ? sp.quest : null,
   };
@@ -1066,6 +1073,14 @@ function handleAction(site, label, btn) {
       ui.modalOutcome(`${def.guardian.name} steps between you and the visitor. The introduction is not optional.`);
       return;
     }
+    // the visitor speaks — before, after, and regardless of its gift
+    if (label === 'Listen') {
+      const n = run.skyChats['v_' + def.id] || 0;
+      run.skyChats['v_' + def.id] = n + 1;
+      for (const line of def.sets[n % def.sets.length]) ui.modalOutcome(line);
+      saveNow(true);
+      return;
+    }
     const mutItem = ITEMS.find(i => i.id === def.mutation);
     if (!mutItem || run.ownedIds.has(def.mutation)) {
       ui.modalOutcome('The visitor has given what it came to give. It sleeps now, and the crater keeps it.');
@@ -1443,14 +1458,28 @@ ui.inventoryHandlers = {
   },
 };
 
+// Standing IN one of the deep places sounds like that place, whatever the
+// region around it plays: craters hum, islets tinkle, the Wound is the Wound.
+function musicBiomeFor(tile, reg) {
+  return ['CRASH', 'ISLET', 'WOUND'].includes(tile.biome) ? tile.biome : reg.dominantBiome;
+}
+
+// 1 at a crater's floor, fading to silence four hexes out
+function visitorHumFor(tile) {
+  if (!world.crashes?.length) return 0;
+  const d = Math.min(...world.crashes.map(c => hexDist(tile.q, tile.r, c.center.q, c.center.r)));
+  return d > 4 ? 0 : 1 - d / 5;
+}
+
 // the music of the spheres begins on the first human touch (autoplay policy)
 const bootAudio = () => {
   audio.init();
   const reg = world.regionOf(player.tile);
   audio.setRegionMusic({
-    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    biome: musicBiomeFor(player.tile, reg), tier: reg.tier, id: reg.id, seed: world.seed,
     town: player.tile.landmark?.type === 'town' || player.tile.landmark?.type === 'capital',
   });
+  audio.setVisitorHum(visitorHumFor(player.tile));
   updateAudioButton();
 };
 window.addEventListener('pointerdown', bootAudio, { once: true });

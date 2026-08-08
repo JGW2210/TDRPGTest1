@@ -387,6 +387,43 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    before-fight, elite fight, two-step accept, refuse-once + claim-later,
    wound sealed at 4 / torn at 5, retier spot-checks). BUILD is 17.
 
+18. **Pre-PR polish round "17b"** (same branch; poll held — user picked
+   3 of 4 recommended: Listen cycles + sky notices / all-three biome music
+   + crater hum / deity phase 2; mutation-economy changes deliberately
+   DEFERRED to human playtest — the 1-crash worst case ships knowingly
+   RNG-gated for the fifth change): **visitors speak** — every VISITORS
+   def gains 2 cycling Listen `sets` (guardian-gated 'Listen' action on
+   the crash_body site, counter `run.skyChats['v_'+id]`, works before and
+   after the claim); **the sky notices the falls** — `CRASH_NOTICES`
+   (names.js) holds one line each for sun/third_sister/door_ajar,
+   appended at runtime by `skyDefFor` to whichever dialogue set plays
+   when `world.crashes.length > 0` (never onto quest payoffs); **audio
+   identity** — MUSIC entries for WOUND (root 36, b2-over-tritone,
+   pulse 2.8) / CRASH (root 39 sus2-bent-flat, bell, 2.6) / ISLET
+   (root 57 music-box, 0.9), each flagged `own: true` so the tier≥4
+   DARK palette swap no longer erases an authored deep palette (dread
+   still applies); main.js `musicBiomeFor` prefers the TILE biome for
+   CRASH/ISLET/WOUND (before this, islets could never key their entry —
+   region music is dominant-biome-keyed); **crater hum** — `audio.
+   setVisitorHum(level)` drives a deep detuned sine/triangle pair
+   (49 Hz) on the drone bus, fed by `visitorHumFor(tile)` each hop
+   (1 at the crater floor → 0 four hexes out; `_pendingHum` survives
+   pre-init calls); **deity phase 2** — in `_enemyPhase`, a deity below
+   half hp spends its turn on `_deityPhase2`: arena darkens (ambLight
+   0.9→0.4, keyLight 1.9→0.85, fog thickens — per-battle scene so no
+   reset needed), portrait swaps to the new `deity2` painter
+   (monsters.js: the tear is most of it now — split crown seam, 14
+   drifting eyes, sagging tendrils, the inverted star cracked in two),
+   enrage commits permanently, and `_spawnWhisperAdds(2)` pulls two
+   FOES.WOUND foes through at tier−2 × 0.8 hp (full enemy objects,
+   ids = array positions); the rotation becomes 4-beat when `phase2`
+   (charge/drink/flurry/**crush BARRAGE** = `_enemyStrike(e, {crush,
+   hits:3})`) at 0.85 aggression. Suite 40 seeds green; 21-check 17b
+   playtest green (listen gating/cycling, CRASH music key + hum on/off
+   + WOUND-at-tier-7 palette, Vael's notice line in-cinematic, phase-2
+   transition/adds/darkening/barrage — note `_log` shows only the last
+   line; tests must hook `_logHist`). BUILD is 18.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -818,14 +855,17 @@ the band mid, call `battle._resolveTiming()`.
 - Roamer speed ratios (0.35–1.35) and battle projectile pacing
   (0.2–0.35s flights) are theory-tuned, untested by human play.
 - ISLET biome: FOES.ISLET reuses BRIDGE species (haunt/remora) so no new
-  monster art was needed; MUSIC falls back to MEADOW (no ISLET entry).
+  monster art was needed. (Its MUSIC entry exists as of round 17b.)
 - Round-7 numbers untested by humans: mutation stat swings, deity
   hp ×2.6×1.6 at tier 7, wound-battle counts, bargain prices, water-pack
   density (≈11-16/world), nebula reward rates. Suites verify structure,
   not feel.
-- The deity is one phase; a phase-2 (adds/board-clear) was floated but
-  not built. Mutations cannot be removed once taken (no cleansing
-  shrine yet).
+- The deity has a phase 2 as of round 17b (adds + barrage + torn
+  portrait); its numbers (add tier−2 × 0.8 hp, 0.85 aggression, 3-crush
+  barrage) are sim-free and untested by humans. Mutations cannot be
+  removed once taken (no cleansing shrine yet — the option was polled
+  and declined for now). The Wound-at-5 path in a 1-crash world rides
+  on RNG for the fifth change — knowingly shipped, awaiting playtest.
 - The rarity skew and MEADOW/FOREST astral holes were fixed this round
   (16 retags; totals now 42c/48u/43r/17a, one astral per biome pool).
 - `summary.md` (this file) and the `__vael` debug handle ship in the repo;
@@ -844,8 +884,8 @@ the band mid, call `battle._resolveTiming()`.
   deity difficulty, bargain prices)
 - GPU taste pass on round 8-16 visuals (debris/beacon/aurora/scrim
   intensities, drowned-body models, constellation cinematic framing)
-- Deity phase 2 / Wound music+audio identity (WOUND has no MUSIC entry
-  yet — falls back by biome default; ISLET likewise)
+- ~~Deity phase 2 / Wound music identity~~ (both built in round 17b; a
+  dedicated deity battle THEME — beyond the shared taiko — remains open)
 - A mutation-cleansing shrine (mutations are currently permanent)
 - More speakers/errands if the story layer lands well (nebulas, the
   hermit, the Oxidized King's dreams; a second act of keepsakes)

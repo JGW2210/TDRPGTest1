@@ -1429,7 +1429,7 @@ export function generateWorld(seed) {
         type: 'side', subtype: 'crash_body', visitor: def.id,
         name: def.name,
         flavor: def.flavor + ' (' + def.sub + ')',
-        actions: ['Approach the Visitor', 'Refuse the Gift'],
+        actions: ['Listen', 'Approach the Visitor', 'Refuse the Gift'],
       }];
     } else if (lm?.type === 'deity') {
       sites = [{

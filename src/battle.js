@@ -131,10 +131,12 @@ export class BattleSystem {
     const scene = new THREE.Scene();
     this.scene = scene;
     scene.fog = new THREE.FogExp2(0x0a0d24, 0.012);
-    scene.add(new THREE.AmbientLight(0x9aa4d8, 0.9));
+    this.ambLight = new THREE.AmbientLight(0x9aa4d8, 0.9);
+    scene.add(this.ambLight);
     const key = new THREE.DirectionalLight(0xfff2dd, 1.9);
     key.position.set(-6, 12, 8);
     scene.add(key);
+    this.keyLight = key;
 
     const biome = BIOMES[team.biome] || BIOMES.MEADOW;
     const back = new THREE.Mesh(
@@ -852,6 +854,77 @@ export class BattleSystem {
 
   // ------------------------------------------------------------ enemy turn ---
 
+  // -------------------------------------------------- the deity's second act ---
+  // At half health Vhal-Suthek tears wider: the arena light bleeds out, the
+  // portrait opens onto its second state, and two of the Choir Below pull
+  // themselves through. The transition spends its turn — one breath to
+  // choose a target before the barrage rotation begins.
+  async _deityPhase2(e) {
+    e.phase2 = true;
+    e.enraged = true;   // there is no calmer state to return to
+    this._log(`${e.name} TEARS WIDER — the light bleeds out of the arena!`);
+    audio.sfxGate?.();
+    if (this.ambLight) this.ambLight.intensity = 0.4;
+    if (this.keyLight) this.keyLight.intensity = 0.85;
+    this.scene.fog = new THREE.FogExp2(0x070214, 0.02);
+    const tex2 = makeEnemyTexture({
+      base: '#3a1430', eye: '#ff5a7a', role: 'brute', seed: 0.7, boss: true,
+      bossKind: 'deity2', accent: '#a6ff57',
+    });
+    e.mesh.material.map = tex2;
+    e.mesh.material.needsUpdate = true;
+    this._shake(e.mesh);
+    this._burst(e.mesh.position.clone().add(new THREE.Vector3(0, 1.8, 0)), '#a6ff57');
+    await wait(750);
+    this._spawnWhisperAdds(2);
+    this._log('Two of the Choir Below pull themselves through the tear!');
+    this._refreshCards();
+    await wait(700);
+  }
+
+  _spawnWhisperAdds(n) {
+    const roster = FOES.WOUND;
+    const tier = Math.max(1, (this.team.tier ?? 8) - 2);   // lesser voices
+    const spots = [[1.6, -3.3], [5.2, -0.1]];
+    const biome = BIOMES.WOUND;
+    for (let k = 0; k < n; k++) {
+      const spec = pick(this.rng, roster);
+      const mods = ROLE_MODS[spec.r] || ROLE_MODS.brute;
+      const E = CONFIG.battle.enemy;
+      const hp = Math.round((E.hp0 + E.hpT * tier + E.hpQ * tier * tier) * mods.hp * 0.8);
+      const [x, z] = spots[k % spots.length];
+      const tex = makeEnemyTexture({
+        base: '#' + new THREE.Color(biome.color).offsetHSL(0.02 * k, 0.12, -0.1).getHexString(),
+        eye: '#ffd24a', role: spec.r, seed: this.rng(),
+        species: speciesSlug(spec.n),
+        accent: '#' + new THREE.Color(biome.accent).getHexString(),
+      });
+      const s = 1.9 + (spec.r === 'brute' ? 0.35 : 0);
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(s, s),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false })
+      );
+      mesh.geometry.translate(0, s / 2, 0);
+      mesh.position.set(x, 0, z);
+      this.scene.add(mesh);
+      const sh = shadowBlob(s * 0.32);
+      sh.position.set(x, 0.03, z);
+      this.scene.add(sh);
+      this._burst(mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), '#a6ff57');
+      this.enemies.push({
+        id: this.enemies.length, name: spec.n + ' ' + 'AB'[k % 2], role: spec.r,
+        ranged: spec.r === 'mystic',
+        hp, maxHP: hp,
+        atk: Math.round((E.atk0 + E.atkT * tier + E.atkQ * tier * tier) * mods.atk * 10) / 10,
+        spd: Math.round((4 + tier) * mods.spd),
+        boss: false, deity: false,
+        burn: 0, burnTurns: 0, chill: 0, stun: 0, charging: false, enraged: false,
+        mesh, home: mesh.position.clone(), dead: false,
+        intent: 'attack',
+      });
+    }
+  }
+
   async _enemyPhase() {
     this.state = 'enemyPhase';
     const tier = this.team.tier ?? 0;
@@ -871,15 +944,24 @@ export class BattleSystem {
         await wait(500);
         continue;
       }
+      if (e.deity && !e.phase2 && e.hp < e.maxHP / 2) {
+        // the second act opens — the transition spends the deity's turn
+        await this._deityPhase2(e);
+        continue;
+      }
       if (e.charging) {
         e.charging = false;
         // wound-up blows land as unblockable crushes in the deep (and always from bosses)
         const crush = e.boss || tier >= 2;
         await this._enemyStrike(e, crush ? { crush: true } : { heavy: true });
-      } else if (e.deity && this.rng() < 0.65) {
-        // the Wound made flesh fights with every voice at once
-        const move = this.turn % 3;
-        if (move === 0) {
+      } else if (e.deity && this.rng() < (e.phase2 ? 0.85 : 0.65)) {
+        // the Wound made flesh fights with every voice at once — and torn
+        // wider, it adds a fourth beat: the crush BARRAGE
+        const move = this.turn % (e.phase2 ? 4 : 3);
+        if (move === 3) {
+          this._log(`${e.name} brings every voice down at once — a BARRAGE of crushing blows!`);
+          await this._enemyStrike(e, { crush: true, hits: 3 });
+        } else if (move === 0) {
           e.charging = true;
           this._log(`${e.name} folds the light back for a CRUSHING blow…`);
           this._refreshCards();
