@@ -454,7 +454,9 @@ body.in-battle #btn-menu { display: none; }
   to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 .bl-window {
-  position: relative; height: 216px; overflow: hidden; border-radius: 10px;
+  /* round 20: a taller run — shapes travel further at higher speed, with
+     only slightly less time to react (fall 1.05s → 0.95s) */
+  position: relative; height: 290px; overflow: hidden; border-radius: 10px;
   background: linear-gradient(to bottom, rgba(8, 10, 26, 0.05), rgba(8, 10, 26, 0.55) 35%, rgba(16, 20, 44, 0.8));
   box-shadow: 0 0 0 1px rgba(126, 140, 255, 0.14) inset, 0 2px 18px rgba(0, 0, 0, 0.5);
 }

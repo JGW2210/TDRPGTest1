@@ -4,8 +4,8 @@
 //
 // stat keys: vessel (max Star Vessels, in HALVES — vessel gains are rare
 //            and deliberate; a few strong relics trade vessels away),
-//            atk, spd, luck (crit %), dodge (%), shardGain (%),
-//            timingBonus, blockBonus
+//            atk, spd, luck (fortune % — bends draw-rarity brackets), dodge (%), shardGain (%),
+//            focus (max focus, in ½-stages), luck (rarity fortune)
 // Heal-flag values are in half-vessels: killHeal/afterBattleHeal heal that
 // many halves per trigger; blockHeal/perfectHeal allow that many ½★ heals
 // per battle (on perfect blocks / perfect strikes).
@@ -54,11 +54,11 @@ export const ITEMS = [
     flavor: 'Scoops deeper than its size suggests. Rude, physics-wise.' }),
   I('picnic_stone', 'MEADOW', 'c', 'The Picnic Stone', {
     stats: { spd: 1, luck: 3 }, tags: ['bloom'],
-    desc: '+1 SPD, +3% crit.',
+    desc: '+1 SPD, +3% luck.',
     flavor: 'Every road is shorter after sitting on it.' }),
   I('wisp_lantern', 'MEADOW', 'r', 'Wisp-in-a-Lantern', {
     stats: { luck: 8 }, tags: ['bloom', 'sun'], flags: { visionPlus: 1 },
-    desc: '+8% crit. Your vision reaches one hex further.',
+    desc: '+8% luck. Your vision reaches one hex further.',
     flavor: 'It only pretends to be trapped.' }),
   I('boar_saddle', 'MEADOW', 'u', 'Runeboar War-Saddle', {
     stats: { atk: 3, spd: -1 }, tags: ['bloom'],
@@ -73,8 +73,8 @@ export const ITEMS = [
     desc: '+3% dodge. Perfect blocks answer for 2 damage.',
     flavor: 'It held a pole for forty years. Your wrist is a promotion.' }),
   I('bee_metronome', 'MEADOW', 'r', 'Beekeeper’s Metronome', {
-    stats: { timingBonus: 1 }, tags: ['bloom'], flags: { noteSlow: 0.08 },
-    desc: 'Timing multipliers +0.15; block-shapes fall 8% slower.',
+    stats: { focus: 1 }, tags: ['bloom'], flags: { noteSlow: 0.08 },
+    desc: 'Focus +½ stage; block-shapes fall 8% slower.',
     flavor: 'The hive keeps 4/4. The honey keeps the metronome.' }),
   I('harvest_bell', 'MEADOW', 'u', 'Harvest Bell', {
     stats: { atk: 1 }, tags: ['sun'], flags: { heavyPlus: 0.3 },
@@ -93,15 +93,15 @@ export const ITEMS = [
     flavor: 'Grows on you.' }),
   I('fernking_crown', 'FOREST', 'u', 'The Fern King’s Crown', {
     core: true, stats: { atk: 2, luck: 4 }, tags: ['bloom'], flags: { shopMarkup: 0.25 },
-    desc: '+2 ATK, +4% crit. Merchants resent royalty: shop prices +25%.',
+    desc: '+2 ATK, +4% luck. Merchants resent royalty: shop prices +25%.',
     flavor: 'Heavy is the head. Itchy, also.' }),
   I('thorn_ring', 'FOREST', 'u', 'Ring of Patient Thorns', {
     core: true, stats: {}, tags: ['bloom'], flags: { thorns: 2 },
     desc: 'Foes that strike you take 2 damage back.',
     flavor: 'The forest forgives. The ring does not.' }),
   I('bark_shield', 'FOREST', 'r', 'Treant-Bark Buckler', {
-    core: true, stats: { blockBonus: 1, dodge: 3 }, tags: ['bloom'],
-    desc: '+3% dodge. Your Block window is 30% wider.',
+    core: true, stats: { focus: 1, dodge: 3 }, tags: ['bloom'],
+    desc: '+3% dodge, +½ focus stage.',
     flavor: 'Donated. Probably.' }),
   I('spore_pouch', 'FOREST', 'u', 'Sighing Spore Pouch', {
     stats: {}, tags: ['bloom'],
@@ -110,7 +110,7 @@ export const ITEMS = [
     flavor: 'Inhale on the exhale. Never the reverse.' }),
   I('owl_eyes', 'FOREST', 'r', 'Borrowed Owl Eyes', {
     stats: { luck: 10 }, tags: ['moon'], flags: { seeIntent: true },
-    desc: '+10% crit. You see what each foe intends.',
+    desc: '+10% luck. You see what each foe intends.',
     flavor: 'The owl insisted. The owl is now a bat, professionally.' }),
   I('root_boots', 'FOREST', 'c', 'Rootbound Boots', {
     stats: { spd: -1 }, tags: ['bloom'], flags: { noteSlow: 0.1 },
@@ -152,7 +152,7 @@ export const ITEMS = [
     flavor: 'You are 4% gravel now. It suits you.' }),
   I('vertigo_charm', 'MOUNTAIN', 'c', 'Vertigo Charm', {
     core: true, stats: { spd: 3, luck: 5 }, tags: [],
-    desc: '+3 SPD, +5% crit.',
+    desc: '+3 SPD, +5% luck.',
     flavor: 'The trick is to fall upward, socially.' }),
   I('anvil_splinter', 'MOUNTAIN', 'c', 'Anvil Splinter', {
     core: true, stats: { atk: 3, spd: -1 }, tags: [],
@@ -192,8 +192,8 @@ export const ITEMS = [
     desc: '+1 SPD. The leap-window on crushing blows is 25% wider.',
     flavor: 'Marks the spot your feet will need before your eyes agree.' }),
   I('stone_metronome', 'MOUNTAIN', 'r', 'Metronome of Standing Stone', {
-    stats: { timingBonus: 1 }, tags: [], flags: { gatherCalm: 0.35 },
-    desc: 'Timing multipliers +0.15; your energy gathers 35% longer — more time to read each bar.',
+    stats: { focus: 1 }, tags: [], flags: { gatherCalm: 0.35 },
+    desc: 'Focus +½ stage; your energy gathers 35% longer — more time to read each bar.',
     flavor: 'It ticks in geologic time, rounded down for you.' }),
   I('oxbell', 'MOUNTAIN', 'u', 'Ox-Bell of the High Pass', {
     stats: { atk: 2 }, tags: [], flags: { interruptGood: true },
@@ -241,7 +241,7 @@ export const ITEMS = [
     flavor: 'It breathes for the fire when the fire forgets.' }),
   I('caldera_crown', 'VOLCANO', 'a', 'Crown of the Caldera Organ', {
     stats: { atk: 4, luck: 4 }, tags: ['ember', 'card'], flags: { burnOnHit: 2 },
-    desc: '+4 ATK, +4% crit. Your strikes Burn (2/turn, 2 turns).',
+    desc: '+4 ATK, +4% luck. Your strikes Burn (2/turn, 2 turns).',
     flavor: 'The Choir’s final chord, cast in cooling stone. Wear the crescendo.' }),
   I('quench_hiss', 'VOLCANO', 'c', 'Quench-Hiss Rhythm', {
     core: true, stats: {}, tags: ['ember'], flags: { noteSlow: 0.08 },
@@ -257,13 +257,13 @@ export const ITEMS = [
     flavor: 'What the volcano discards still weighs an argument’s worth.' }),
   I('ash_bead', 'VOLCANO', 'u', 'Ashen Focus-Bead', {
     stats: { luck: 4 }, tags: ['ember'], flags: { gatherCalm: 0.3 },
-    desc: '+4% crit. Your energy gathers 30% longer before every bar.',
+    desc: '+4% luck. Your energy gathers 30% longer before every bar.',
     flavor: 'Worry it clockwise. The eruption postpones.' }),
 
   // ════════════════════════════════════════════════════════ DESERT (14) ═══
   I('glass_quill', 'DESERT', 'r', 'Glass Quill', {
-    core: true, stats: { luck: 12 }, tags: ['glass'], flags: { critShatter: 2 },
-    desc: '+12% crit. Crits shatter: your next strike gains +2 damage.',
+    core: true, stats: { luck: 12, focus: 1 }, tags: ['glass'],
+    desc: '+12% luck, +½ focus stage.',
     flavor: 'Writes only in past tense.' }),
   I('mirage_veil', 'DESERT', 'u', 'Mirage Veil', {
     core: true, stats: { dodge: 20, vessel: -1 }, tags: ['glass'],
@@ -275,16 +275,16 @@ export const ITEMS = [
     flavor: 'The mark of noon, which forgives nothing.' }),
   I('dune_compass', 'DESERT', 'c', 'Dune-Swimmer’s Compass', {
     core: true, stats: { spd: 2, luck: 3 }, tags: [],
-    desc: '+2 SPD, +3% crit.',
+    desc: '+2 SPD, +3% luck.',
     flavor: 'Points to the nearest exit from any conversation.' }),
   I('bleached_dice', 'DESERT', 'u', 'Sun-Bleached Dice', {
     stats: { luck: 8 }, tags: [],
     ability: { id: 'gamble', name: 'Revenant’s Gamble', cd: 3, kind: 'gamble', desc: 'Strike for anywhere between nothing and 300% ATK.' },
-    desc: '+8% crit. Grants ability: Revenant’s Gamble (0–300% ATK, 3-turn cooldown).',
+    desc: '+8% luck. Grants ability: Revenant’s Gamble (0–300% ATK, 3-turn cooldown).',
     flavor: 'Carved from something that also gambled.' }),
   I('glasscoil_fang', 'DESERT', 'c', 'Glasscoil Fang', {
     stats: { atk: 2, luck: 6 }, tags: ['glass'],
-    desc: '+2 ATK, +6% crit.',
+    desc: '+2 ATK, +6% luck.',
     flavor: 'Transparent about its intentions.' }),
   I('sirocco_skin', 'DESERT', 'c', 'Sirocco Waterskin', {
     stats: {}, tags: [], flags: { dewPotency: 1 },
@@ -304,11 +304,11 @@ export const ITEMS = [
     flavor: 'Whatever is hammered here keeps its shadow forever.' }),
   I('still_air_lens', 'DESERT', 'r', 'Lens of Still Air', {
     stats: { luck: 4 }, tags: ['glass'], flags: { veilSight: true },
-    desc: '+4% crit. The sand-veil can no longer hide your timing.',
+    desc: '+4% luck. The sand-veil can no longer hide your timing.',
     flavor: 'Ground from a noon with no wind in it.' }),
   I('scorpion_hilt', 'DESERT', 'u', 'Scorpion-Hilt Dagger', {
     stats: { luck: 4 }, tags: [], flags: { riposte: 3 },
-    desc: '+4% crit. Perfect blocks answer for 3 damage.',
+    desc: '+4% luck. Perfect blocks answer for 3 damage.',
     flavor: 'Strikes back on principle. The principle is spite.' }),
   I('dune_drum', 'DESERT', 'c', 'Dune-Skin Drum', {
     core: true, stats: { spd: 1 }, tags: [], flags: { noteSlow: 0.08 },
@@ -329,12 +329,12 @@ export const ITEMS = [
     desc: 'As each battle begins, the Hound is dealt: 6 damage to a random foe.',
     flavor: 'It is drawn. It was always going to be drawn.' }),
   I('sleet_mantle', 'TUNDRA', 'r', 'Sleet Mantle', {
-    core: true, stats: { blockBonus: 1 }, tags: ['moon'],
-    desc: 'Your Block window is 30% wider.',
+    core: true, stats: { focus: 1 }, tags: ['moon'],
+    desc: 'Focus +½ stage.',
     flavor: 'The storm signs its work; this is a forgery good enough to fool it.' }),
   I('auroral_thread', 'TUNDRA', 'c', 'Auroral Thread', {
     core: true, stats: { dodge: 5, luck: 3 }, tags: ['moon'],
-    desc: '+5% dodge, +3% crit.',
+    desc: '+5% dodge, +3% luck.',
     flavor: 'Sewn into your hem, the sky keeps half an eye on you.' }),
   I('pale_tower_card', 'TUNDRA', 'u', 'Pale Card: “The Tower”', {
     stats: { atk: 3, vessel: -1 }, tags: ['card'],
@@ -350,7 +350,7 @@ export const ITEMS = [
     flavor: 'Shed in courtship, gathered in war.' }),
   I('pale_moon_card', 'TUNDRA', 'u', 'Pale Card: “The Moon”', {
     stats: { luck: 8, dodge: 8 }, tags: ['card', 'moon'],
-    desc: '+8% crit, +8% dodge.',
+    desc: '+8% luck, +8% dodge.',
     flavor: 'The deck’s favorite. The deck denies having favorites.' }),
   I('white_silence', 'TUNDRA', 'r', 'A White Silence', {
     stats: {}, tags: ['moon'],
@@ -366,8 +366,8 @@ export const ITEMS = [
     desc: 'Block-shapes fall 10% slower.',
     flavor: 'Winter’s glockenspiel. Play gently or wear it.' }),
   I('long_white_stance', 'TUNDRA', 'r', 'Stance of the Long White', {
-    stats: { blockBonus: 1 }, tags: ['moon'], flags: { poiseful: true, openingPlus: 0.15 },
-    desc: 'Block windows 30% wider; a good Swift Cut counts as perfect, and your openings hit +15% harder.',
+    stats: { focus: 1 }, tags: ['moon'], flags: { poiseful: true, openingPlus: 0.15 },
+    desc: 'Focus +½ stage; a good Swift Cut counts as perfect, and your openings hit +15% harder.',
     flavor: 'The stillness between snowfalls, taught as footwork.' }),
   I('sleet_visor', 'TUNDRA', 'c', 'Sleet Visor', {
     core: true, stats: { dodge: 3 }, tags: ['moon'], flags: { dodgePlus: 1 },
@@ -375,7 +375,7 @@ export const ITEMS = [
     flavor: 'See the storm the way the storm sees you: briefly.' }),
   I('held_breath', 'TUNDRA', 'u', 'A Breath, Held', {
     stats: { luck: 3 }, tags: ['moon'], flags: { gatherCalm: 0.3 },
-    desc: '+3% crit. Your energy gathers 30% longer before every bar.',
+    desc: '+3% luck. Your energy gathers 30% longer before every bar.',
     flavor: 'Let out in spring, it will have opinions.' }),
 
   // ═══════════════════════════════════════════════════════════ SEA (14) ═══
@@ -385,7 +385,7 @@ export const ITEMS = [
     flavor: 'Still singing, very quietly, about you.' }),
   I('fathom_pearl', 'SEA', 'u', 'Fathom Pearl', {
     core: true, stats: { vessel: 1, atk: 1, spd: 1, luck: 5, shardGain: -33 }, tags: ['water'],
-    desc: '+½ Star Vessel, +1 ATK, +1 SPD, +5% crit — but shard finds −33%.',
+    desc: '+½ Star Vessel, +1 ATK, +1 SPD, +5% luck — but shard finds −33%.',
     flavor: 'Everything the deep owns, it lends at interest.' }),
   I('anglers_lure', 'SEA', 'u', 'Void Angler’s Lure', {
     core: true, stats: {}, tags: ['water'], flags: { fewerFoes: true },
@@ -439,8 +439,8 @@ export const ITEMS = [
 
   // ═══════════════════════════════════════════════════════ CRYSTAL (14) ═══
   I('prism_core', 'CRYSTAL', 'r', 'Prism Core', {
-    core: true, stats: { timingBonus: 1 }, tags: ['glass'],
-    desc: 'All your timing multipliers are raised by +0.15.',
+    core: true, stats: { focus: 1 }, tags: ['glass'],
+    desc: 'Focus +½ stage: your steadiness runs deeper before the bands narrow.',
     flavor: 'Light enters confused and leaves determined.' }),
   I('chime_shard', 'CRYSTAL', 'u', 'Chime Shard', {
     core: true, stats: {}, tags: ['glass'],
@@ -449,15 +449,15 @@ export const ITEMS = [
     flavor: 'Struck once, it rings forever; the trick is aiming the forever.' }),
   I('facet_eye', 'CRYSTAL', 'r', 'Facet Eye', {
     core: true, stats: { luck: 10 }, tags: ['glass'], flags: { seeIntent: true },
-    desc: '+10% crit. You see what each foe intends to do next.',
+    desc: '+10% luck. You see what each foe intends to do next.',
     flavor: 'Blink schedule: never.' }),
   I('tuning_spar', 'CRYSTAL', 'r', 'Tuning Spar', {
-    core: true, stats: { timingBonus: 1 }, tags: ['glass'],
-    desc: 'All your timing multipliers are raised by +0.15.',
+    core: true, stats: { focus: 1 }, tags: ['glass'],
+    desc: 'Focus +½ stage: your steadiness runs deeper before the bands narrow.',
     flavor: 'Hum first. It corrects you kindly.' }),
   I('refracted_coin', 'CRYSTAL', 'c', 'Refracted Coin', {
     stats: { luck: 6, shardGain: 10 }, tags: ['glass'],
-    desc: '+6% crit, +10% shard finds.',
+    desc: '+6% luck, +10% shard finds.',
     flavor: 'Lands on all its edges at once.' }),
   I('widow_chime', 'CRYSTAL', 'u', 'The Widow’s Smallest Chime', {
     stats: { atk: 2 }, tags: ['glass'], flags: { stunOnPerfect: 20 },
@@ -465,7 +465,7 @@ export const ITEMS = [
     flavor: 'She has larger ones. Pray she keeps to the small.' }),
   I('lattice_veins', 'CRYSTAL', 'r', 'Lattice Veins', {
     stats: { luck: 4 }, tags: ['glass'], flags: { perfectHeal: 2 },
-    desc: '+4% crit. Perfect strikes restore ½★ (twice per battle).',
+    desc: '+4% luck. Perfect strikes restore ½★ (twice per battle).',
     flavor: 'Your blood learns symmetry. Your heart keeps 4/4 anyway.' }),
   I('golem_kernel', 'CRYSTAL', 'u', 'Shard-Golem Kernel', {
     stats: { atk: 1, spd: -1 }, tags: ['glass'], flags: { thorns: 2 },
@@ -473,27 +473,27 @@ export const ITEMS = [
     flavor: 'It wants to be a golem again. For now, be its golem.' }),
   I('prophecy_prism', 'CRYSTAL', 'r', 'Prism of Mild Prophecy', {
     stats: { luck: 6, dodge: 6 }, tags: ['glass'], flags: { seeIntent: true, crackSense: true },
-    desc: '+6% crit, +6% dodge, see foe intents, and sense sealed hexes further.',
+    desc: '+6% luck, +6% dodge, see foe intents, and sense sealed hexes further.',
     flavor: 'Foretells the next four seconds with total accuracy and no context.' }),
   I('facet_crown', 'CRYSTAL', 'a', 'The Facet Crown', {
-    stats: { timingBonus: 2, luck: 8 }, tags: ['glass', 'card'],
-    desc: 'Timing multipliers +0.30, +8% crit.',
+    stats: { focus: 2, luck: 8 }, tags: ['glass', 'card'],
+    desc: 'Focus +1 stage, +8% luck.',
     flavor: 'Refracts intention into execution. Kings wept for less.' }),
   I('facet_pendulum', 'CRYSTAL', 'r', 'Facet Pendulum', {
-    stats: { timingBonus: 1 }, tags: ['glass'], flags: { noteSlow: 0.1 },
-    desc: 'Timing multipliers +0.15; block-shapes fall 10% slower.',
+    stats: { focus: 1 }, tags: ['glass'], flags: { noteSlow: 0.1 },
+    desc: 'Focus +½ stage; block-shapes fall 10% slower.',
     flavor: 'Swings forever; forgives once per swing.' }),
   I('chime_of_keys', 'CRYSTAL', 'u', 'Chime of Three Keys', {
     core: true, stats: { luck: 4 }, tags: ['glass'], flags: { trapWard: 1 },
-    desc: '+4% crit. The first trap you spring each battle rings harmless.',
+    desc: '+4% luck. The first trap you spring each battle rings harmless.',
     flavor: 'A, S and D, tuned a hair apart, agreeing about you.' }),
   I('prism_edge', 'CRYSTAL', 'u', 'Prism Counter-Edge', {
     stats: {}, tags: ['glass'], flags: { riposte: 3 },
     desc: 'Perfect blocks answer for 3 damage.',
     flavor: 'Light enters an argument and leaves a verdict.' }),
   I('resonant_core', 'CRYSTAL', 'r', 'The Resonant Core', {
-    stats: { timingBonus: 1 }, tags: ['glass'], flags: { gatherCalm: 0.3 },
-    desc: 'Timing multipliers +0.15; your energy gathers 30% longer.',
+    stats: { focus: 1 }, tags: ['glass'], flags: { gatherCalm: 0.3 },
+    desc: 'Focus +½ stage; your energy gathers 30% longer.',
     flavor: 'It hums the note before the note. Follow it in.' }),
 
   // ═══════════════════════════════════════════════════════════ ANY (49) ═══
@@ -518,12 +518,12 @@ export const ITEMS = [
     desc: 'Heal ½★ after each battle.',
     flavor: 'Boils on spite alone.' }),
   I('spare_string', 'ANY', 'r', 'A Spare String', {
-    core: true, stats: { timingBonus: 1 }, tags: [],
-    desc: 'Timing multipliers +0.15.',
+    core: true, stats: { focus: 1 }, tags: [],
+    desc: 'Focus +½ stage.',
     flavor: 'For the instrument you are, apparently.' }),
   I('left_glove', 'ANY', 'c', 'The Left Glove', {
     core: true, stats: { atk: 1, luck: 4 }, tags: [],
-    desc: '+1 ATK, +4% crit.',
+    desc: '+1 ATK, +4% luck.',
     flavor: 'Its partner is out there, being right about everything.' }),
   I('rune_eraser', 'ANY', 'u', 'Rune Eraser', {
     core: true, stats: {}, tags: [], flags: { fleeSure: true },
@@ -551,7 +551,7 @@ export const ITEMS = [
     flavor: 'Stands where you tell it. Falls where it chooses.' }),
   I('moth_lantern', 'ANY', 'c', 'Moth-Tender’s Lantern', {
     core: true, stats: { luck: 6 }, tags: ['moon'],
-    desc: '+6% crit.',
+    desc: '+6% luck.',
     flavor: 'The moths do the aiming.' }),
   I('borrowed_time', 'ANY', 'r', 'Borrowed Time (Overdue)', {
     stats: { spd: 4 }, tags: [], flags: { extraFoeChance: 0.15 },
@@ -563,7 +563,7 @@ export const ITEMS = [
     flavor: 'It copies you a half-beat late, and better.' }),
   I('pocket_eclipse', 'ANY', 'r', 'Pocket Eclipse', {
     stats: { atk: 2, luck: 6 }, tags: ['sun', 'moon'],
-    desc: '+2 ATK, +6% crit. Counts as both sun and moon.',
+    desc: '+2 ATK, +6% luck. Counts as both sun and moon.',
     flavor: 'Do not open both hands at once.' }),
   I('marching_drum', 'ANY', 'c', 'Ghost Marching-Drum', {
     stats: { atk: 1, spd: 2 }, tags: [],
@@ -583,15 +583,15 @@ export const ITEMS = [
     flavor: 'It rings inward now.' }),
   I('star_atlas_torn', 'ANY', 'c', 'Torn Page of a Star-Atlas', {
     stats: { luck: 5, spd: 1 }, tags: [],
-    desc: '+5% crit, +1 SPD.',
+    desc: '+5% luck, +1 SPD.',
     flavor: 'The missing half maps the mistakes.' }),
   I('vagrant_ring', 'ANY', 'c', 'Vagrant’s Iron Ring', {
     stats: { atk: 1, luck: 3 }, tags: [],
-    desc: '+1 ATK, +3% crit.',
+    desc: '+1 ATK, +3% luck.',
     flavor: 'Passed hand to hand until hands improved.' }),
   I('lucky_bones', 'ANY', 'u', 'Lucky Knucklebones', {
     stats: { luck: 10, atk: -1 }, tags: [],
-    desc: '+10% crit, −1 ATK. Fortune favors the light-fisted.',
+    desc: '+10% luck, −1 ATK. Fortune favors the light-fisted.',
     flavor: 'Whose? Theirs, once. Yours, now. Luck moves.' }),
   I('hourglass_cracked', 'ANY', 'r', 'Cracked Hourglass', {
     stats: {}, tags: [], flags: { extraActionEvery: 5 },
@@ -615,27 +615,27 @@ export const ITEMS = [
     flavor: 'Where do you keep it? Wrong question. Where does it keep you?' }),
   I('nettle_wine', 'ANY', 'c', 'Nettle Wine, Vintage Rift', {
     stats: { atk: 2, luck: 3, dodge: -4 }, tags: ['bloom'],
-    desc: '+2 ATK, +3% crit, −4% dodge.',
+    desc: '+2 ATK, +3% luck, −4% dodge.',
     flavor: 'Bold, punishing, notes of regret and juniper.' }),
   I('clockwork_tick', 'ANY', 'r', 'Clockwork Cricket', {
-    stats: { timingBonus: 1, spd: 1 }, tags: [], flags: { openingPlus: 0.1 },
-    desc: 'Timing multipliers +0.15, +1 SPD, and your Swift Cut openings hit +10% harder.',
+    stats: { focus: 1, spd: 1 }, tags: [], flags: { openingPlus: 0.1 },
+    desc: 'Focus +½ stage, +1 SPD, and your Swift Cut openings hit +10% harder.',
     flavor: 'Wind it and the whole world keeps better time.' }),
   I('gamblers_iou', 'ANY', 'u', 'A Gambler’s IOU', {
     stats: { luck: 14, shardGain: -20 }, tags: [],
-    desc: '+14% crit, −20% shard finds.',
+    desc: '+14% luck, −20% shard finds.',
     flavor: 'Signed in someone else’s hand. Cash it carefully.' }),
   I('candle_endless', 'ANY', 'r', 'The Unlit Candle’s Twin', {
     stats: { luck: 4 }, tags: ['card'], flags: { blockHeal: 2 },
-    desc: '+4% crit. Perfect Blocks restore ½★ (twice per battle).',
+    desc: '+4% luck. Perfect Blocks restore ½★ (twice per battle).',
     flavor: 'It burns exactly when its sibling does not. So: now.' }),
   I('rumor_earring', 'ANY', 'c', 'Rumor-Catcher Earring', {
     stats: { luck: 4, shardGain: 8 }, tags: [],
-    desc: '+4% crit, +8% shard finds.',
+    desc: '+4% luck, +8% shard finds.',
     flavor: 'Hears where the shards fell and what they said on the way down.' }),
   I('practice_sword', 'ANY', 'u', 'Practice Sword (Graduated)', {
-    stats: { atk: 1, timingBonus: 1 }, tags: [], flags: { openingPlus: 0.1 },
-    desc: '+1 ATK, timing multipliers +0.15, and your Swift Cut openings hit +10% harder.',
+    stats: { atk: 1, focus: 1 }, tags: [], flags: { openingPlus: 0.1 },
+    desc: '+1 ATK, focus +½ stage, and your Swift Cut openings hit +10% harder.',
     flavor: 'Wood that studied. Wood that passed.' }),
   I('shoulder_gargoyle', 'ANY', 'u', 'Pocket Gargoyle', {
     stats: {}, tags: [], flags: { thorns: 2 },
@@ -643,7 +643,7 @@ export const ITEMS = [
     flavor: 'Perches, glowers, bites precisely once per grievance.' }),
   I('festival_mask', 'ANY', 'u', 'Festival Mask of the Meridian', {
     stats: { dodge: 8, luck: 4 }, tags: [],
-    desc: '+8% dodge, +4% crit.',
+    desc: '+8% dodge, +4% luck.',
     flavor: 'Worn on the night the world broke. It remembers the dance steps.' }),
   I('needle_compass', 'ANY', 'r', 'Needle That Points at Trouble', {
     stats: { atk: 3 }, tags: [], flags: { seeIntent: true },
@@ -651,7 +651,7 @@ export const ITEMS = [
     flavor: 'Never lost, frequently alarmed.' }),
   I('rust_locket', 'ANY', 'c', 'Rusted Locket (Stuck)', {
     stats: { dodge: 5, luck: -3 }, tags: [],
-    desc: '+5% dodge, −3% crit. Whatever is inside is staying inside.',
+    desc: '+5% dodge, −3% luck. Whatever is inside is staying inside.',
     flavor: 'Shake it and something inside shakes back, half a beat late.' }),
   I('star_snuffbox', 'ANY', 'r', 'Star-Snuff Box', {
     stats: { atk: 2 }, tags: ['sun'], flags: { perfectShard: 1 },
@@ -664,7 +664,7 @@ export const ITEMS = [
     flavor: 'Six faces, no numbers, total conviction.' }),
   I('midnight_office', 'ANY', 'r', 'Seal of the Midnight Office', {
     stats: { atk: 2, luck: 4 }, tags: ['moon', 'card'],
-    desc: '+2 ATK, +4% crit. Counts as moon and card.',
+    desc: '+2 ATK, +4% luck. Counts as moon and card.',
     flavor: 'The bureaucracy that files eclipses. Terrifyingly punctual.' }),
   I('one_good_deed', 'ANY', 'a', 'One Good Deed (Unspent)', {
     stats: {}, tags: [], flags: { reviveOnce: true },
@@ -675,8 +675,8 @@ export const ITEMS = [
     desc: '+1 SPD. Once per battle, a slipped Star Strike chain holds anyway.',
     flavor: 'The beat goes on. That is the entire creed.' }),
   I('metronome_heart', 'ANY', 'r', 'A Metronome Heart', {
-    stats: { timingBonus: 1 }, tags: [], flags: { noteSlow: 0.1 },
-    desc: 'Timing multipliers +0.15; block-shapes fall 10% slower.',
+    stats: { focus: 1 }, tags: [], flags: { noteSlow: 0.1 },
+    desc: 'Focus +½ stage; block-shapes fall 10% slower.',
     flavor: 'It does not skip. It has never once skipped.' }),
   I('sparring_shadow', 'ANY', 'c', 'Invisible Sparring Partner', {
     core: true, stats: {}, tags: [], flags: { riposte: 2 },
@@ -684,7 +684,7 @@ export const ITEMS = [
     flavor: 'Twenty years of practice, none of it visible, all of it yours.' }),
   I('duellist_primer', 'ANY', 'c', 'Old Duellist’s Primer', {
     core: true, stats: { luck: 3 }, tags: [], flags: { dodgePlus: 1 },
-    desc: '+3% crit. The leap-window on crushing blows is 25% wider.',
+    desc: '+3% luck. The leap-window on crushing blows is 25% wider.',
     flavor: 'Chapter one: be elsewhere. There is no chapter two.' }),
   I('juggler_gloves', 'ANY', 'u', 'Juggler’s Soft Gloves', {
     stats: { spd: 1 }, tags: [], flags: { trapWard: 1 },
@@ -709,8 +709,8 @@ export const ITEMS = [
     desc: '+1 SPD. Entering a region charts it all into hazy memory.',
     flavor: 'It points to where you will eventually have been.' }),
   I('gate_splinter', 'BOSS', 'r', 'Splinter of a Broken Ward', {
-    core: true, stats: { vessel: 1, blockBonus: 1 }, tags: [],
-    desc: '+½ Star Vessel. Your Block window is 30% wider.',
+    core: true, stats: { vessel: 1, focus: 1 }, tags: [],
+    desc: '+½ Star Vessel, +½ focus stage.',
     flavor: 'The ward remembers holding. Now it holds for you.' }),
   I('wardens_gavel', 'BOSS', 'r', 'The Warden’s Gavel', {
     stats: { atk: 4 }, tags: [], flags: { stunOnPerfect: 20 },
@@ -726,7 +726,7 @@ export const ITEMS = [
     flavor: 'Sworn by someone stronger. Kept, now, by you.' }),
   I('keepers_ledger', 'BOSS', 'r', 'The Keeper’s Ledger', {
     stats: { luck: 8, shardGain: 20 }, tags: ['card'], flags: { crackSense: true },
-    desc: '+8% crit, +20% shard finds, and sealed hexes whisper louder.',
+    desc: '+8% luck, +20% shard finds, and sealed hexes whisper louder.',
     flavor: 'Every hoard it ever guarded, itemized. Yours are page one now.' }),
   I('champions_belt', 'BOSS', 'u', 'The Proving-Ring Belt', {
     stats: { vessel: 1, atk: 2, spd: 1 }, tags: [],
@@ -747,8 +747,8 @@ export const ITEMS = [
     desc: 'Grants ability: Crescendo (+2 ATK stacking per use, costs ½★, 3-turn cooldown).',
     flavor: 'It only knows one direction.' }),
   I('wardens_tempo', 'BOSS', 'r', 'The Warden’s Tempo', {
-    core: true, stats: { blockBonus: 1 }, tags: [], flags: { noteSlow: 0.15 },
-    desc: 'Block windows 30% wider; block-shapes fall 15% slower.',
+    core: true, stats: { focus: 1 }, tags: [], flags: { noteSlow: 0.15 },
+    desc: 'Focus +½ stage; block-shapes fall 15% slower.',
     flavor: 'A thousand years at one gate teaches you every rhythm that can approach it.' }),
   I('gatecrusher', 'BOSS', 'r', 'The Gatecrusher’s Memory', {
     stats: { atk: 1, spd: -1 }, tags: [], flags: { heavyPlus: 0.6 },
@@ -770,7 +770,7 @@ export const ITEMS = [
     flavor: 'Catches a wind that blows only between worlds.' }),
   I('moon_moth_dust', 'ASTRAL', 'r', 'Moon-Moth Dust', {
     stats: { dodge: 14, luck: 6 }, tags: ['moon'],
-    desc: '+14% dodge, +6% crit.',
+    desc: '+14% dodge, +6% luck.',
     flavor: 'Shaken from wings that have never once been caught.' }),
   I('rust_engine_piston', 'ASTRAL', 'r', 'Piston of the Oxidized King', {
     stats: { atk: 4, spd: -1 }, tags: ['ember'], flags: { doubleStrike: 15 },
@@ -785,8 +785,8 @@ export const ITEMS = [
     desc: '+4 SPD. Fleeing always succeeds — always going, never arriving.',
     flavor: 'It is late for something and takes you along.' }),
   I('sundial_night', 'ASTRAL', 'a', 'Sundial That Works at Night', {
-    stats: { timingBonus: 2 }, tags: ['sun', 'moon'],
-    desc: 'Timing multipliers +0.30. Counts as sun and moon.',
+    stats: { focus: 2 }, tags: ['sun', 'moon'],
+    desc: 'Focus +1 stage. Counts as sun and moon.',
     flavor: 'It casts a shadow of light. Noon answers to it now.' }),
   I('giant_dream', 'ASTRAL', 'a', 'A Dream of Thal-Vaur', {
     stats: { vessel: 2, spd: -1 }, tags: [], flags: { firstHitHalved: true },
@@ -794,7 +794,7 @@ export const ITEMS = [
     flavor: 'Sleep like something too large to be woken by history.' }),
   I('constellation_thread', 'ASTRAL', 'r', 'Constellation Thread', {
     stats: { luck: 10 }, tags: ['moon', 'glass'], flags: { perfectShard: 1 },
-    desc: '+10% crit. Perfect strikes shake loose 1 star-shard.',
+    desc: '+10% luck. Perfect strikes shake loose 1 star-shard.',
     flavor: 'Unpicked from the Spilled Cup. The sky has not noticed. Sew quickly.' }),
   I('void_anchor', 'ASTRAL', 'a', 'Void Anchor', {
     stats: { vessel: 2, atk: 3, spd: -3 }, tags: [], flags: { thorns: 4 },
@@ -810,16 +810,16 @@ export const ITEMS = [
     flavor: 'Stitches wounds with light that remembers being whole.' }),
   I('pale_daughter_tear', 'ASTRAL', 'a', 'The Pale Daughter’s Tear', {
     stats: { vessel: 2, luck: 8 }, tags: ['moon', 'water'], flags: { dewPotency: 2 },
-    desc: '+1 Star Vessel, +8% crit. Star-dew restores 1★ more.',
+    desc: '+1 Star Vessel, +8% luck. Star-dew restores 1★ more.',
     flavor: 'She wept once, for the sea she was made to keep. It keeps you now.' }),
   I('zodiac_die', 'ASTRAL', 'a', 'The Bone Zodiac’s Die', {
     stats: { luck: 15 }, tags: ['card'],
     ability: { id: 'zodiac', name: 'Cast the Zodiac', cd: 4, kind: 'gamble', desc: '0–300% ATK, judged by beasts of bone.' },
-    desc: '+15% crit. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
+    desc: '+15% luck. Grants ability: Cast the Zodiac (0–300% ATK, 4-turn cooldown).',
     flavor: 'Twelve faces, each a hungry constellation. All of them owe you one.' }),
   I('stilled_second', 'ASTRAL', 'a', 'A Second, Stilled', {
-    stats: { timingBonus: 1 }, tags: ['moon'], flags: { noteSlow: 0.2, gatherCalm: 0.5 },
-    desc: 'Timing +0.15, block-shapes fall 20% slower, and your energy gathers 50% longer.',
+    stats: { focus: 1 }, tags: ['moon'], flags: { noteSlow: 0.2, gatherCalm: 0.5 },
+    desc: 'Focus +½ stage, block-shapes fall 20% slower, and your energy gathers 50% longer.',
     flavor: 'Between one tick and the next, room was made. You keep what fits.' }),
   I('comet_hammer', 'ASTRAL', 'a', 'Hammerfall of the Comet', {
     stats: { atk: 2 }, tags: ['sun'], flags: { heavyPlus: 0.8 },
@@ -839,7 +839,7 @@ export const ITEMS = [
   I('thousand_eyes', 'MUTATION', 'm', 'A Thousand Unclosing Eyes', {
     core: true, mutation: true, stats: { luck: 15, dodge: 10, vessel: -1 }, tags: [],
     flags: { seeIntent: true, noFirstDodge: true },
-    desc: '+15% crit, +10% dodge, see all foe intents, −½ Star Vessel. They never close: effects that auto-dodge first blows are lost.',
+    desc: '+15% luck, +10% dodge, see all foe intents, −½ Star Vessel. They never close: effects that auto-dodge first blows are lost.',
     flavor: 'You see everything now. Everything sees that you see it. Introductions are exhausting.' }),
   I('antler_deep', 'MUTATION', 'm', 'Antler Crown of the Deep', {
     core: true, mutation: true, stats: { vessel: 2, atk: 2, spd: -3 }, tags: [], flags: { heavyGait: true },
@@ -864,7 +864,7 @@ export const ITEMS = [
     flavor: 'Where your chest-rune sat there is now a small tidy absence with one star inside.' }),
   I('voice_wound', 'MUTATION', 'm', 'Voice of the Wound', {
     core: true, mutation: true, stats: { luck: 8, shardGain: -30 }, tags: [], flags: { chillOnHit: 1 },
-    desc: '+8% crit, your strikes Chill — but the whispers cost you: shard finds −30%.',
+    desc: '+8% luck, your strikes Chill — but the whispers cost you: shard finds −30%.',
     flavor: 'You speak your own language now. Only the rift speaks it back.' }),
 
   // ---- the ten set changes of the crashed visitors. Each is bound to its
@@ -878,12 +878,12 @@ export const ITEMS = [
   I('comet_marrow', 'MUTATION', 'm', 'Marrow of Falling Glass', {
     core: true, mutation: true, visitor: 'glasswing',
     stats: { spd: 4, luck: 12, vessel: -2 }, tags: [],
-    desc: '+4 SPD, +12% crit. Glass is quick, and glass is thin: −1 Star Vessel.',
+    desc: '+4 SPD, +12% luck. Glass is quick, and glass is thin: −1 Star Vessel.',
     flavor: 'Your bones ring faintly now when you run. The argument continues in you.' }),
   I('pilgrim_tongue', 'MUTATION', 'm', 'The Pilgrim’s Tongue', {
     core: true, mutation: true, visitor: 'kneeling_star',
     stats: { luck: 6, shardGain: -20 }, tags: [], flags: { perfectHeal: 1 },
-    desc: '+6% crit, and one Perfect strike each battle knits ½★ — but alms flow outward: shard finds −20%.',
+    desc: '+6% luck, and one Perfect strike each battle knits ½★ — but alms flow outward: shard finds −20%.',
     flavor: 'You know the liturgy now. It is mostly apology, said forward.' }),
   I('patient_yolk', 'MUTATION', 'm', 'Yolk of the Patient Egg', {
     core: true, mutation: true, visitor: 'patient_egg',
@@ -892,8 +892,8 @@ export const ITEMS = [
     flavor: 'Something in you is incubating now. It is very patient. You are the warm side.' }),
   I('link_vow', 'MUTATION', 'm', 'The Vow of Links', {
     core: true, mutation: true, visitor: 'chained_choir',
-    stats: { vessel: 1, blockBonus: 1 }, tags: [], flags: { heavyGait: true },
-    desc: '+½ Star Vessel and your block windows widen — but a link is a leash: you can never travel fast again.',
+    stats: { vessel: 1, focus: 1 }, tags: [], flags: { heavyGait: true },
+    desc: '+½ Star Vessel, +½ focus stage — but a link is a leash: you can never travel fast again.',
     flavor: 'One chain found your wrist and called it home. The Choir hums approvingly through it.' }),
   I('elsewhere_eye', 'MUTATION', 'm', 'An Eye from Elsewhere', {
     core: true, mutation: true, visitor: 'mirrorshard',
@@ -943,7 +943,7 @@ export const SYNERGIES = [
   { id: 'fullbloom', sets: ['bloom'], name: 'FULL BLOOM',
     desc: 'The garden takes root in you: heal ½★ every other turn.' },
   { id: 'glassworks', sets: ['glass'], name: 'GLASSWORKS',
-    desc: 'Everything refracts: +8% crit, and your crits cut 25% deeper.' },
+    desc: 'Everything refracts: +12% luck — rarer finds gleam through the facets.' },
   { id: 'moonbound', sets: ['moon'], name: 'MOONBOUND',
     desc: 'Four moons in one sky: +10% dodge, and you always dodge the first blow.' },
   { id: 'high_noon', sets: ['sun'], name: 'HIGH NOON',
@@ -954,17 +954,17 @@ export const SYNERGIES = [
     desc: 'The deck plays you first: a random card is dealt as each battle opens.' },
   // ---- grand synergies: two completed sets -----------------------------
   { id: 'fulgurite', sets: ['ember', 'glass'], grand: true, name: 'FULGURITE',
-    desc: 'Fire through glass: +2 ATK, and your crits also Burn (3/turn, 3 turns).' },
+    desc: 'Fire through glass: +2 ATK, and your strikes Burn 2 deeper.' },
   { id: 'pale_hand', sets: ['moon', 'card'], grand: true, name: 'THE PALE HAND',
     desc: 'The Hound hunts in moonlight: each battle opens with its bite (8 damage, Chill −2 ATK).' },
   { id: 'steamveil', sets: ['ember', 'water'], grand: true, name: 'STEAMVEIL',
     desc: 'Fire meets sea: water weakness annulled, +15% dodge, and Perfect Blocks restore ½★ (twice per battle).' },
   { id: 'eclipse', sets: ['sun', 'moon'], grand: true, name: 'ECLIPSE',
-    desc: 'Sun and moon align: +3 ATK, and Perfect windows widen.' },
+    desc: 'Sun and moon align: +3 ATK and +1 focus stage.' },
   { id: 'verdance', sets: ['bloom', 'water'], grand: true, name: 'VERDANCE',
     desc: 'Rain on green: the bloom heals ½★ at the start of every one of your turns.' },
   { id: 'stained_glass', sets: ['glass', 'card'], grand: true, name: 'STAINED GLASS',
-    desc: 'Fate refracted: +10% crit, and crits grant +1 star-shard.' },
+    desc: 'Fate refracted: +12% luck and +15% shard finds.' },
 ];
 
 // ------------------------------------------------------------ rarity draw ---
@@ -986,11 +986,18 @@ const SOURCE_WEIGHTS = {
 };
 
 export function drawItem(rng, pool, ownedIds, opts = {}) {
-  const { source = 'pedestal', tier = 0, unlocked = null } = opts;
+  const { source = 'pedestal', tier = 0, unlocked = null, luck = 0 } = opts;
   const w = { ...(SOURCE_WEIGHTS[source] || SOURCE_WEIGHTS.pedestal) };
   const shift = Math.min(0.2, tier * 0.045);   // deep pockets skew rare
   w.c = Math.max(0, w.c - shift);
   w.r += shift;
+  // luck is fortune now, not crits: each point leans the brackets a little
+  // toward the good shelves (capped — fortune tilts, never guarantees)
+  const lshift = Math.min(0.12, Math.max(0, luck) * 0.0025);
+  w.c = Math.max(0, w.c - lshift);
+  w.u += lshift * 0.4;
+  w.r += lshift * 0.4;
+  w.a += lshift * 0.2;
   let roll = rng(), rarity = 'c';
   for (const k of ['c', 'u', 'r', 'a']) { if (roll < w[k]) { rarity = k; break; } roll -= w[k]; }
 
