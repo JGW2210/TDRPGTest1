@@ -229,6 +229,7 @@ export class WorldView {
     const seed = this.world.seed;
     const rng = (a, b) => hash2(a | 0, b | 0, seed + 8888);
 
+    this.skyLabels = this.skyLabels || [];   // hidden during sky-event cinematics
     const skyLabel = (text, sub, color = '#c9d2ff', scale = 0.02, opacity = 0.75) => {
       const tex = makeLabelTexture(text, { sub, color });
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -236,6 +237,7 @@ export class WorldView {
       }));
       sp.scale.set(tex.userData.w * scale, tex.userData.h * scale, 1);
       sp.renderOrder = 10;
+      this.skyLabels.push(sp);
       return sp;
     };
     const glowSprite = (color, size, opacity = 0.5) => {
@@ -339,17 +341,15 @@ export class WorldView {
       g.add(holder);
     }
 
-    // --- helper: find spots over the void, spread apart -------------------
-    const voidSpots = [];
-    {
-      const cands = this.world.list
-        .filter(t => t.void && !t.secret && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
-        .sort((a, b) => hash2(b.q, b.r, seed + 9100) - hash2(a.q, a.r, seed + 9100));
-      for (const t of cands) {
-        if (voidSpots.length >= 6) break;
-        if (voidSpots.some(s => hexDist(s.q, s.r, t.q, t.r) < 18)) continue;
-        voidSpots.push(t);
-      }
+    // --- spots over the void, chosen by worldgen so vantages line up ------
+    const voidSpots = this.world.celestialSpots || [];
+
+    // Vael itself bears its name now, and can be beheld from the crater rim
+    this.skyBodies.sun = { x: 0, y: 2.6, z: 0, frame: 17 };
+    if (this.sun) {
+      const sunLbl = skyLabel(this.world.sun.name, 'the world’s heart', '#ffd98a', 0.016, 0.8);
+      sunLbl.position.y = 6.6;
+      this.sun.add(sunLbl);
     }
 
     // --- constellations drifting over the rifts ---------------------------
@@ -359,6 +359,7 @@ export class WorldView {
       if (!spot) return;
       const holder = new THREE.Group();
       holder.position.set(spot.x, 4.2, spot.z);
+      this.skyBodies[def.id] = { x: spot.x, y: 4.2, z: spot.z, frame: 14 };
       const pts = [];
       let px = 0, pz = 0;
       const n = 5 + Math.floor(rng(ci, 77) * 3);
@@ -394,6 +395,7 @@ export class WorldView {
       if (!spot) return;
       const holder = new THREE.Group();
       holder.position.set(spot.x, 3.4, spot.z);
+      this.skyBodies[def.id] = { x: spot.x, y: 3.4, z: spot.z, frame: 12 };
       const mat = new THREE.MeshStandardMaterial({
         color: 0xb8bcd8, flatShading: true, roughness: 0.9, emissive: 0x585e88, emissiveIntensity: 0.2,
       });
@@ -530,6 +532,25 @@ export class WorldView {
         holder.add(lbl);
       }
       g.add(holder);
+    }
+  }
+
+  // Live position for a speaking body — the Errand moves; everything else
+  // holds still. The sky-event camera asks here, not skyBodies directly.
+  skyBodyFor(id) {
+    if (id === 'errand' && this.comet) {
+      const p = this.comet.holder.position;
+      return { x: p.x, y: p.y, z: p.z, frame: 13 };
+    }
+    return this.skyBodies?.[id] || null;
+  }
+
+  // Sky-event cinematics hide every floating nameplate so nothing sits
+  // inside the frame while a body speaks.
+  setSkyLabelsVisible(v) {
+    for (const s of this.skyLabels || []) s.visible = v;
+    for (const t of this.world.land) {
+      if (t.landmarkView?.labelSprite) t.landmarkView.labelSprite.visible = v;
     }
   }
 
@@ -1066,6 +1087,75 @@ export class WorldView {
           g.add(base, dome, tube, lens);
         }
         g.add(label(lm.name, def?.sub || 'forgotten islet', '#d8ffb0', 2.5));
+      } else if (lm.type === 'drowned') {
+        // fallen sky, resting in the shallows
+        if (lm.id === 'drowned_star') {
+          const star = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.4),
+            std(0x8a90b8, { emissive: 0xffd98a, emissiveIntensity: 1.4 })
+          );
+          star.position.y = -0.12;   // face-down beneath the surface
+          star.rotation.set(0.4, 0.7, 0.3);
+          const shine = new THREE.Mesh(
+            new THREE.CircleGeometry(0.75, 16),
+            new THREE.MeshBasicMaterial({
+              color: 0xffe9a0, transparent: true, opacity: 0.28,
+              blending: THREE.AdditiveBlending, depthWrite: false,
+            })
+          );
+          shine.rotation.x = -Math.PI / 2;
+          shine.position.y = 0.06;
+          g.add(star, shine);
+        } else if (lm.id === 'ferry_river') {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.0, 5), std(0x4a3a2c));
+          post.position.set(0.3, 0.5, -0.2);
+          post.rotation.z = 0.16;
+          const hull = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 0.4), std(0x5a4634));
+          hull.position.set(-0.25, 0.1, 0.15);
+          const seat = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.4), std(0x6a5640));
+          seat.position.set(-0.25, 0.2, 0.15);
+          g.add(post, hull, seat);
+        } else if (lm.id === 'mirror_font') {
+          const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.3, 10), std(0x8a90b8));
+          basin.position.y = 0.15;
+          const face = new THREE.Mesh(
+            new THREE.CircleGeometry(0.55, 16),
+            new THREE.MeshBasicMaterial({
+              color: 0xdfe6ff, transparent: true, opacity: 0.85,
+              blending: THREE.AdditiveBlending, depthWrite: false,
+            })
+          );
+          face.rotation.x = -Math.PI / 2;
+          face.position.y = 0.32;
+          g.add(basin, face);
+        } else if (lm.id === 'salt_bell') {
+          const bell = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.28, 0.62, 0.85, 10),
+            std(0x5a7a6a, { roughness: 0.5, emissive: 0x2a4438, emissiveIntensity: 0.4 })
+          );
+          bell.position.set(0.05, 0.3, 0);
+          bell.rotation.z = 2.35;   // mouth in the water
+          const crown = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 6, 12), std(0x6a8a7a));
+          crown.position.set(-0.42, 0.62, 0);
+          crown.rotation.z = 2.35;
+          g.add(bell, crown);
+        } else {   // first_rain: a held shower, never landing
+          for (let i = 0; i < 9; i++) {
+            const drop = new THREE.Mesh(
+              new THREE.SphereGeometry(0.045 + hash2(i, 3, 77) * 0.04, 6, 5),
+              std(0x9fd4ff, { emissive: 0x6fa8ff, emissiveIntensity: 1.8, roughness: 0.2 })
+            );
+            const a = (i / 9) * Math.PI * 2;
+            drop.position.set(
+              Math.cos(a) * (0.2 + hash2(i, 5, 78) * 0.5),
+              0.5 + hash2(i, 7, 79) * 1.3,
+              Math.sin(a) * (0.2 + hash2(i, 9, 80) * 0.5)
+            );
+            drop.scale.y = 1.5;
+            g.add(drop);
+          }
+        }
+        g.add(label(lm.name, lm.sub || 'a drowned celestial', '#9fd4ff', 2.3));
       }
 
       const hit = new THREE.Mesh(

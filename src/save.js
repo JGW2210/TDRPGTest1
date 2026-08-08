@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 5; // v5: Star Vessels (hp in half-vessels) + vesselBonus; older saves discarded
+const VERSION = 6; // v6: sky-chat cycling + keepsakes + errands (round 16); older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -21,6 +21,9 @@ export function saveRun(world, player, worldView, roamers = null) {
       boons: run.boons,
       shrineBoons: [...run.shrineBoons],
       vantageSeen: [...run.vantageSeen],
+      skyChats: run.skyChats,
+      keepsakes: run.keepsakes,
+      questsDone: [...run.questsDone],
       revealedBridges: world.satellites.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       revealedIslets: world.islets.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       roamers: roamers ? roamers.serialize() : null,
@@ -69,6 +72,9 @@ export function applySave(data, world, worldView, roamers = null) {
   run.shrineHeals = data.shrineHeals | 0;
   run.shrineBoons = new Set(data.shrineBoons || []);
   run.vantageSeen = new Set(data.vantageSeen || []);
+  run.skyChats = data.skyChats || {};
+  run.keepsakes = Array.isArray(data.keepsakes) ? data.keepsakes : [];
+  run.questsDone = new Set(data.questsDone || []);
   for (const idx of data.revealedBridges || []) {
     if (world.revealBridge(idx)) {
       worldView.revealHiddenTiles(world.satellites[idx].bridgeTiles);

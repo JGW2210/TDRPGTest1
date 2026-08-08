@@ -291,6 +291,54 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    lost per early fight, ~2½–3★ per deep pack with all foes alive all
    rounds (real kills shorten exposure ~40%). BUILD is 15.
 
+16. **Speaking-sky story round** (same branch; poll held — user picked ALL
+   FOUR recommended options: quiet vantages / more rivers + 5 drowned
+   bodies / 4 authored errands / "Pages of the Meridian" backstory):
+   **every named body speaks** — names.js replaces SKY_VOICES/SKY_GAZES
+   with a unified **SKY_SPEAKERS** table (16 speakers: the 4 old summoning
+   voices, 3 wandering worlds, + new quiet vantages for Vael the sun,
+   the Errand comet, 4 constellations `c_*`, 2 shattermoons `m_*`); each
+   speaker has **2–3 dialogue SETS that cycle per completed visit**
+   (`run.skyChats[id]` counter, save v6) — never the same twice running;
+   only the original four still auto-summon (`summons` flag; the on-hop
+   trigger checks `def.voice`). The sets converge on the one story:
+   Vael folded daughters from its light; the Meridian seam held the world
+   as one page; the eldest leaned past the Door Ajar, the Wound answered
+   through her, the seam snapped, the daughters shattered; the wanderer
+   is the newest page of the Meridian's book (the "fourth one" line now
+   reads as prior pages). **Worldgen**: pass 3.5 rivers strengthened
+   (largest lake births two, lakes ≥4 qualify, up to 8 walks of 32 —
+   SEA tiles/world 439→476 over 40 seeds); **pass 13.5** chooses the 6
+   constellation/shattermoon void-spots (world.celestialSpots — world3d
+   reads them so vantages line up) and settles **5 DROWNED celestials**
+   on mainland water with per-id pickers + always-land fallbacks
+   (drowned_star lake-interior / ferry_river longest-river-end /
+   mirror_font river-spring / salt_bell lake-coast / first_rain
+   cold-water; `world.drowned`); `world.sparkDungeonKey` = dungeon
+   nearest the volcano; **pass 14** extended to 12 anchors ({x,z} or
+   {angle,dist}; sun at world center, errand fixed vantage with LIVE
+   comet framing via `worldView.skyBodyFor(id)`). **Drowned bodies** are
+   landmark tiles (getSites subtype 'drowned', hand-built models +
+   labels in world3d) with cycling Listen dialogue (`skyChats['d_'+id]`)
+   and first-listen effects: ferry_river sheds the oar, mirror_font
+   full-heals once, salt_bell +12 ☆, first_rain +1 dew. **4 authored
+   errands** (never prompted — the clue lives in each giver's FIRST set;
+   `KEEPSAKES` tokens render in the inventory sheet): Vael wants the
+   fallen_spark (keeper of the spark dungeon drops it) → **+1 Star
+   Vessel**; the Drowned Star wants star_name_page (falls with the
+   observatory islet's pedestal claim) → astral relic via 'Read Her
+   Name' (action injected at openSite only while carried); the Ferry
+   Lantern wants ferrymans_oar → Ferryman's Blessing boon (spd+1,
+   fastTravel); the Third Sister wants sister_shard (granted at first
+   m_sundered behold) → astral relic. Quest payoff sets replace the
+   cycling set while the token is carried; rewards resolve at dialogue
+   END (`def.quest`), `run.questsDone`/`run.keepsakes` saved (v6),
+   meta stat `errands` bumped. Sky-event cinematics now **hide all
+   floating nameplates** (`setSkyLabelsVisible` — the round-14 deferred
+   nit); the sun bears its name ("Vael, the Undying Sun / the world's
+   heart"). Debug: `__vael.visit(q,r)` enters a tile's local diorama
+   headlessly. BUILD is 16.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -612,7 +660,8 @@ Siren', speciesRole:'mystic'}), smite() (all enemies →1hp),
 give(itemId) (routes mutation count → openWound), openGateAt(q,r),
 detonate() (unfurls bridges/islets from hint tiles, opens secrets),
 revealIslet(i) (world + view + fog + save), localSites(),
-act(siteId,label), shopOffers(q,r), skyEventState (getter:
+act(siteId,label), visit(q,r) (enter a tile's local diorama headlessly —
+needed before act/localSites), shopOffers(q,r), skyEventState (getter:
 {id, phase, idx} | null), startSkyEvent() (from the current tile),
 advanceSkyEvent()`.
 
@@ -670,9 +719,17 @@ the band mid, call `battle._resolveTiming()`.
   nameplate) can sit inside the cinematic frame — they read as world
   detail, but hiding labels during `body.in-skyevent` was floated and
   deliberately deferred ("for now" per user).
-- Save VERSION is now 5 (round 15: hp stored in half-vessels +
-  vesselBonus) — older saves are discarded on load. Worldgen unchanged
-  this round.
+- Save VERSION is now 6 (round 16: skyChats + keepsakes + questsDone) —
+  older saves are discarded on load. Worldgen changed for identical seeds
+  again (stronger rivers, drowned landmarks, 8 new vantages), by design.
+- Round-16 story content is verified headless only: set-cycling, all 4
+  errands end-to-end, drowned mercies, v6 round-trip, 40-seed suite
+  (12 vantages + 5 drowned + spark dungeon every seed). Dialogue pacing,
+  camera framing of constellations (diffuse star-fields), and quest-clue
+  discoverability by real players await a human pass. The lore bible
+  lives only in the SKY_SPEAKERS/DROWNED texts — keep new writing
+  consistent with it (daughters = moons folded by Vael; Vhal-Suthek =
+  the eldest, hollowed; the player = a page of the Meridian's book).
 - **Star Vessel / Focus numbers are untested by humans**: the tier damage
   table, focus costs/recovery, the 0.6 min strike-window scale, trap ½★,
   the 16-relic vessel list and 3★-cap dew all follow the round-15 poll +
@@ -681,7 +738,7 @@ the band mid, call `battle._resolveTiming()`.
   ease crush frequency or widen `lanes.dodgeWin` before touching the
   table; if too cold, move the `highTier` band down to 3.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 15. Without the bump, live players keep stale
+  release** — currently 16. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
@@ -721,10 +778,8 @@ the band mid, call `battle._resolveTiming()`.
   yet — falls back by biome default; ISLET likewise)
 - A mutation-cleansing shrine (mutations are currently permanent)
 - Optional "lite" render mode for weak GPUs
-- Hide floating sky-labels during sky-event cinematics (2-line change:
-  toggle the label sprites' visibility from start/endSkyEvent)
-- More SKY_GAZES: Vael the sun, the shattermoons, constellations —
-  bodies without tiles would need a nearest-hex rule like pass 14's
+- ~~Hide floating sky-labels during cinematics~~ and ~~voices for the
+  sun/shattermoons/constellations~~ — both shipped in round 16
 
 ## Conventions
 

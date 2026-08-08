@@ -10,7 +10,7 @@ import { keyOf, axialToWorld, worldToAxial, discCoords, neighborsOf, hexDist, he
 import {
   BIOMES, KINGDOMS, DRIFTLAND_TOWNS, SATELLITES, dungeonName, wildName, regionName, wardenName,
   makeBattle, makeTrader, makeSide, capitalSites, townSites, dungeonSites,
-  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS, ISLETS,
+  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS, ISLETS, CELESTIALS, DROWNED,
 } from './names.js';
 
 const angleDiff = (a, b) => {
@@ -231,14 +231,18 @@ export function generateWorld(seed) {
     }
     return comps.sort((a, b) => b.length - a.length);
   };
+  const riverPaths = [];   // recorded for the drowned-celestial pass (13.5)
   {
     const rngRiver = mulberry32(seed + 4100);
     const lakes = seaComponents();
-    for (const lake of lakes.slice(0, 4)) {
-      if (lake.length < 6) break;
+    // every lake of consequence births a river now — and the greatest lake
+    // births two, running opposite ways — so the shallows web the land
+    const sources = [...lakes.slice(0, 1), ...lakes.slice(0, 7)].filter(l => l.length >= 4);
+    for (const lake of sources) {
       let cur = lake[Math.floor(rngRiver() * lake.length)];
       let dir = rngRiver() * Math.PI * 2;
-      for (let step = 0; step < 24; step++) {
+      const path = [cur];
+      for (let step = 0; step < 32; step++) {
         dir += (fbm(cur.x * 0.13, cur.z * 0.13, seed + 4200, 3) - 0.5) * 1.7;
         const nbs = neighborsOf(cur.q, cur.r)
           .map(([q, r]) => tiles.get(keyOf(q, r)))
@@ -254,7 +258,9 @@ export function generateWorld(seed) {
         next.biome = 'SEA';
         applyHeight(next, seed, volcano);
         cur = next;
+        path.push(cur);
       }
+      if (path.length > 3) riverPaths.push(path);
     }
     // nebulas rest inside the largest lakes, ringed entirely by water
     let placedNebulas = 0;
@@ -1129,22 +1135,127 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 13.5: the sky's fixed shapes & the drowned celestials ----------
+  // The void-spots where constellations and shattermoons hang are chosen
+  // HERE now (world3d reads world.celestialSpots) so their vantage hexes
+  // line up with the bodies. Then five fallen bodies settle into the
+  // shallows — each seeks its own kind of water, with a fallback so all
+  // five always land somewhere quiet.
+  const celestialSpots = [];
+  {
+    const cands = list
+      .filter(t => t.void && !t.secret && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
+      .sort((a, b) => hash2(b.q, b.r, seed + 9100) - hash2(a.q, a.r, seed + 9100));
+    for (const t of cands) {
+      if (celestialSpots.length >= 6) break;
+      if (celestialSpots.some(s => hexDist(s.q, s.r, t.q, t.r) < 18)) continue;
+      celestialSpots.push(t);
+    }
+  }
+
+  const drowned = [];
+  {
+    const spawnAt = new Set(roamerSpawns.map(s => keyOf(s.q, s.r)));
+    const isSea = t => t && !t.void && t.biome === 'SEA';
+    const free = t => isSea(t) && t.region < 100 && !t.landmark && !t.gate && !t.siteKind
+      && !t.secret && !t.seamHint && t.isletHint == null && !spawnAt.has(keyOf(t.q, t.r))
+      && hexDist(t.q, t.r, start.q, start.r) >= 4
+      && !drowned.some(d => hexDist(d.q, d.r, t.q, t.r) < 6);
+    const byHash = (arr, salt) =>
+      [...arr].sort((a, b) => hash2(b.q, b.r, seed + salt) - hash2(a.q, a.r, seed + salt))[0] || null;
+    const lakes = seaComponents();
+    const rivers = [...riverPaths].sort((a, b) => b.length - a.length);
+    const pickers = {
+      // the longest river's far end — where the ferryman laid his oar down
+      ferry_river: () => {
+        for (const p of rivers) for (let i = p.length - 1; i >= 0; i--) if (free(p[i])) return p[i];
+        return null;
+      },
+      // another river's spring: still water that remembers being first
+      mirror_font: () => {
+        for (const p of rivers.slice(1).concat(rivers.slice(0, 1))) {
+          for (const t of p) if (free(t)) return t;
+        }
+        return null;
+      },
+      // the deep interior of a broad lake, ringed entirely by water
+      drowned_star: () => {
+        for (const lake of lakes) {
+          if (lake.length < 8) continue;
+          const interior = lake.filter(t => free(t) && neighborsOf(t.q, t.r).every(([q, r]) => isSea(tiles.get(keyOf(q, r)))));
+          if (interior.length) return byHash(interior, 311);
+        }
+        return null;
+      },
+      // a wide water's edge, where a bell could walk ashore on its own sound
+      salt_bell: () => {
+        for (const lake of lakes) {
+          if (lake.length < 6) continue;
+          const coast = lake.filter(t => free(t) && neighborsOf(t.q, t.r).some(([q, r]) => {
+            const n = tiles.get(keyOf(q, r));
+            return n && !n.void && n.biome !== 'SEA';
+          }));
+          if (coast.length) return byHash(coast, 313);
+        }
+        return null;
+      },
+      // the coldest water in the world holds the sun's one grief
+      first_rain: () => {
+        const cold = list.filter(t => free(t) && neighborsOf(t.q, t.r).some(([q, r]) => {
+          const n = tiles.get(keyOf(q, r));
+          return n && ['TUNDRA', 'LUNAR'].includes(n.biome);
+        }));
+        return byHash(cold, 317);
+      },
+    };
+    for (const def of DROWNED) {
+      let t = pickers[def.id]?.();
+      if (!t || !free(t)) t = byHash(list.filter(free), 331 + def.id.length);
+      if (!t) continue;
+      t.landmark = { type: 'drowned', id: def.id, name: def.name, sub: def.sub };
+      drowned.push(t);
+    }
+  }
+
+  // the sun's errand: the vault nearest the fire-mountain keeps a fallen spark
+  let sparkDungeonKey = null;
+  {
+    let best = null, bd = Infinity;
+    for (const t of land) {
+      if (t.landmark?.type !== 'dungeon') continue;
+      const d = (t.x - volcano.x) ** 2 + (t.z - volcano.z) ** 2;
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best) sparkDungeonKey = keyOf(best.q, best.r);
+  }
+
   // ---- pass 14: voices in the sky ------------------------------------------
-  // Fixed celestial bodies get a vantage hex on the nearest shore: stand
-  // there and the sky speaks. (The moving comet keeps its own counsel.)
+  // Every named celestial body gets a vantage hex on the nearest shore:
+  // stand there and the body can be beheld. The original four voices still
+  // summon on first arrival; the rest wait quietly (round 16).
   const skyAnchors = [
     { id: 'giant', angle: -1.0, dist: 1.5 },
     { id: 'third_sister', angle: Math.PI, dist: 1.3 },
     { id: 'ferry_lantern', angle: -0.2, dist: 1.25 },
     { id: 'door_ajar', angle: 2.05, dist: 1.35 },
+    { id: 'sun', x: 0, z: 0 },
+    { id: 'errand', angle: 1.45, dist: 1.12 },   // where the Errand passes lowest
+    ...CELESTIALS.constellations.map((c, i) => ({
+      id: c.id, x: celestialSpots[i]?.x ?? 0, z: celestialSpots[i]?.z ?? 0,
+    })),
+    ...CELESTIALS.shattermoons.map((c, i) => ({
+      id: c.id, x: celestialSpots[4 + i]?.x ?? 0, z: celestialSpots[4 + i]?.z ?? 0,
+    })),
   ];
   for (const a of skyAnchors) {
-    a.x = Math.cos(a.angle) * worldR * a.dist;
-    a.z = Math.sin(a.angle) * worldR * a.dist;
+    if (a.x === undefined) {
+      a.x = Math.cos(a.angle) * worldR * a.dist;
+      a.z = Math.sin(a.angle) * worldR * a.dist;
+    }
     let best = null, bd = Infinity;
     for (const t of land) {
       if (t.landmark || t.region >= 100 || t.biome === 'BRIDGE' || t.gate || t.siteKind
-        || t.seamHint || t.isletHint != null) continue;
+        || t.seamHint || t.isletHint != null || t.vantage) continue;
       const d = (t.x - a.x) ** 2 + (t.z - a.z) ** 2;
       if (d < bd) { bd = d; best = t; }
     }
@@ -1267,6 +1378,14 @@ export function generateWorld(seed) {
         type: 'side', subtype: 'whisper', name: w.name, flavor: w.flavor,
         actions: ['Listen Closely'],
       }];
+    } else if (lm?.type === 'drowned') {
+      const def = DROWNED.find(d => d.id === lm.id) || DROWNED[0];
+      sites = [{
+        type: 'side', subtype: 'drowned', drownedId: def.id,
+        name: def.name,
+        flavor: 'Something of the old sky rests in this water — ' + def.sub + '. It has noticed you.',
+        actions: ['Listen'],
+      }];
     } else if (tile.secretRevealed) {
       const roll = rng();
       if (roll < CONFIG.secrets.pedestalChance) sites = [pedestalSite(pickPoolFor(tile, regionOf(tile)))];
@@ -1332,6 +1451,7 @@ export function generateWorld(seed) {
     seed, tiles, list, land, start, volcano,
     kingdoms, kingdomById, dungeons, shrines, traders, roamerSpawns,
     regions, regionOf, gates, satellites, secrets, wound, skyAnchors, islets,
+    celestialSpots, drowned, sparkDungeonKey,
     sun: { name: 'Vael, the Undying Sun', flavor: 'The world’s heart, still burning in its crater of sky.' },
     getSites,
     revealSecret(v) {

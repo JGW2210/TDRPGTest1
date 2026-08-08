@@ -2,7 +2,7 @@
 
 import { RARITY, SETS } from './items.js';
 import { FEATS } from './meta.js';
-import { BIOMES } from './names.js';
+import { BIOMES, KEEPSAKES } from './names.js';
 import { makeItemIconURL, paintPlayerCanvas } from './textures.js';
 
 const $ = id => document.getElementById(id);
@@ -97,7 +97,14 @@ export const ui = {
       `<span>✸ ×${run.consumables.charge} <i>(✸ Detonate on the map)</i></span>` +
       `<span>❋ ×${run.consumables.dew} <button id="inv-use-dew" ${canDew ? '' : 'disabled'}>Drink</button></span>` +
       `<span>➳ ×${run.consumables.feather} <button id="inv-use-feather" ${canFeather ? '' : 'disabled'}>Fly home</button></span>` +
-      `</div>`;
+      `</div>` +
+      // keepsakes: the sky's errands, carried until someone asks for them
+      (run.keepsakes?.length
+        ? `<div class="inv-keepsakes">` + run.keepsakes.map(id => {
+          const kp = KEEPSAKES[id];
+          return kp ? `<span class="keepsake" title="${kp.desc.replace(/"/g, '&quot;')}">${kp.icon} ${kp.name}</span>` : '';
+        }).join('') + `</div>`
+        : '');
     if (h) {
       $('inv-use-dew')?.addEventListener('click', () => h.useDew());
       $('inv-use-feather')?.addEventListener('click', () => h.useFeather());

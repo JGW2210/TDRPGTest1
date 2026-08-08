@@ -21,6 +21,9 @@ class Run {
     this.boons = [];               // blessings & bargains: { id, name, stats?, flags? }
     this.shrineBoons = new Set();  // shrine site ids already communed with
     this.vantageSeen = new Set();  // celestial voices already heard
+    this.skyChats = {};            // speaker id → completed visits (dialogue sets cycle)
+    this.keepsakes = [];           // statless errand tokens (names.KEEPSAKES ids)
+    this.questsDone = new Set();   // speakers whose errands have paid out
     this.woundOpen = false;        // the Wound has torn open this run
     this._recompute();
   }

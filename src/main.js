@@ -12,7 +12,7 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem, fmtV } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES, SKY_GAZES } from './names.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS } from './names.js';
 import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
 import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
@@ -302,11 +302,12 @@ function travelTo(target, onArrive = null) {
       // first time beneath a speaking body, the sky arrests you: the rest
       // of the path is dropped and the camera goes to look
       if (tile.vantage && !run.vantageSeen.has(tile.vantage)) {
-        player.path = [];
-        player.onDone = null;
-        saveNow(true);
         const def = skyDefFor(tile);
-        if (def) {
+        // only the four old voices summon; the quiet vantages wait for ☄
+        if (def && def.voice) {
+          player.path = [];
+          player.onDone = null;
+          saveNow(true);
           const tryStart = () => {
             if (skyEvent || mode !== 'world') return;   // a battle cut in — next visit calls again
             if (player.isMoving) { setTimeout(tryStart, 250); return; }
@@ -362,17 +363,25 @@ function revealRegionMemory(tile) {
 // skyEvent (declared with the mode state above):
 //   { def, idx, phase: 'out'|'hold'|'back', t, dur, from, to, backFrom, drift }
 
+// Which speaker (if any) this tile can behold, with the dialogue the NEXT
+// viewing should play: sets cycle per completed visit (run.skyChats), and a
+// carried keepsake swaps in the speaker's quest payoff instead.
 function skyDefFor(tile) {
-  if (tile.vantage) {
-    const v = SKY_VOICES.find(v => v.id === tile.vantage);
-    if (v) return { id: v.id, name: v.name, lines: v.lines, gift: v.gift, voice: true };
-  }
-  if (tile.region >= 100 && tile.region < 200) {
+  let sp = null;
+  if (tile.vantage) sp = SKY_SPEAKERS.find(v => v.id === tile.vantage);
+  else if (tile.region >= 100 && tile.region < 200) {
     const satId = world.satellites[tile.region - 100]?.def.id;
-    const gz = SKY_GAZES.find(s => s.id === satId);
-    if (gz) return { id: gz.id, name: gz.name, lines: gz.lines, gift: null, voice: false };
+    sp = SKY_SPEAKERS.find(v => v.id === satId);
   }
-  return null;
+  if (!sp) return null;
+  const questReady = sp.quest && run.keepsakes.includes(sp.quest.token) && !run.questsDone.has(sp.id);
+  const n = run.skyChats[sp.id] || 0;
+  return {
+    id: sp.id, name: sp.name,
+    lines: questReady ? sp.quest.payoff : sp.sets[n % sp.sets.length],
+    gift: sp.gift, voice: !!sp.summons, grants: sp.grants,
+    quest: questReady ? sp.quest : null,
+  };
 }
 
 function updateSkyButton(tile) {
@@ -388,10 +397,11 @@ function updateSkyButton(tile) {
 
 function startSkyEvent(def) {
   if (skyEvent || mode !== 'world' || player.isMoving) return;
-  const body = worldView.skyBodies?.[def.id];
+  const body = worldView.skyBodyFor(def.id);
   if (!body) return;
   mode = 'skyEvent';
   document.body.classList.add('in-skyevent');
+  worldView.setSkyLabelsVisible(false);   // no nameplates inside the frame
   worldRig.enabled = false;
   worldRig.velocity.set(0, 0, 0);
   worldRig.tween = null;
@@ -439,11 +449,14 @@ function advanceSkyEvent() {
     showSkyLine();
     return;
   }
-  // the dialogue is done: first hearings of a voice leave a gift
+  // the dialogue is done: the visit counts (sets cycle), first hearings of
+  // a voice leave a gift, keepsakes fall, and carried errands pay out
   document.getElementById('skyevent').classList.add('hidden');
-  if (se.def.voice && !run.vantageSeen.has(se.def.id)) {
-    run.vantageSeen.add(se.def.id);
-    const gift = se.def.gift;
+  const def = se.def;
+  run.skyChats[def.id] = (run.skyChats[def.id] || 0) + 1;
+  if (def.voice && !run.vantageSeen.has(def.id)) {
+    run.vantageSeen.add(def.id);
+    const gift = def.gift;
     if (gift?.shards) {
       const got = run.gainShards(gift.shards);
       ui.toast(`☄ Something small falls from the sky into your hand. (+${got} ☆)`, true);
@@ -452,8 +465,36 @@ function advanceSkyEvent() {
       run.addBoon(gift.boon);
       ui.toast(`☄ <b>${gift.boon.name}</b> settles over you like weather.`, true);
     }
-    saveNow(true);
   }
+  // a body that sheds a keepsake does so once (never re-shed after delivery)
+  if (def.grants && !run.keepsakes.includes(def.grants)) {
+    const owner = SKY_SPEAKERS.find(s => s.quest?.token === def.grants);
+    if (!owner || !run.questsDone.has(owner.id)) {
+      run.keepsakes.push(def.grants);
+      const kp = KEEPSAKES[def.grants];
+      if (kp) ui.toast(`${kp.icon} You now carry <b>${kp.name}</b>.`, true);
+    }
+  }
+  // the errand delivered: the token is spent, the speaker pays
+  if (def.quest) {
+    run.keepsakes = run.keepsakes.filter(k => k !== def.quest.token);
+    run.questsDone.add(def.id);
+    if (def.quest.reward === 'vessel') {
+      run.addVessels(2);
+      ui.toast('★ Vael kindles you a vessel — a small star, fired hollow. Your paper heart grows by one.', true);
+    } else if (def.quest.reward === 'boon') {
+      run.addBoon({ ...def.quest.boon });
+      ui.toast(`☄ <b>${def.quest.boon.name}</b> settles over you like weather.`, true);
+    } else if (def.quest.reward === 'astral') {
+      const item = drawItem(
+        mulberry32((world.seed * 131 + def.id.length * 17 + 9) >>> 0),
+        'ASTRAL', run.ownedIds, { source: 'astral', tier: 3, unlocked: meta.unlockedIds });
+      if (item) grantItem(item);
+      else { const got = run.gainShards(30); ui.toast(`The sky pays in loose light instead. (+${got} ☆)`, true); }
+    }
+    announceFeats(meta.bump(s => { s.errands = (s.errands || 0) + 1; }));
+  }
+  saveNow(true);
   se.phase = 'back';
   se.t = 0;
   se.dur = 1.3;
@@ -463,6 +504,7 @@ function advanceSkyEvent() {
 function endSkyEvent() {
   skyEvent = null;
   document.body.classList.remove('in-skyevent');
+  worldView.setSkyLabelsVisible(true);
   mode = 'world';
   worldRig.enabled = true;
   worldRig.apply();
@@ -750,6 +792,12 @@ function startGauntlet(site, tile) {
       const item = (tier >= 3 && rng() < 0.25 && drawMutation(rng, run.ownedIds))
         || drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds });
       if (item) grantItem(item);
+      // the sun's fallen spark sleeps in the vault nearest the fire-mountain
+      if (keyOf(tile.q, tile.r) === world.sparkDungeonKey
+        && !run.keepsakes.includes('fallen_spark') && !run.questsDone.has('sun')) {
+        run.keepsakes.push('fallen_spark');
+        ui.toast(`${KEEPSAKES.fallen_spark.icon} Among the Keeper’s hoard: <b>${KEEPSAKES.fallen_spark.name}</b> — cool to your hand alone.`, true);
+      }
     },
     waves: [
       { team: { biome, tier, count: 2 }, title: `${site.name} · First Chamber` },
@@ -1037,6 +1085,55 @@ function handleAction(site, label, btn) {
     saveNow(true);
     return;
   }
+  if (label === 'Listen' && site.subtype === 'drowned') {
+    const def = DROWNED.find(d => d.id === site.drownedId);
+    if (!def) return;
+    const n = run.skyChats['d_' + def.id] || 0;
+    run.skyChats['d_' + def.id] = n + 1;
+    for (const line of def.sets[n % def.sets.length]) ui.modalOutcome(line);
+    // the first listening: keepsakes fall, small mercies are given
+    if (!run.clearedSites.has(site.id)) {
+      run.clearedSites.add(site.id);
+      if (def.grants && !run.keepsakes.includes(def.grants)) {
+        const owner = SKY_SPEAKERS.find(s => s.quest?.token === def.grants);
+        if (!owner || !run.questsDone.has(owner.id)) {
+          run.keepsakes.push(def.grants);
+          const kp = KEEPSAKES[def.grants];
+          if (kp) ui.toast(`${kp.icon} You now carry <b>${kp.name}</b>.`, true);
+        }
+      }
+      if (def.mercy === 'heal' && run.hp < run.stats.maxHP) {
+        run.hp = run.stats.maxHP;
+        audio.sfxHeal();
+        ui.toast('✚ The font insists you are whole — and briefly, generously, you are.', true);
+      } else if (def.mercy === 'shards') {
+        const got = run.gainShards(12);
+        ui.toast(`☆ Your footstep rings the bronze, barely — ${got} star-shards shiver loose from the old sound.`, true);
+      } else if (def.mercy === 'dew') {
+        run.consumables.dew++;
+        ui.toast('❋ One impossible drop settles into your flask. (+1 star-dew)', true);
+      }
+    }
+    refreshHud(player.tile);
+    saveNow(true);
+    return;
+  }
+  if (label === 'Read Her Name' && site.subtype === 'drowned') {
+    const def = DROWNED.find(d => d.id === site.drownedId);
+    if (!def?.quest || run.questsDone.has(def.id)) return;
+    if (!run.keepsakes.includes(def.quest.token)) { ui.toast('Her name is not with you.'); return; }
+    run.keepsakes = run.keepsakes.filter(k => k !== def.quest.token);
+    run.questsDone.add(def.id);
+    for (const line of def.payoff) ui.modalOutcome(line);
+    const item = drawItem(mulberry32((world.seed * 131 + 77) >>> 0), 'ASTRAL', run.ownedIds,
+      { source: 'astral', tier: 3, unlocked: meta.unlockedIds });
+    if (item) grantItem(item);
+    else { const got = run.gainShards(30); ui.toast(`Her thanks scatters into loose light. (+${got} ☆)`, true); }
+    announceFeats(meta.bump(s => { s.errands = (s.errands || 0) + 1; }));
+    refreshHud(player.tile);
+    saveNow(true);
+    return;
+  }
   if (label === 'Listen Closely') {
     if (run.clearedSites.has(site.id)) { ui.toast('The whisper has said its piece.'); return; }
     run.clearedSites.add(site.id);
@@ -1084,6 +1181,13 @@ function handleAction(site, label, btn) {
     ui.closeModal();
     if (item) grantItem(item);
     else { const got = run.gainShards(20); ui.toast(`The pedestal stands empty of gifts — but ${got} ☆ pool in the hollow.`, true); }
+    // the observatory's ledger gives up a page along with the observation
+    const lmHere = tileHere.landmark;
+    if (lmHere?.type === 'islet' && ISLETS[lmHere.islet]?.id === 'observatory'
+      && !run.keepsakes.includes('star_name_page') && !run.questsDone.has('drowned_star')) {
+      run.keepsakes.push('star_name_page');
+      ui.toast(`${KEEPSAKES.star_name_page.icon} A page slips loose from the brass ledger: <b>${KEEPSAKES.star_name_page.name}</b>.`, true);
+    }
     if (currentLocalTile) {
       localView.build(currentLocalTile, world, sitesFor(currentLocalTile));
       checkGlint(currentLocalTile);
@@ -1168,6 +1272,12 @@ function handleAction(site, label, btn) {
 }
 
 function openSite(site) {
+  // a carried name surfaces the drowned star's offer — never before
+  if (site.subtype === 'drowned') {
+    const def = DROWNED.find(d => d.id === site.drownedId);
+    const ready = def?.quest && run.keepsakes.includes(def.quest.token) && !run.questsDone.has(def.id);
+    site.actions = ready ? ['Listen', def.quest.action] : ['Listen'];
+  }
   localRig.enabled = false;
   ui.openModal(site, {
     onAction: (label, btn) => handleAction(site, label, btn),
@@ -1427,6 +1537,11 @@ window.__vael = {
   localSites: () => currentLocalTile
     ? sitesFor(currentLocalTile).map(s => ({ id: s.id, name: s.name, type: s.type, actions: s.actions, cleared: s.cleared }))
     : [],
+  visit: (q, r) => {   // headless tests: dive into a tile's local diorama
+    const t = world.tiles.get(q + ',' + r);
+    if (t && !t.void && mode === 'world') { enterLocal(t); return true; }
+    return false;
+  },
   act: (id, label) => {
     if (!currentLocalTile) return false;
     const site = sitesFor(currentLocalTile).find(s => s.id === id);
