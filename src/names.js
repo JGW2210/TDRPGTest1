@@ -373,7 +373,7 @@ const MYSTERY_OUTCOMES = [
   { text: 'It was a trap, of the polite kind. You pay the toll and are complimented on your grace.', shards: -5 },
   { text: 'A voice explains, at length, the arrangement of the heavens. You emerge older but luckier.', shards: 0, boon: { id: 'starlore', name: 'Starlore', stats: { luck: 4 } } },
   { text: 'Something small and cold climbs into your pack and refuses to leave. It seems protective.', shards: 0, boon: { id: 'small_cold', name: 'A Small Cold Companion', stats: { dodge: 4 } } },
-  { text: 'You touch it. The world flinches. Somewhere a bell you cannot hear stops ringing.', shards: 0, hp: -4 },
+  { text: 'You touch it. The world flinches. Somewhere a bell you cannot hear stops ringing.', shards: 0, hp: -1 },
 ];
 
 // ------------------------------------------------- sacrifice bargains ---
@@ -390,14 +390,14 @@ export const BARGAINS = [
   {
     id: 'tithe_stone', name: 'The Tithe-Stone',
     flavor: 'A basalt altar with a bowl worn smooth by centuries of palms. The inscription is one word: MORE. It wants blood, or what passes for it in paper.',
-    cost: { hp: 8 }, gain: { boon: { id: 'tithe_edge', name: 'Tithe-Sharpened Edge', stats: { atk: 2 } } },
-    action: 'Bleed into the bowl (−8 HP)',
+    cost: { hp: 2 }, gain: { boon: { id: 'tithe_edge', name: 'Tithe-Sharpened Edge', stats: { atk: 2 } } },
+    action: 'Bleed into the bowl (−1★)',
   },
   {
     id: 'moth_court', name: 'The Court of Moths',
     flavor: 'A thousand moths arranged in the shape of a judge. They will trade fortune for warmth — a piece of your flame, forever this run.',
-    cost: { maxHP: 4 }, gain: { boon: { id: 'moth_favor', name: 'The Moths’ Favor', stats: { luck: 10, dodge: 5 } } },
-    action: 'Give up your warmth (−4 max HP)',
+    cost: { vessel: 2 }, gain: { boon: { id: 'moth_favor', name: 'The Moths’ Favor', stats: { luck: 10, dodge: 5 } } },
+    action: 'Give up your warmth (−1 Star Vessel)',
   },
   {
     id: 'unlit_door', name: 'A Door, Priced',
@@ -419,11 +419,11 @@ export const BARGAINS = [
 export const SHRINE_BOONS = [
   { id: 'pilgrim_stride', name: 'Pilgrim’s Stride', cost: { shards: 14 }, boon: { stats: { spd: 2 } },
     line: 'The shrine blesses your steps: the road will be shorter, both ways.' },
-  { id: 'lantern_heart', name: 'Lantern Heart', cost: { shards: 14 }, boon: { stats: { maxHP: 6 } },
+  { id: 'lantern_heart', name: 'Lantern Heart', cost: { shards: 14 }, boon: { stats: { vessel: 1 } },
     line: 'A small light takes up residence behind your chest-rune.' },
   { id: 'keen_omen', name: 'Keen Omen', cost: { shards: 16 }, boon: { stats: { luck: 6 } },
     line: 'The shrine shows you, briefly, where everything is going to be.' },
-  { id: 'wardens_grace', name: 'Warden’s Grace', cost: { hp: 6 }, boon: { stats: { dodge: 6 } },
+  { id: 'wardens_grace', name: 'Warden’s Grace', cost: { hp: 2 }, boon: { stats: { dodge: 6 } },
     line: 'The shrine takes a little of your ink and redraws your outline, slightly to the left of danger.' },
   { id: 'sharpened_meridian', name: 'Sharpened Meridian', cost: { shards: 20 }, boon: { stats: { atk: 2 } },
     line: 'The shrine hones your shadow to an edge.' },
@@ -523,12 +523,12 @@ export function nebulaSites(rng, name) {
       type: 'side', subtype: 'bargain', bargain: {
         id: 'nebula_shape', name: 'A Shape in the Dust',
         flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
-        cost: { maxHP: 5 }, gain: 'mutation',
-        action: 'Let it improve you (−5 max HP)',
+        cost: { vessel: 2 }, gain: 'mutation',
+        action: 'Let it improve you (−1 Star Vessel)',
       },
       name: 'A Shape in the Dust',
       flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
-      actions: ['Let it improve you (−5 max HP)'],
+      actions: ['Let it improve you (−1 Star Vessel)'],
     },
   ];
 }

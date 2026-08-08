@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 4; // v4: archipelago worldgen + revealed islets; older saves discarded
+const VERSION = 5; // v5: Star Vessels (hp in half-vessels) + vesselBonus; older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -16,6 +16,7 @@ export function saveRun(world, player, worldView, roamers = null) {
       consumables: run.consumables,
       shards: run.shards,
       hp: run.hp,
+      vesselBonus: run.vesselBonus,
       shrineHeals: run.shrineHeals,
       boons: run.boons,
       shrineBoons: [...run.shrineBoons],
@@ -61,6 +62,7 @@ export function applySave(data, world, worldView, roamers = null) {
     if (item) run.items.push(item);
   }
   run.boons = Array.isArray(data.boons) ? data.boons : [];
+  run.vesselBonus = data.vesselBonus | 0;
   run._recompute();
   run.consumables = { charge: 0, dew: 0, feather: 0, ...data.consumables };
   run.shards = data.shards;

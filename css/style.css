@@ -84,6 +84,20 @@ button {
 .hud-region { font-size: 12px; color: #8fa0e0; margin-top: 2px; }
 .hud-stats { font-size: 13px; margin-top: 10px; color: #c6ccf2; letter-spacing: 0.03em; }
 .hud-stats b { color: #fff; }
+
+/* ---------- Star Vessels: life drawn as stars, in halves ---------- */
+.vstars { letter-spacing: 2px; white-space: nowrap; }
+.vstar {
+  position: relative; display: inline-block; font-size: 1.15em; line-height: 1;
+  color: rgba(140, 150, 200, 0.32); text-shadow: none;
+}
+.vstar .vs-fill {
+  position: absolute; left: 0; top: 0; width: 0; overflow: hidden;
+  color: #ffd98a; text-shadow: 0 0 8px rgba(255, 214, 130, 0.75);
+  transition: width 0.25s ease;
+}
+.vstar.full .vs-fill { width: 100%; }
+.vstar.half .vs-fill { width: 50%; }
 .hud-shards { margin-top: 4px; font-size: 13px; color: var(--gold); letter-spacing: 0.06em; }
 .hud-consum { font-size: 12.5px; margin-top: 2px; color: #9fb0e8; }
 
@@ -346,6 +360,22 @@ body.in-battle #btn-menu { display: none; }
   width: 280px; text-shadow: var(--tsh);
 }
 #b-player .b-name { font-size: 14.5px; color: #fff; letter-spacing: 0.04em; }
+#b-player .b-vstars { margin: 4px 0 2px; font-size: 15px; }
+/* focus: five pips that dim as your hands fray */
+.b-focus {
+  font-size: 10px; letter-spacing: 0.14em; color: #9fb0e8; margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.fpip {
+  display: inline-block; width: 14px; height: 5px; margin-left: 4px;
+  border-radius: 2px; background: rgba(140, 150, 200, 0.22);
+  vertical-align: middle; position: relative; overflow: hidden;
+}
+.fpip.full { background: #9fe8ff; box-shadow: 0 0 7px rgba(140, 220, 255, 0.7); }
+.fpip.half {
+  background: linear-gradient(90deg, #9fe8ff 0 50%, rgba(140, 150, 200, 0.22) 50% 100%);
+  box-shadow: 0 0 5px rgba(140, 220, 255, 0.4);
+}
 #b-log {
   position: absolute; bottom: 122px; left: 50%; transform: translateX(-50%);
   font-size: 15px; color: #e8ebff; max-width: 52vw; text-align: center;
@@ -485,6 +515,7 @@ body.in-battle #btn-menu { display: none; }
 .b-num.dmg { color: #ffb08a; }
 .b-num.heal { color: #9fe8c8; }
 .b-num.burn { color: #ff9a5a; }
+.b-num.focus { color: #9fe8ff; font-size: 13px; }
 .b-num.stun { color: #dfc2ff; }
 @keyframes floatup { 0% { opacity: 0; margin-top: 8px; } 15% { opacity: 1; } 100% { opacity: 0; margin-top: -44px; } }
 

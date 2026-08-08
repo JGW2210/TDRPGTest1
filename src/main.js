@@ -10,7 +10,7 @@ import { WorldView, TIER_COLORS } from './world3d.js';
 import { PlayerToken } from './player.js';
 import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
-import { BattleSystem } from './battle.js';
+import { BattleSystem, fmtV } from './battle.js';
 import { ui } from './ui.js';
 import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_VOICES, SKY_GAZES } from './names.js';
 import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
@@ -564,6 +564,9 @@ function challengeGate(gateTile) {
             audio.sfxGate();
             ui.toast(`⚑ The ward shatters — ${world.regions[g.into].name} lies open.`, true);
             announceFeats(meta.bump(s => { s.wardens++; if (g.tier >= 3) s.deepWarden = true; }));
+            // every warden's broken ward condenses into a whole new vessel
+            run.addVessels(2);
+            ui.toast('★ A Star Vessel condenses from the shattered ward — your paper heart grows by one.', true);
             const bossDraw = drawItem(
               mulberry32(hash2(gateTile.q, gateTile.r, world.seed + 777) * 0xffffffff | 0),
               'BOSS', run.ownedIds, { source: 'boss', tier: g.tier, unlocked: meta.unlockedIds });
@@ -684,8 +687,8 @@ async function startBattle({ team, title, onWin, siteId, waves = null }) {
     if (result.won && queue.length) {
       // gauntlet continues: a breath, then the next chamber
       const nxt = queue.shift();
-      run.hp = Math.min(run.stats.maxHP, run.hp + 4);
-      ui.toast(`A breath between chambers (+4 ❤) — deeper now.`, true);
+      run.hp = Math.min(run.stats.maxHP, run.hp + 1);
+      ui.toast(`A breath between chambers (+½★) — deeper now.`, true);
       activeScene = 'battle';
       mode = 'battle';
       battle.start({ team: nxt.team, title: nxt.title, onEnd: handleEnd });
@@ -765,7 +768,8 @@ function checkGlint(tile) {
 }
 
 const statText = stats => Object.entries(stats || {})
-  .map(([k, v]) => `${v > 0 ? '+' : ''}${v}${k === 'luck' ? '% crit' : k === 'dodge' ? '% dodge' : ' ' + k.toUpperCase()}`)
+  .map(([k, v]) => k === 'vessel' ? `${v > 0 ? '+' : '−'}${fmtV(v)} max`
+    : `${v > 0 ? '+' : ''}${v}${k === 'luck' ? '% crit' : k === 'dodge' ? '% dodge' : ' ' + k.toUpperCase()}`)
   .join(', ');
 
 // A bargain asks for something real; refusal is always free.
@@ -782,12 +786,14 @@ function resolveBargain(site) {
     cands.sort((x, y) => order[x.rarity] - order[y.rarity]);
     const eaten = run.removeItem(cands[0].id);
     ui.toast(`The star swallows <b>${eaten.name}</b> whole, and chews with its whole face.`);
-  } else if (b.cost.hp) {
+  } else if (b.cost.hp) {   // hp costs are half-vessels now
     if (run.hp <= b.cost.hp) { ui.toast('It would take more than you have left to give.'); return; }
     run.hp -= b.cost.hp;
-  } else if (b.cost.maxHP) {
-    if (run.stats.maxHP - b.cost.maxHP < 12) { ui.toast('There is not enough of you left to trade away.'); return; }
-    run.addBoon({ id: b.id + '_price', name: b.name + ' (the price)', stats: { maxHP: -b.cost.maxHP } });
+  } else if (b.cost.vessel) {   // permanent halves traded away
+    if (run.stats.maxHP - b.cost.vessel < CONFIG.battle.vessels.min + 2) {
+      ui.toast('There is not enough of you left to trade away.'); return;
+    }
+    run.addBoon({ id: b.id + '_price', name: b.name + ' (the price)', stats: { vessel: -b.cost.vessel } });
   } else if (b.cost.shards) {
     if (!run.spendShards(b.cost.shards)) { ui.toast('Your purse does not meet the asking.'); return; }
   }
@@ -1011,7 +1017,7 @@ function handleAction(site, label, btn) {
     const offer = SHRINE_BOONS[Math.floor(rng0() * SHRINE_BOONS.length)];
     if (!site._communeOffered) {
       site._communeOffered = true;
-      const costTxt = offer.cost.shards ? `☆ ${offer.cost.shards}` : `${offer.cost.hp} HP of your ink`;
+      const costTxt = offer.cost.shards ? `☆ ${offer.cost.shards}` : `${fmtV(offer.cost.hp)} of your ink`;
       ui.modalOutcome(`The shrine stirs. It offers ${offer.name} (${statText(offer.boon.stats)}) in exchange for ${costTxt}. Commune again to accept.`);
       return;
     }
@@ -1042,8 +1048,8 @@ function handleAction(site, label, btn) {
       run.addBoon({ id: 'whisper_' + site.id, name: 'A Whispered Truth', stats: { luck: 3 } });
       ui.modalOutcome('You listen. You will never repeat it, and it will never stop being useful. (+3% crit)');
     } else {
-      run.hp = Math.max(1, run.hp - 4);
-      ui.modalOutcome('You listen too long. Something on the far side listens back. (−4 HP)');
+      run.hp = Math.max(1, run.hp - 1);
+      ui.modalOutcome('You listen too long. Something on the far side listens back. (−½★)');
     }
     refreshHud(player.tile);
     saveNow(true);
@@ -1053,9 +1059,9 @@ function handleAction(site, label, btn) {
     if (run.clearedSites.has(site.id)) { ui.toast('The nursery sleeps. Let it.'); return; }
     run.clearedSites.add(site.id);
     if (Math.random() < 0.55) {
-      run.addBoon({ id: 'star_warmth', name: 'Newborn Starlight', stats: { luck: 4, maxHP: 3 } });
+      run.addBoon({ id: 'star_warmth', name: 'Newborn Starlight', stats: { luck: 4, vessel: 1 } });
       audio.sfxHeal();
-      ui.modalOutcome('The little star settles in your palms, considers its options, and moves into your chest-rune. (+4% crit, +3 max HP)');
+      ui.modalOutcome('The little star settles in your palms, considers its options, and moves into your chest-rune. (+4% crit, +½ Star Vessel)');
     } else {
       const got = run.gainShards(16);
       ui.modalOutcome(`The star sneezes stardust all over you. Good manners require keeping it. (+${got} ☆)`);
@@ -1136,7 +1142,7 @@ function handleAction(site, label, btn) {
     ui.modalOutcome(out.text
       + (out.shards ? `  (${out.shards > 0 ? '+' : ''}${out.shards} ☆)` : '')
       + (out.boon ? `  (${statText(out.boon.stats)})` : '')
-      + (out.hp ? `  (${out.hp} HP)` : ''));
+      + (out.hp ? `  (${out.hp > 0 ? '+' : '−'}${fmtV(out.hp)})` : ''));
     btn.disabled = true;
     if (currentLocalTile) checkGlint(currentLocalTile);
     return;
@@ -1246,9 +1252,10 @@ ui.inventoryHandlers = {
   useDew: () => {
     if (run.consumables.dew <= 0 || run.hp >= run.stats.maxHP) return;
     run.consumables.dew--;
-    const amount = 12 + (run.flags.dewPotency || 0);
+    let amount = Math.min(6, 4 + (run.flags.dewPotency || 0));   // 2★, relics push to 3★
+    if (run.flags.dewMuted) amount = Math.ceil(amount / 2);
     run.hp = Math.min(run.stats.maxHP, run.hp + amount);
-    ui.toast(`❋ The star-dew glows going down. +${amount} HP.`);
+    ui.toast(`❋ The star-dew glows going down. +${fmtV(amount)}.`);
     refreshHud(player.tile);
     ui.renderInventory(run);
     saveNow(true);

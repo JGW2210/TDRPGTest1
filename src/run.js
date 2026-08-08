@@ -8,7 +8,8 @@ class Run {
     this.items = [];              // item defs, in pickup order
     this.consumables = { charge: 2, dew: 0, feather: 0 };
     this.shards = 10;
-    this.hp = CONFIG.battle.baseHP;
+    this.hp = CONFIG.battle.vessels.base;   // half Star Vessels
+    this.vesselBonus = 0;         // permanent halves earned (warden hearts)
     this.clearedSites = new Set(); // site ids resolved this run
     this.openedGates = new Set();  // gate keys unlocked
     this.revealedSecrets = new Set();
@@ -28,6 +29,16 @@ class Run {
 
   addBoon(boon) {
     this.boons.push(boon);
+    const before = this.stats.maxHP;
+    this._recompute();
+    if (this.stats.maxHP > before) this.hp += this.stats.maxHP - before;
+    this.hp = Math.min(this.hp, this.stats.maxHP);
+  }
+
+  // A permanent Star Vessel gain (in halves) — warden hearts and the like.
+  // The new capacity arrives full.
+  addVessels(halves) {
+    this.vesselBonus += halves;
     const before = this.stats.maxHP;
     this._recompute();
     if (this.stats.maxHP > before) this.hp += this.stats.maxHP - before;
@@ -55,7 +66,7 @@ class Run {
 
   _recompute() {
     const s = {
-      maxHP: CONFIG.battle.baseHP, atk: CONFIG.battle.baseAtk, spd: CONFIG.battle.baseSpd,
+      vessel: 0, atk: CONFIG.battle.baseAtk, spd: CONFIG.battle.baseSpd,
       luck: 0, dodge: 0, shardGain: 0, timingBonus: 0, blockBonus: 0,
     };
     const flags = {};
@@ -86,7 +97,7 @@ class Run {
     if (has('glassworks')) s.luck += 8;
     if (has('moonbound')) { s.dodge += 10; flags.firstStrikeDodge = true; }
     if (has('high_noon')) s.atk += 2;
-    if (has('tideborne')) { s.dodge += 5; flags.afterBattleHeal = (flags.afterBattleHeal || 0) + 3; }
+    if (has('tideborne')) { s.dodge += 5; flags.afterBattleHeal = (flags.afterBattleHeal || 0) + 1; }
     // grand synergies
     if (has('fulgurite')) s.atk += 2;
     if (has('eclipse')) s.atk += 3;
@@ -96,7 +107,9 @@ class Run {
     if (flags.noFirstDodge) delete flags.firstStrikeDodge;   // the Eyes never close
     if (flags.cooldownMinus) for (const a of abilities) a.cd = Math.max(1, a.cd - flags.cooldownMinus);
 
-    s.maxHP = Math.max(10, s.maxHP);
+    // max Star Vessels (halves): base + relic/boon vessels + earned hearts
+    const V = CONFIG.battle.vessels;
+    s.maxHP = Math.max(V.min, Math.min(V.cap, V.base + s.vessel + this.vesselBonus));
     s.spd = Math.max(1, s.spd);
     s.atk = Math.max(1, s.atk);
     this.stats = s;
@@ -133,8 +146,10 @@ class Run {
   }
 
   // rough strength score, used for danger comparison on gates
+  // (maxHP is in half-vessels now: base 10 halves contributes the same 5
+  // points the old 30-HP pool did, so the expectedPower curve still holds)
   get power() {
-    return Math.round(this.stats.atk * 2 + this.stats.maxHP / 6 + this.stats.spd
+    return Math.round(this.stats.atk * 2 + this.stats.maxHP / 2 + this.stats.spd
       + this.stats.luck / 8 + this.items.length * 1.5);
   }
 

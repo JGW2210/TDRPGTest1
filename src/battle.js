@@ -8,12 +8,19 @@ import { mulberry32, hash2, pick } from './rng.js';
 import { BIOMES, FOES, speciesSlug } from './names.js';
 import { run } from './run.js';
 import { audio } from './audio.js';
+import { vesselStarsHTML } from './ui.js';
 import {
   makeNebulaTexture, makePlayerTexture, makeEnemyTexture, makeGlowTexture, makeStarTexture,
 } from './textures.js';
 
 const $ = id => document.getElementById(id);
 const wait = ms => new Promise(res => setTimeout(res, ms));
+
+// half-vessels → "1½★" style text for floats and logs
+export const fmtV = halves => {
+  const whole = Math.floor(Math.abs(halves) / 2), half = Math.abs(halves) % 2;
+  return (whole > 0 ? whole : '') + (half ? '½' : '') + '★';
+};
 
 const ROLE_MODS = {
   brute: { hp: 1.4, atk: 1.15, spd: 0.7 },
@@ -60,15 +67,21 @@ export class BattleSystem {
     this.firstDodgeUsed = false;
     this.frenzyAtk = 0;
     this.shieldLeft = (run.flags.firstHitHalved ? 1 : 0) + (run.flags.shieldHits || 0);
-    this.hexTurns = 0;   // mystic hex: rounds of narrowed timing bands
-    this.playerBurn = null;   // { dmg, turns } — cinders in your folds
+    this.playerBurn = null;   // { turns } — cinders in your folds burn your FOCUS
     this.playerChill = 0;     // frost stacks: the marker runs faster
     this.poise = 0;           // a swift perfect settles your stance for the next blocks
     this.opening = 0;         // …and marks an opening: bonus mult on your next attack
     this._openingNow = 0;     // the opening being spent by the current action
-    this.playerRattle = 0;    // big blows rattle your hands: strike bars narrow & speed
-    this._rattleTold = false;
     this.braced = false;      // Brace: slower notes, wider windows, a riposte
+    // Focus: full at the bell, drained by sloppy blocks, restored by perfect
+    // ones. Low focus narrows your strike-bar windows — never the lanes.
+    const F = CONFIG.battle.focus;
+    this.focus = F.max;
+    this._focusTold = false;
+    // the gills ache on dry land: those battles start a stage down
+    if (run.flags.drylandAche && !['SEA', 'BRIDGE'].includes(team.biome)) this.focus = F.max - 1;
+    this.blockHealLeft = run.flags.blockHeal || 0;      // ½★ per perfect block, per battle
+    this.perfectHealLeft = run.flags.perfectHeal || 0;  // ½★ per perfect strike, per battle
     this.laneActive = false;  // the falling-note block minigame is live
     this.lane = null;
     this.trapWardLeft = run.flags.trapWard || 0;      // traps forgiven per battle
@@ -105,9 +118,8 @@ export class BattleSystem {
           this.frenzyAtk += 1;
           this._log('The deck deals THE BANNER — +1 ATK for this battle.');
         } else {
-          run.hp = Math.min(run.stats.maxHP, run.hp + 5);
-          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), '+5', 'heal');
-          this._log('The deck deals THE HEARTH — you are 5 HP warmer.');
+          this._healPlayer(1);
+          this._log('The deck deals THE HEARTH — you are half a vessel warmer.');
         }
         this._refreshCards();
       }, 850);
@@ -275,7 +287,7 @@ export class BattleSystem {
       const pct = Math.max(0, e.hp / e.maxHP * 100);
       const status = [
         e.burnTurns > 0 ? `<span class="st burn">🔥${e.burn}</span>` : '',
-        e.chill ? `<span class="st chill">❄−${e.chill}</span>` : '',
+        e.chill ? `<span class="st chill">❄×${e.chill}</span>` : '',
         e.stun ? `<span class="st stun">✶stun</span>` : '',
         e.charging ? `<span class="st charge">⚡charging</span>` : '',
         e.enraged ? `<span class="st charge">enraged</span>` : '',
@@ -291,20 +303,60 @@ export class BattleSystem {
       });
       en.appendChild(card);
     }
-    const pct = Math.max(0, run.hp / run.stats.maxHP * 100);
     const pStatus = [
       this.playerGuardBonus ? '<span class="st chill">guarded</span>' : '',
       this.braced ? '<span class="st chill">⛨ braced</span>' : '',
       this.poise ? '<span class="st chill">✦ poised</span>' : '',
       this.opening > 0 ? `<span class="st charge">✦ opening +${Math.round(this.opening * 100)}%</span>` : '',
-      this.playerRattle > 0 ? '<span class="st burn">✖ rattled</span>' : '',
-      this.hexTurns > 0 ? '<span class="st burn">hexed</span>' : '',
-      this.playerBurn?.turns > 0 ? `<span class="st burn">🔥${this.playerBurn.dmg}</span>` : '',
+      this.playerBurn?.turns > 0 ? '<span class="st burn">🔥 focus burning</span>' : '',
       this.playerChill > 0 ? `<span class="st chill">❄×${this.playerChill}</span>` : '',
     ].filter(Boolean).join(' ');
+    // focus pips: 5 stages, drawn in half-steps
+    const F = CONFIG.battle.focus;
+    const pips = Array.from({ length: F.max }, (_, i) => {
+      const fill = Math.max(0, Math.min(1, this.focus - i));
+      return `<span class="fpip${fill >= 1 ? ' full' : fill > 0 ? ' half' : ''}"></span>`;
+    }).join('');
     $('b-player').innerHTML = `<div class="b-name">You, the Star-Wanderer</div>
-      <div class="b-hpbar"><div class="b-hpfill player" style="width:${pct}%"></div></div>
-      <div class="b-sub">${run.hp} / ${run.stats.maxHP} HP · ATK ${this._playerAtk()} · SPD ${run.stats.spd}${pStatus ? ' · ' + pStatus : ''}</div>`;
+      <div class="b-vstars">${vesselStarsHTML(run.hp, run.stats.maxHP)}</div>
+      <div class="b-focus" title="Focus: sloppy blocks drain it, perfect blocks restore it — low focus narrows your strike windows">focus ${pips}</div>
+      <div class="b-sub">ATK ${this._playerAtk()} · SPD ${run.stats.spd}${pStatus ? ' · ' + pStatus : ''}</div>`;
+  }
+
+  // ---- focus & vessels -----------------------------------------------------
+
+  // Move focus by delta stages (halves allowed), clamped to [min, max].
+  _focusShift(delta, why) {
+    const F = CONFIG.battle.focus;
+    const before = this.focus;
+    this.focus = Math.max(F.min, Math.min(F.max, this.focus + delta));
+    if (this.focus === before) return;
+    if (delta < 0) {
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0.6, 2.4, 0)),
+        `−focus${why ? ' ' + why : ''}`, 'focus');
+      if (this.focus <= F.min && !this._focusTold) {
+        this._focusTold = true;
+        this._log('Your focus FRAYS to nothing — the gold bands run knife-thin. Land perfect blocks to steady your hands.');
+      }
+    }
+  }
+
+  // how much the strike bands narrow as focus frays: 1.0 at full → minScale at 1
+  _focusScale() {
+    const F = CONFIG.battle.focus;
+    return F.minScale + (1 - F.minScale) * (this.focus - F.min) / (F.max - F.min);
+  }
+
+  _healPlayer(halves) {
+    if (halves <= 0 || run.hp >= run.stats.maxHP) return;
+    run.hp = Math.min(run.stats.maxHP, run.hp + halves);
+    this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${fmtV(halves)}`, 'heal');
+  }
+
+  _damagePlayer(halves, tag) {
+    run.hp -= halves;
+    this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)),
+      `−${fmtV(halves)}${tag ? ' ' + tag : ''}`, 'dmg');
   }
 
   _playerAtk() {
@@ -386,15 +438,12 @@ export class BattleSystem {
       $('b-timing-label').textContent = opts.label
         || (kind === 'strike' ? 'Strike! (click / space)' : '☄ DODGE!');
 
-      // rattled hands: the band narrows and the marker runs wilder
-      const R = CONFIG.battle.rattle;
-      if (this.playerRattle > 0) this.timingSpeed *= R.speed;
-      const shrink = (this.hexTurns > 0 ? 0.55 : 1) * (opts.shrink || 1)
-        * (this.playerRattle > 0 ? R.shrink : 1);
+      // frayed focus narrows your attack windows — the lanes never suffer this
+      const shrink = (opts.shrink || 1) * (kind === 'strike' ? this._focusScale() : 1);
       let half = (kind === 'dodge' ? T.dodgeHalf : T.perfectHalf) * shrink;
       if (run.hasSynergy('eclipse')) half += 0.015;
       const mid = 0.28 + this.rng() * 0.5;   // the band wanders every swing
-      const pad = kind === 'dodge' ? 0 : T.goodPad;
+      const pad = kind === 'dodge' ? 0 : T.goodPad * this._focusScale();
       this.zones = {
         p0: mid - half, p1: mid + half,
         g0: Math.max(0.02, mid - half - pad), g1: Math.min(0.98, mid + half + pad),
@@ -447,7 +496,7 @@ export class BattleSystem {
   //   Swift Cut  — one generous bar; a perfect settles you into POISE
   //                (slower, wider blocks next enemy phase) and marks an
   //                OPENING: your next attack lands harder. The consistent
-  //                choice when rattled or hexed hands can't hold a chain.
+  //                choice when frayed focus can't hold a chain.
   //   Star Strike — the 3-bar chain, each faster and tighter than the last.
   //   Meteor Edge — a 3-bar chain of knife-slits: each perfect lands 1.5×,
   //                pierces guard-plates and wards, and knocks a gathering
@@ -555,8 +604,9 @@ export class BattleSystem {
     this.state = 'playerActing';
     this._hideMenu();
     this.braced = true;
+    this._focusShift(CONFIG.battle.focus.brace);   // stillness steadies the hands
     this._burst(this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0x9fb4ff);
-    this._log('⛨ You plant your feet and watch the rhythm of the fight — braced.');
+    this._log('⛨ You plant your feet and watch the rhythm of the fight — braced, and your focus steadies.');
     audio.sfxBlock();
     await wait(600);
     this._afterPlayerAction();
@@ -590,8 +640,9 @@ export class BattleSystem {
     else if (timing.grade === 'good') audio.sfxGood();
     if (crit && run.flags.critShatter) this.shatterNext = run.flags.critShatter;
     if (crit && run.hasSynergy('stained_glass')) run.gainShards(1);
-    if (timing.grade === 'perfect' && run.flags.perfectHeal) {
-      run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.perfectHeal);
+    if (timing.grade === 'perfect' && this.perfectHealLeft > 0) {
+      this.perfectHealLeft--;
+      this._healPlayer(1);
     }
     if (timing.grade === 'perfect' && run.flags.perfectShard) run.gainShards(run.flags.perfectShard);
     if (timing.grade === 'perfect' && run.flags.stunOnPerfect && !target.dead
@@ -601,7 +652,7 @@ export class BattleSystem {
     }
     if (target.dead) {
       audio.sfxEnemyDie();
-      if (run.flags.killHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.killHeal);
+      if (run.flags.killHeal) this._healPlayer(run.flags.killHeal);   // halves per felled foe
       if (run.flags.killShard) run.gainShards(run.flags.killShard);
     }
     if (!silent && run.flags.doubleStrike && !target.dead && this.rng() * 100 < run.flags.doubleStrike) {
@@ -631,9 +682,8 @@ export class BattleSystem {
     this._openingNow = this.opening;
     this.opening = 0;
     if (this._openingNow > 0) this._log(`The opening you cut — the cast lands +${Math.round(this._openingNow * 100)}% harder!`);
-    if (run.flags.abilityToll) {   // the Hollow Chest takes its cut
-      run.hp = Math.max(1, run.hp - run.flags.abilityToll);
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${run.flags.abilityToll}`, 'dmg');
+    if (run.flags.abilityToll) {   // the Hollow Chest takes its cut — in focus now
+      this._focusShift(-0.5, '(the hollow)');
     }
     this._log(`✧ ${ab.name}!`);
     const alive = this._aliveEnemies();
@@ -666,9 +716,8 @@ export class BattleSystem {
         this._log(`${target.name} rings like a bell and forgets its turn.`);
       }
     } else if (ab.kind === 'heal_self') {
-      run.hp = Math.min(run.stats.maxHP, run.hp + ab.amount);
+      this._healPlayer(ab.amount);   // ability amounts are half-vessels now
       this._burst(castFrom(), 0x8affc4);
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${ab.amount}`, 'heal');
       audio.sfxHeal();
     } else if (ab.kind === 'weaken_all') {
       for (const e of alive) {
@@ -699,12 +748,11 @@ export class BattleSystem {
         await this._strike(target, { grade: 'good', mult: ab.mult }, 1, true);
         const dealt = before - Math.max(0, target.hp);
         await this._projectile(castAt(target), castFrom(), '#8affc4', { dur: 0.28, size: 0.45 });
-        run.hp = Math.min(run.stats.maxHP, run.hp + dealt);
-        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${dealt}`, 'heal');
+        if (dealt > 0) this._healPlayer(1);   // drink back half a vessel
       }
     } else if (ab.kind === 'frenzy') {
       this.frenzyAtk += ab.atkUp;
-      run.hp = Math.max(1, run.hp - ab.selfDmg);
+      if (run.hp > ab.selfDmg) this._damagePlayer(ab.selfDmg);   // selfDmg is half-vessels
       this._burst(castFrom(), 0xff6a5a);
       this._log(`The drum takes its due — +${ab.atkUp} ATK for this battle.`);
     }
@@ -737,11 +785,10 @@ export class BattleSystem {
     this._hideMenu();
     run.consumables.dew--;
     audio.sfxHeal();
-    let amount = 12 + (run.flags.dewPotency || 0);
+    let amount = Math.min(6, 4 + (run.flags.dewPotency || 0));   // 2★, relics push to 3★
     if (run.flags.dewMuted) amount = Math.ceil(amount / 2);   // the Starving Halo tithes it
-    run.hp = Math.min(run.stats.maxHP, run.hp + amount);
-    this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${amount}`, 'heal');
-    this._log(`❋ The star-dew glows going down. +${amount} HP.`);
+    this._healPlayer(amount);
+    this._log(`❋ The star-dew glows going down. +${fmtV(amount)}.`);
     this._refreshCards();
     await wait(650);
     this._afterPlayerAction();
@@ -774,12 +821,10 @@ export class BattleSystem {
       this._tween(e.mesh.position, { y: -0.4 }, 0.4);
       setTimeout(() => { e.mesh.visible = false; }, 600);
     } else if (e.boss && !e.enraged && e.hp < e.maxHP / 2) {
-      e.enraged = true;
-      e.atk = Math.round(e.atk * 1.3 * 10) / 10;
+      e.enraged = true;   // enraged blows land ½★ heavier
       this._log(`${e.name} is ENRAGED!`);
     } else if (!e.boss && e.role === 'brute' && !e.enraged && e.hp < e.maxHP * 0.4) {
       e.enraged = true;
-      e.atk = Math.round(e.atk * 1.25 * 10) / 10;
       this._log(`${e.name} bellows and ENRAGES!`);
     }
   }
@@ -828,7 +873,7 @@ export class BattleSystem {
         e.charging = false;
         // wound-up blows land as unblockable crushes in the deep (and always from bosses)
         const crush = e.boss || tier >= 2;
-        await this._enemyStrike(e, 2.0, crush ? { crush: true } : { heavy: true });
+        await this._enemyStrike(e, crush ? { crush: true } : { heavy: true });
       } else if (e.deity && this.rng() < 0.65) {
         // the Wound made flesh fights with every voice at once
         const move = this.turn % 3;
@@ -839,21 +884,20 @@ export class BattleSystem {
           await wait(600);
           continue;
         } else if (move === 1) {
-          const drain = 4 + Math.round((this.team.tier || 6) * 0.8);
+          const mend = 4 + Math.round((this.team.tier || 6) * 0.8);
           await this._projectile(
             this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
             e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
             '#a6ff57', { dur: 0.35, size: 0.5 }
           );
-          run.hp -= drain;
-          e.hp = Math.min(e.maxHP, e.hp + drain);
-          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
-          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drain}`, 'heal');
-          this._log(`${e.name} drinks the seam between you and the world…`);
+          this._focusShift(-1, '(drunk away)');
+          e.hp = Math.min(e.maxHP, e.hp + mend);
+          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${mend}`, 'heal');
+          this._log(`${e.name} drinks your focus out through the seam between you and the world…`);
           this._refreshCards();
           await wait(550);
         } else {
-          await this._enemyStrike(e, 1, { hits: 2 });
+          await this._enemyStrike(e, { hits: 2 });
         }
       } else if (e.role === 'mystic' && this.rng() < 0.42) {
         e.intent = 'special';
@@ -866,20 +910,19 @@ export class BattleSystem {
           this._float(ally.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${mend}`, 'heal');
           this._log(`${e.name} re-folds ${ally.name}'s wounds shut.`);
         } else if (tier >= 3 && roll < 0.55) {
-          const drain = 3 + Math.round(tier * 0.7);
+          const mend = 3 + Math.round(tier * 0.7);
           await this._projectile(
             this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
             e.mesh.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
             '#8affc4', { dur: 0.32, size: 0.45 }
           );
-          run.hp -= drain;
-          e.hp = Math.min(e.maxHP, e.hp + drain);
-          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${drain}`, 'dmg');
-          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drain}`, 'heal');
-          this._log(`${e.name} siphons your starlight into itself…`);
-        } else if (tier >= 2 && this.hexTurns === 0 && roll < 0.75) {
-          this.hexTurns = 2;
-          this._log(`${e.name} knots the light around your hands — your timing bands narrow!`);
+          this._focusShift(-1, '(siphoned)');
+          e.hp = Math.min(e.maxHP, e.hp + mend);
+          this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${mend}`, 'heal');
+          this._log(`${e.name} siphons your focus into itself…`);
+        } else if (tier >= 2 && roll < 0.75) {
+          this._focusShift(-1, '(knotted)');
+          this._log(`${e.name} knots the light around your hands — your focus frays!`);
         } else {
           this._log(`${e.name} hexes you with cold starlight…`);
           await this._projectile(
@@ -887,9 +930,7 @@ export class BattleSystem {
             this.playerMesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
             this.accent, { dur: 0.28, size: 0.5 }
           );
-          const hexDmg = Math.max(1, Math.round(e.atk * 0.5));
-          run.hp -= hexDmg;
-          this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${hexDmg}`, 'dmg');
+          this._focusShift(-0.5, '(hexed)');
         }
         this._refreshCards();
         await wait(550);
@@ -904,7 +945,7 @@ export class BattleSystem {
           e.warded = true;
           this._log(`${e.name} locks its plates into a rune-shell.`);
         } else {
-          await this._enemyStrike(e, 1);
+          await this._enemyStrike(e);
         }
         this._refreshCards();
         await wait(550);
@@ -916,33 +957,28 @@ export class BattleSystem {
         continue;
       } else if (e.role === 'swift' && this.rng() < 0.3 + tier * 0.08) {
         // the flurry: every swing gets its own quickening bar
-        await this._enemyStrike(e, 1, { hits: tier >= 3 ? 3 : 2 });
+        await this._enemyStrike(e, { hits: tier >= 3 ? 3 : 2 });
       } else {
-        await this._enemyStrike(e, 1);
+        await this._enemyStrike(e);
       }
       if (run.hp <= 0) return this._defeat();
       this._refreshCards();
       await wait(280);
     }
     this.turn++;
-    if (this.hexTurns > 0) this.hexTurns--;
-    if (this.playerRattle > 0) this.playerRattle--;
     if (this.playerChill > 0 && this.rng() < 0.5) this.playerChill--;
     for (const k of Object.keys(this.abilityCds)) this.abilityCds[k] = Math.max(0, this.abilityCds[k] - 1);
     if (this._aliveEnemies().length === 0) return this._victory();
-    // your burn ticks as your turn comes around
+    // cinders in your folds burn away focus, not vessels — mistakes alone cost stars
     if (this.playerBurn && this.playerBurn.turns > 0) {
-      run.hp -= this.playerBurn.dmg;
       this.playerBurn.turns--;
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${this.playerBurn.dmg} 🔥`, 'dmg');
-      if (run.hp <= 0) return this._defeat();
+      this._focusShift(-CONFIG.battle.focus.burnTick, '🔥');
     }
-    let regen = 0;
-    if (run.hasSynergy('fullbloom')) regen += 2;
-    if (run.hasSynergy('verdance')) regen += 3;
-    if (regen && run.hp < run.stats.maxHP) {
-      run.hp = Math.min(run.stats.maxHP, run.hp + regen);
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `+${regen} ❀`, 'heal');
+    // the bloom keeps you: ½★ every other turn, every turn under full verdance
+    if ((run.hasSynergy('verdance') || (run.hasSynergy('fullbloom') && this.turn % 2 === 0))
+      && run.hp < run.stats.maxHP) {
+      this._healPlayer(1);
+      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0.8, 1.6, 0)), '❀', 'heal');
     }
     this.braced = false;   // the stance and the poise are spent with the storm
     this.poise = 0;
@@ -955,7 +991,12 @@ export class BattleSystem {
   // unblockable heavy — one wide shape falls and only a knife-thin leap (or
   // a passive dodge) saves you. opts.hits > 1: a flurry — one falling note
   // per swing, graded shape by shape.
-  async _enemyStrike(e, mult, opts = {}) {
+  //
+  // Star Vessel rules: perfect and good blocks NULLIFY the blow — a perfect
+  // steadies your focus, a good chips it. Only a fully missed shape (or a
+  // crush you fail to leap) costs vessels, in fixed half-star amounts from
+  // the tier table. Heavies and crushes cost double, capped at 3★.
+  async _enemyStrike(e, opts = {}) {
     const { heavy = false, crush = false, hits = 1 } = opts;
     const tier = this.team.tier || 1;
     const veil = ['DESERT', 'CRIMSON'].includes(this.team.biome);   // sand hides the shapes
@@ -978,19 +1019,26 @@ export class BattleSystem {
     const speed = 1 + tier * 0.04 + (crush ? 0.3 : heavy ? 0.2 : 0) + (this.playerChill || 0) * 0.08;
     const res = await this._blockRun({ swings: hits, tier, crush, speed, veil });
 
-    // sprung traps bite before the blows land
+    // sprung traps bite before the blows land: ½★ each (focus already paid)
     if (res.trapsHit > 0) {
-      const chip = Math.max(1, Math.round(e.atk * 0.5)) * res.trapsHit;
-      run.hp -= chip;
-      this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${chip} ⚠`, 'dmg');
+      this._damagePlayer(CONFIG.battle.damage.trap * res.trapsHit, '⚠');
       this._log('The feint bites — you moved to block a lie.');
       this._shake(this.playerMesh);
       audio.sfxHurt();
     }
 
+    // what a landed hit costs, in half-vessels, from the tier table
+    const D = CONFIG.battle.damage;
+    const F = CONFIG.battle.focus;
+    let base = tier < D.midTier ? D.low : tier < D.highTier ? D.mid : D.high;
+    if (e.boss) base += D.bossPlus;
+    if (e.enraged) base += D.enragePlus;
+    base = Math.max(1, base - Math.floor((e.chill || 0) / D.chillPer));
+    const perHitHalves = hits > 1 ? Math.max(1, Math.round(base / 2))
+      : (heavy || crush) ? Math.min(D.heavyCap, base * D.heavyMult) : base;
+
     for (let h = 0; h < hits; h++) {
       if (run.hp <= 0) break;
-      const perHit = hits > 1 ? mult * 0.55 : mult;
       const grade = res.grades[h] || 'miss';
       if (ranged) {
         await this._projectile(
@@ -999,7 +1047,6 @@ export class BattleSystem {
           this.accent, { dur: 0.24 }
         );
       }
-      let dmg = Math.max(1, e.atk - (e.chill || 0)) * perHit * (0.9 + this.rng() * 0.2);
 
       const autoDodge = run.flags.firstStrikeDodge && !this.firstDodgeUsed;
       const passiveDodge = this.rng() * 100 < (run.stats.dodge || 0);
@@ -1008,59 +1055,46 @@ export class BattleSystem {
         this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'leapt clear!', 'heal');
         this._log('You fold sideways — the blow shatters empty ground!');
         audio.sfxBlock();
-        dmg = 0;
       } else if (autoDodge || passiveDodge) {
         this.firstDodgeUsed = true;
         this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 'dodged!', 'heal');
         this._log('You flutter aside — dodged!');
-        dmg = 0;
-      } else {
-        if (crush) {
-          dmg *= 1.2;   // caught flat-footed under the full weight
-          audio.sfxHurt();
-          this._burst(playerPos(), 0xff6a4a);
-        } else if (grade === 'perfect') {
-          dmg *= CONFIG.battle.blockPerfect;
-          audio.sfxBlock();
-          this._burst(playerPos(), 0x9fe8ff);
-          if (run.flags.blockHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.blockHeal);
-          // the braced blade (or a parrying relic) answers
-          const riposte = (this.braced ? Math.round(this._playerAtk() * 0.6) : 0) + (run.flags.riposte || 0);
-          if (riposte > 0 && !e.dead) {
-            this._hurtEnemy(e, riposte, '⛨');
-            this._log(this.braced ? 'PERFECT block — and your braced blade answers!' : 'PERFECT block — the parry bites back!');
-          } else {
-            this._log('PERFECT block!');
-          }
-        } else if (grade === 'good') {
-          dmg *= CONFIG.battle.blockGood;
-          this._log('Blocked — most of it.');
-          audio.sfxBlock();
-          this._burst(playerPos(), 0x9fb4ff);
+      } else if (!crush && grade === 'perfect') {
+        // a PERFECT block turns the whole blow — and steadies your focus
+        audio.sfxBlock();
+        this._burst(playerPos(), 0x9fe8ff);
+        this._focusShift(F.perfectBlock);
+        if (this.blockHealLeft > 0) { this.blockHealLeft--; this._healPlayer(1); }
+        // the braced blade (or a parrying relic) answers
+        const riposte = (this.braced ? Math.round(this._playerAtk() * 0.6) : 0) + (run.flags.riposte || 0);
+        if (riposte > 0 && !e.dead) {
+          this._hurtEnemy(e, riposte, '⛨');
+          this._log(this.braced ? 'PERFECT block — and your braced blade answers!' : 'PERFECT block — the parry bites back!');
         } else {
-          audio.sfxHurt();
-          this._burst(playerPos(), 0xff8a5a);
+          this._log('PERFECT block — nothing lands, and your focus steadies!');
         }
-        if (this.shieldLeft > 0) { dmg *= 0.5; this.shieldLeft--; }
-        if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) dmg += run.flags.waterWeak;
-        dmg = Math.max(1, Math.round(dmg));
-        run.hp -= dmg;
-        this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)), `−${dmg}`, 'dmg');
+      } else if (!crush && grade === 'good') {
+        // a good block still turns the blow — the price is focus, not stars
+        audio.sfxBlock();
+        this._burst(playerPos(), 0x9fb4ff);
+        this._focusShift(-F.good);
+        this._log('Blocked — but the jolt chips your focus.');
+      } else {
+        // the blow lands whole: a missed shape, or a crush you failed to leap
+        let halves = perHitHalves;
+        this._focusShift(-F.missBlock);
+        if (crush || heavy) this._focusShift(-F.heavyLanded);   // big blows shake you worse
+        if (this.shieldLeft > 0) { halves = Math.ceil(halves / 2); this.shieldLeft--; }
+        if (run.flags.waterWeak && ['SEA', 'BRIDGE'].includes(this.team.biome)) halves += 1;
+        audio.sfxHurt();
+        this._burst(playerPos(), crush ? 0xff6a4a : 0xff8a5a);
+        this._damagePlayer(halves);
         this._shake(this.playerMesh);
         if (run.flags.thorns && !e.dead) {
           this._hurtEnemy(e, run.flags.thorns, '⟁');
         }
         // the land fights through its beasts
-        if (dmg > 0) this._applyBiomeAffliction(e, dmg);
-        // deep brutes and bosses leave their mark on your hands: a landed
-        // heavy or crushing blow (not perfectly answered) RATTLES you
-        if ((crush || heavy) && dmg > 0 && grade !== 'perfect' && (tier >= 3 || e.boss)) {
-          this.playerRattle = CONFIG.battle.rattle.turns;
-          if (!this._rattleTold) {
-            this._rattleTold = true;
-            this._log('The impact RATTLES your hands — strike bands narrow, markers run wild. Swift Cut stays steady.');
-          }
-        }
+        this._applyBiomeAffliction(e);
       }
       if (hits > 1) { this._refreshCards(); await wait(200); }
     }
@@ -1091,7 +1125,6 @@ export class BattleSystem {
       el.classList.add('coalesce');
 
       const widen = (1 + 0.3 * (run.stats.blockBonus || 0))
-        * (this.hexTurns > 0 ? 0.55 : 1)
         * (this.braced ? 1.5 : 1)
         * (this.poise ? 1.25 : 1)
         + (run.hasSynergy('eclipse') ? 0.15 : 0);
@@ -1181,6 +1214,7 @@ export class BattleSystem {
         this._laneJudge(trap, 'warded');
       } else {
         K.trapsHit++;
+        this._focusShift(-CONFIG.battle.focus.trap);
         this._laneJudge(trap, 'trap');
         audio.sfxHurt();
       }
@@ -1231,24 +1265,25 @@ export class BattleSystem {
     K.resolve({ grades, trapsHit: K.trapsHit });
   }
 
-  _applyBiomeAffliction(e, dmg) {
+  // The land fights through its beasts when a blow lands. Afflictions
+  // pressure your FOCUS and your tempo — vessels are only ever lost to
+  // missed blocks, failed leaps and sprung traps.
+  _applyBiomeAffliction(e) {
     const biome = this.team.biome;
     if (biome === 'WOUND' && this.rng() < 0.35) {
-      this.playerBurn = { dmg: 2, turns: 2 };
+      this.playerBurn = { turns: 2 };
       if ((this.playerChill || 0) < 3) this.playerChill = (this.playerChill || 0) + 1;
-      this._log('Un-light seeps into your folds — it burns cold.');
+      this._log('Un-light seeps into your folds — it burns your focus cold.');
     } else if (['VOLCANO', 'CRIMSON'].includes(biome) && this.rng() < 0.4) {
-      this.playerBurn = { dmg: 2, turns: 2 };
-      this._log('Cinders catch in your paper folds — you are BURNING!');
+      this.playerBurn = { turns: 2 };
+      this._log('Cinders catch in your paper folds — your focus BURNS!');
     } else if (['TUNDRA', 'LUNAR'].includes(biome) && this.rng() < 0.4 && (this.playerChill || 0) < 3) {
       this.playerChill = (this.playerChill || 0) + 1;
       this._log('Frost stiffens your hands — the marker runs faster while you shiver.');
     } else if (['SEA', 'BRIDGE'].includes(biome) && !e.dead) {
-      const drink = Math.round(dmg * 0.4);
-      if (drink > 0) {
-        e.hp = Math.min(e.maxHP, e.hp + drink);
-        this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drink}`, 'heal');
-      }
+      const drink = 2 + (this.team.tier || 1);
+      e.hp = Math.min(e.maxHP, e.hp + drink);
+      this._float(e.mesh.position.clone().add(new THREE.Vector3(0, 1.6, 0)), `+${drink}`, 'heal');
     }
   }
 
@@ -1263,10 +1298,7 @@ export class BattleSystem {
     const drops = { shards };
     if (this.rng() < 0.18 + (run.flags.chargeDropBonus || 0)) { run.consumables.charge++; drops.charge = 1; }
     else if (this.rng() < 0.05) { run.consumables.dew++; drops.dew = 1; }   // dew is precious now
-    if (run.flags.afterBattleHeal) run.hp = Math.min(run.stats.maxHP, run.hp + run.flags.afterBattleHeal);
-    if (run.flags.drylandAche && !['SEA', 'BRIDGE'].includes(this.team.biome)) {
-      run.hp = Math.max(1, run.hp - run.flags.drylandAche);   // the gills miss the water
-    }
+    if (run.flags.afterBattleHeal) this._healPlayer(run.flags.afterBattleHeal);   // halves
     run.battlesWon++;
     if (boss) run.bossesDown++;
     this._log(`Victory! +${shards} ☆${drops.charge ? ' · +1 ✸' : ''}${drops.dew ? ' · +1 ❋' : ''}`);

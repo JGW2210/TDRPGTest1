@@ -243,6 +243,54 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    loop. Debug: `__vael.skyEventState/startSkyEvent()/advanceSkyEvent()`.
    BUILD is 14.
 
+15. **Star Vessels & Focus round** (branch `claude/hp-damage-redesign-6h5ekx`;
+   poll held — user picked ALL FOUR recommended options): numeric HP replaced
+   by **Star Vessels** — 5 star-shaped vessels counted in half-vessel units
+   (`CONFIG.battle.vessels` base 10 / cap 20 / min 4 halves; `run.hp` and
+   `run.stats.maxHP` are HALVES everywhere), drawn as full/half/hollow ★
+   rows (`vesselStarsHTML` exported from ui.js; used by HUD, inventory,
+   battle plate; `fmtV(halves)` exported from battle.js for floats/toasts);
+   **damage is table-driven, not ATK-driven** (`CONFIG.battle.damage`): a
+   fully missed block costs ½★ at tiers 0–1, 1★ at 2–3, 1½★ at 4+; heavies/
+   crushes ×2 capped at 3★; bosses +½★, enrage +½★ (enrage no longer edits
+   e.atk); flurry swings each cost half the base (min ½★); every 3 player-
+   inflicted Chill stacks soften a foe's hits by ½★ (weaken/chill items
+   re-descripted); traps ½★ flat; **perfect AND good blocks nullify damage
+   entirely** — the price of a good is focus; **Focus** (`CONFIG.battle.
+   focus`): 5 stages in ½-steps, full each battle, good block −½, missed
+   block −1, landed heavy/crush −1 extra (REPLACES the Rattled debuff —
+   `rattle` config and `playerRattle`/`hexTurns` are gone), sprung trap −½,
+   perfect block +½, Brace +½; focus scales STRIKE-bar band widths only
+   (`_focusScale` 1.0→0.6, lanes never narrow); focus pips under the battle
+   nameplate (`.b-focus`/`.fpip`); **attrition attacks focus, not stars**
+   (poll 3A): burns tick −½ focus (playerBurn = {turns}), mystic siphon/
+   knot/hex-bolt drain focus (foe still mends), abilityToll −½ focus/cast,
+   drylandAche = start land battles at −1 focus (no after-battle HP loss),
+   sea-biome foes drink a flat 2+tier on landed hits; **items reworked**
+   (poll 4A): new stat key `vessel` (halves) replaces maxHP on items/boons —
+   16 curated relics grant +½★/+1★ (pebble/hearth_thread/heartwood_flask/
+   hibernal_fat/fathom_pearl/third_lung/glutton_tankard/abyssal_bell/
+   clover_locket/gate_splinter/oath_unbroken/champions_belt at 1 half;
+   glacier_heart/rootmother_seed/giant_dream/void_anchor/pale_daughter_tear/
+   wardens_sigil at 2), tradeoff relics/mutations cost −½/−1★ (mirage_veil/
+   magma_vein/pale_tower_card/sundered_crown/maw_beneath/thousand_eyes/
+   tatter_wings/hollow_chest), all other maxHP stats swapped for small
+   stats; **wardens grant +1 permanent vessel on kill** (`run.addVessels(2)`
+   + `run.vesselBonus`, saved) besides their drop; dew heals 2★ (4 halves),
+   `dewPotency` relics (now 1–2 halves each) push it to a 3★ cap, dewMuted
+   still halves; heal flags quantized to halves (killHeal/afterBattleHeal =
+   halves per trigger; blockHeal/perfectHeal = ½★ heals per battle via
+   `blockHealLeft`/`perfectHealLeft`; rally = 1★; leech drinks ½★; frenzy
+   drum costs ½★; fullbloom ½★ every 2nd turn, verdance every turn;
+   shieldHits/firstHitHalved halve a landed hit's halves, ceil); bargains/
+   shrine boons/mystery outcomes converted (tithe −1★, moth court −1 max★,
+   lantern heart +½ max★, nebula shape −1 max★, whisper −½★, gauntlet
+   breath +½★); `run.power` uses maxHP/2 so the expectedPower curve holds;
+   save **v5** (hp in halves + vesselBonus; older discarded); scratchpad
+   `vessel_sim.mjs` sanity sim (60/30/10 grades, 65% leap success): ~½★
+   lost per early fight, ~2½–3★ per deep pack with all foes alive all
+   rounds (real kills shorten exposure ~40%). BUILD is 15.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -282,11 +330,14 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `config.js` — tunables: mapRadius 45, vision 4/rim 6, hop timings,
   region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
   (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
-  minLandGap, maxBridge), battle: `enemy` quadratic stat curve,
+  minLandGap, maxBridge), battle: `vessels` (base/cap/min, in HALF-vessels),
+  `damage` (tier→halves table, heavyMult/heavyCap, bossPlus/enragePlus,
+  chillPer, trap), `focus` (stage costs/gains, minScale), `enemy` quadratic
+  HP curve (ATK fields vestigial — damage is table-driven now),
   `timing` (incl. `gather`; travel 0.72 — fast), `attacks` (swift incl.
   `opening` / star / heavy incl. `hits`/`ramp`/`shrinkRamp`), `lanes`
-  (fall/lead/windows/spacing/trapWin/fadePortion), `rattle`
-  (shrink/speed/turns), camera bounds. Seed via `?seed=`.
+  (fall/lead/windows/spacing/trapWin/fadePortion), camera bounds.
+  Seed via `?seed=`.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
@@ -341,17 +392,23 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   {source, tier, unlocked})` — source weights + tier shifts; shop table
   is harsh (62/28/9/1). RARITY colors (+m sickly green). **SETS** (7
   tags, need 3-4) + **SYNERGIES** (7 set + 6 grand two-set). CONSUMABLES
-  (charge/dew/feather; dew heals 12, halved by `dewMuted`). Round-12
-  combat-rhythm flags (~40 relics): noteSlow, riposte, trapWard,
-  chainKeeper, heavyPlus, gatherCalm, dodgePlus, poiseful, interruptGood,
-  veilSight — all read by battle.js; rarity totals 46c/65u/62r/19a,
-  still one astral per biome pool.
+  (charge/dew/feather; dew heals 2★ = 4 halves, +dewPotency halves capped
+  at 3★, halved by `dewMuted`). Stat key `vessel` (halves of max Star
+  Vessels) replaced maxHP — 16 curated relics grant it, 8 trade it away.
+  Heal flags are halves per trigger (killHeal/afterBattleHeal) or ½★-heals
+  per battle (blockHeal/perfectHeal). Round-12 combat-rhythm flags
+  (~40 relics): noteSlow, riposte, trapWard, chainKeeper, heavyPlus,
+  gatherCalm, dodgePlus, poiseful, interruptGood, veilSight — all read by
+  battle.js; still one astral per biome pool.
 - `run.js` — singleton `run`: items + **boons** → recomputed stats/flags/
-  abilities/set-synergies, hp, shards, consumables, cleared/opened/
-  revealed sets, `power` score, `shrineHeals`, **shrineBoons/vantageSeen
-  Sets, woundOpen flag, mutationCount, addBoon/removeItem**, `appearance`
-  + `appearanceSig` (tags/sets/grand/mutations drive the texture
-  painter). `noFirstDodge` strips firstStrikeDodge in recompute.
+  abilities/set-synergies, hp (**half Star Vessels**; `stats.maxHP` =
+  vessels base + `vessel` stats + `vesselBonus`, clamped min/cap;
+  `addVessels(halves)` = permanent warden hearts), shards, consumables,
+  cleared/opened/revealed sets, `power` score (maxHP/2 keeps the old
+  scale), `shrineHeals`, **shrineBoons/vantageSeen Sets, woundOpen flag,
+  mutationCount, addBoon/removeItem**, `appearance` + `appearanceSig`
+  (tags/sets/grand/mutations drive the texture painter). `noFirstDodge`
+  strips firstStrikeDodge in recompute.
 - `roamers.js` — `RoamerSystem`: packs from `world.roamerSpawns`. Each
   pack's **species is sealed at spawn** (`r.species` from FOES via
   hash2(q,r,55) — the map icon IS the battle foe) and each has a
@@ -369,10 +426,10 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   (incl. seamfinder/islefinder/changed/thrice_changed/the_other_end) with
   `check(m)` predicates; `bump(fn)` mutates stats, returns newly completed
   feats + items unlocked. `unlockedIds` = core + earned.
-- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v4**:
+- `save.js` — per-seed run persistence (`vaeldrift_run_<seed>`), **v5**:
   saveRun/loadRun/clearSave/applySave. Saved: items(ids), consumables,
-  shards, hp, shrineHeals, **boons, shrineBoons, vantageSeen,
-  revealedBridges, revealedIslets** (applySave replays
+  shards, hp (halves), **vesselBonus**, shrineHeals, **boons, shrineBoons,
+  vantageSeen, revealedBridges, revealedIslets** (applySave replays
   `world.revealBridge`/`world.revealIslet` +
   `worldView.revealHiddenTiles`), roamer state, cleared/gates/secrets/
   visited, explored fog, player pos. The Wound re-opens on load from
@@ -455,10 +512,13 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   `heavyPlus`/3 per bar, pierces guard/ward + interrupts charging foes
   per bar, good 0.6 keeps the chain, miss 0.25 shatters it;
   `interruptGood` extends interrupts to goods) + **`_brace()`** (windows
-  ×1.5, notes slower, perfect-block riposte 60% ATK; `riposte` flag adds
-  flat). **Rattled** (`playerRattle`, set by a landed non-perfect
-  heavy/crush from tier ≥3 foes or bosses): strike bands ×0.75 + marker
-  ×1.15 for 2 turns — lanes unaffected, swift stays the steady option.
+  ×1.5, notes slower, +½ focus, perfect-block riposte 60% ATK; `riposte`
+  flag adds flat). **Focus** (`this.focus`, 5 stages in ½-steps, reset
+  full per battle): good block −½, missed block −1, landed heavy/crush −1
+  extra, sprung trap −½, perfect block +½, Brace +½; `_focusScale()`
+  narrows STRIKE bands only (1.0→0.6 — lanes never narrow); pips render
+  in the player plate; `_focusShift(delta, why)` floats the change.
+  Burns/siphons/knot-hexes/ability-tolls attack focus, never vessels.
   **Strike bars gather first**: `_startTiming` opens in `timingPhase
   'gather'` (orb over the future band, track fades via `--gather`,
   `opts.gather` scaled by `gatherCalm`), then 'live'. **Blocks are the
@@ -467,8 +527,14 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   shape) + traps (tier ≥2, chance 0.18+0.09t), returns per-swing grades +
   trapsHit; input via A/S/D keydown (`_lanePress`) or pointer
   (`_lanePointer` nearest-shape); `noteSlow`/brace/poise slow the fall,
-  `blockBonus`/hex/eclipse scale windows, `dodgePlus` widens crush leaps,
-  `trapWard` forgives springs, sprung traps chip 0.5× foe ATK.
+  `blockBonus`/eclipse scale windows, `dodgePlus` widens crush leaps,
+  `trapWard` forgives springs, sprung traps cost ½★ + ½ focus.
+  **Star Vessel damage** (`_enemyStrike(e, opts)`): perfect/good blocks
+  and dodges NULLIFY; a landed hit costs table halves (½★ t0–1 / 1★
+  t2–3 / 1½★ t4+; boss +½, enrage +½, chill −½ per 3 stacks; heavy/crush
+  ×2 cap 3★; flurry swings half base), `shieldHits`/`firstHitHalved`
+  halve a landed hit's halves, `waterWeak` +½★ in shallows; helpers
+  `_damagePlayer`/`_healPlayer` float `fmtV` amounts.
   **Headless-test knobs**: `battle.strikeAutoplay`/`laneAutoplay =
   {p,g}` pre-roll grades and press at the matching moment.
   **Ranged vs melee**: mystics (`e.ranged`) cast biome-accent bolts via
@@ -476,16 +542,18 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   blows always close in; player abilities fire typed bolts/bursts,
   colored `_burst(pos,color)` impacts. Flow: intro → playerMenu → act
   (timing promise) → enemyPhase (burn/stun/charge/telegraph, lane run) →
-  repeat. Enemy stats from `CONFIG.battle.enemy` (13+7t+0.35t² hp,
-  2.4+1.45t+0.09t² atk), role mods; boss ×2.6 hp ×1.2 atk, enrages <50%.
-  Handles all item flags/ability kinds. **Role specials**: swift flurries
-  (2-3 notes), mystic hex/siphon/mend, guard ward-ally/self-shell,
-  brutes+bosses charge into crushes at tier ≥2; **deity rotates crush/
-  siphon/flurry** (hp ×2.6×1.6, atk ×1.2×1.15). Biome afflictions on hit:
-  volcano burns, tundra chills (notes fall faster), sea leeches, desert
-  sand-veil swallows notes/zones near the line (`veilSight` negates),
-  WOUND burns+chills. Mutation flags honored: abilityToll, dewMuted,
-  drylandAche, heavyGait (in main), noFirstDodge (in run).
+  repeat. Enemy HP from `CONFIG.battle.enemy` (13+7t+0.35t²), role mods;
+  boss ×2.6 hp, enrages <50% (+½★ to its blows — the atk stat is
+  vestigial now). Handles all item flags/ability kinds. **Role
+  specials**: swift flurries (2-3 notes), mystic focus-knot/focus-siphon/
+  mend, guard ward-ally/self-shell, brutes+bosses charge into crushes at
+  tier ≥2; **deity rotates crush/focus-drink/flurry** (hp ×2.6×1.6).
+  Biome afflictions on landed hits: volcano burns focus, tundra chills
+  (notes fall faster), sea foes drink 2+tier HP, desert sand-veil
+  swallows notes/zones near the line (`veilSight` negates), WOUND
+  burns+chills. Mutation flags honored: abilityToll (−½ focus/cast),
+  dewMuted, drylandAche (land battles start −1 focus), heavyGait
+  (in main), noFirstDodge (in run).
   Species/bossKind passed to the texture painter. Rewards → shards/drops
   (dew 5%); revive (Lunar Grace); audio hooks.
 - `localview.js` — diorama builder: platform, site markers by type
@@ -602,11 +670,18 @@ the band mid, call `battle._resolveTiming()`.
   nameplate) can sit inside the cinematic frame — they read as world
   detail, but hiding labels during `body.in-skyevent` was floated and
   deliberately deferred ("for now" per user).
-- Save VERSION is now 4 (round 8: archipelago worldgen + revealedIslets) —
-  older saves are discarded on load. Worldgen changed again for identical
-  seeds (quadrant climates, erosion, water web, islets), by design.
+- Save VERSION is now 5 (round 15: hp stored in half-vessels +
+  vesselBonus) — older saves are discarded on load. Worldgen unchanged
+  this round.
+- **Star Vessel / Focus numbers are untested by humans**: the tier damage
+  table, focus costs/recovery, the 0.6 min strike-window scale, trap ½★,
+  the 16-relic vessel list and 3★-cap dew all follow the round-15 poll +
+  `vessel_sim.mjs` (scratchpad; 60/30/10 grade model, all foes alive all
+  rounds — overcounts real exposure ~40%). If deep tiers play too hot,
+  ease crush frequency or widen `lanes.dodgeWin` before touching the
+  table; if too cold, move the `highTier` band down to 3.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 14. Without the bump, live players keep stale
+  release** — currently 15. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
