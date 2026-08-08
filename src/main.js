@@ -509,7 +509,7 @@ function advanceSkyEvent() {
     } else if (def.quest.reward === 'astral') {
       const item = drawItem(
         mulberry32((world.seed * 131 + def.id.length * 17 + 9) >>> 0),
-        'ASTRAL', run.ownedIds, { source: 'astral', tier: 3, unlocked: meta.unlockedIds });
+        'ASTRAL', run.ownedIds, { source: 'astral', tier: 3, unlocked: meta.unlockedIds, luck: run.stats.luck });
       if (item) grantItem(item);
       else { const got = run.gainShards(30); ui.toast(`The sky pays in loose light instead. (+${got} ☆)`, true); }
     }
@@ -735,7 +735,7 @@ function challengeGate(gateTile) {
             ui.toast('★ A Star Vessel condenses from the shattered ward — your paper heart grows by one.', true);
             const bossDraw = drawItem(
               mulberry32(hash2(gateTile.q, gateTile.r, world.seed + 777) * 0xffffffff | 0),
-              'BOSS', run.ownedIds, { source: 'boss', tier: g.tier, unlocked: meta.unlockedIds });
+              'BOSS', run.ownedIds, { source: 'boss', tier: g.tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
             if (bossDraw) grantItem(bossDraw);
           },
         });
@@ -914,7 +914,7 @@ function startGauntlet(site, tile) {
       const rng = mulberry32(Math.floor(hash2(tile.q, tile.r, world.seed + 1234) * 0xffffffff));
       // deep keepers sometimes guard a change instead of a relic
       const item = (tier >= 3 && rng() < 0.25 && drawMutation(rng, run.ownedIds))
-        || drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds });
+        || drawItem(rng, tile.biome, run.ownedIds, { source: 'boss', tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
       if (item) grantItem(item);
       // the sun's fallen spark sleeps in the vault nearest the fire-mountain
       if (keyOf(tile.q, tile.r) === world.sparkDungeonKey
@@ -941,7 +941,8 @@ function checkGlint(tile) {
 
 const statText = stats => Object.entries(stats || {})
   .map(([k, v]) => k === 'vessel' ? `${v > 0 ? '+' : '−'}${fmtV(v)} max`
-    : `${v > 0 ? '+' : ''}${v}${k === 'luck' ? '% crit' : k === 'dodge' ? '% dodge' : ' ' + k.toUpperCase()}`)
+    : k === 'focus' ? `${v > 0 ? '+' : '−'}${Math.abs(v) / 2} focus`
+    : `${v > 0 ? '+' : ''}${v}${k === 'luck' ? '% luck' : k === 'dodge' ? '% dodge' : ' ' + k.toUpperCase()}`)
   .join(', ');
 
 // A bargain asks for something real; refusal is always free.
@@ -974,7 +975,7 @@ function resolveBargain(site) {
   const rngB = mulberry32((Math.random() * 2 ** 31) | 0);
   if (b.gain === 'draw_rare' || b.gain === 'draw_boosted') {
     const item = drawItem(rngB, world.regionOf(tile).dominantBiome, run.ownedIds,
-      { source: b.gain === 'draw_rare' ? 'boss' : 'secret', tier, unlocked: meta.unlockedIds });
+      { source: b.gain === 'draw_rare' ? 'boss' : 'secret', tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
     if (item) grantItem(item);
     else { const got = run.gainShards(20); ui.toast(`It pays in loose light instead. (+${got} ☆)`, true); }
   } else if (b.gain === 'gamble_shards') {
@@ -1062,7 +1063,7 @@ function buildItemOffers(site, tile, rng) {
   const taken = new Set(run.ownedIds);
   for (let i = 0; i < count; i++) {
     const pool = SHOP_POOLS[Math.floor(rng() * SHOP_POOLS.length)];
-    const item = drawItem(rng, pool, taken, { source: 'shop', tier, unlocked: meta.unlockedIds });
+    const item = drawItem(rng, pool, taken, { source: 'shop', tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
     if (!item) continue;
     taken.add(item.id);
     const base = { c: 18, u: 30, r: 48, a: 80 }[item.rarity] || 30;
@@ -1228,7 +1229,7 @@ function handleAction(site, label, btn) {
       const tier = world.regionOf(tileHere).tier;
       const got = run.gainShards(12 + tier * 5);
       const item = drawItem(rngC, world.regionOf(tileHere).dominantBiome, run.ownedIds,
-        { source: 'boss', tier, unlocked: meta.unlockedIds });
+        { source: 'boss', tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
       ui.modalOutcome(`You refuse the change. The visitor, unoffended, lets the fall’s cargo go instead. (+${got} ☆) `
         + `The change itself remains in the crater, for the day you want it.`);
       if (item) grantItem(item);
@@ -1310,7 +1311,7 @@ function handleAction(site, label, btn) {
     run.questsDone.add(def.id);
     for (const line of def.payoff) ui.modalOutcome(line);
     const item = drawItem(mulberry32((world.seed * 131 + 77) >>> 0), 'ASTRAL', run.ownedIds,
-      { source: 'astral', tier: 3, unlocked: meta.unlockedIds });
+      { source: 'astral', tier: 3, unlocked: meta.unlockedIds, luck: run.stats.luck });
     if (item) grantItem(item);
     else { const got = run.gainShards(30); ui.toast(`Her thanks scatters into loose light. (+${got} ☆)`, true); }
     announceFeats(meta.bump(s => { s.errands = (s.errands || 0) + 1; }));
@@ -1327,7 +1328,7 @@ function handleAction(site, label, btn) {
       ui.modalOutcome(`You listen. It tells you where something was buried before "buried" meant anything. (+${got} ☆)`);
     } else if (roll < 0.8) {
       run.addBoon({ id: 'whisper_' + site.id, name: 'A Whispered Truth', stats: { luck: 3 } });
-      ui.modalOutcome('You listen. You will never repeat it, and it will never stop being useful. (+3% crit)');
+      ui.modalOutcome('You listen. You will never repeat it, and it will never stop being useful. (+3% luck)');
     } else {
       run.hp = Math.max(1, run.hp - 1);
       ui.modalOutcome('You listen too long. Something on the far side listens back. (−½★)');
@@ -1342,7 +1343,7 @@ function handleAction(site, label, btn) {
     if (Math.random() < 0.55) {
       run.addBoon({ id: 'star_warmth', name: 'Newborn Starlight', stats: { luck: 4, vessel: 1 } });
       audio.sfxHeal();
-      ui.modalOutcome('The little star settles in your palms, considers its options, and moves into your chest-rune. (+4% crit, +½ Star Vessel)');
+      ui.modalOutcome('The little star settles in your palms, considers its options, and moves into your chest-rune. (+4% luck, +½ Star Vessel)');
     } else {
       const got = run.gainShards(16);
       ui.modalOutcome(`The star sneezes stardust all over you. Good manners require keeping it. (+${got} ☆)`);
@@ -1360,7 +1361,7 @@ function handleAction(site, label, btn) {
     // astral pedestals occasionally hold something far stranger
     const item = (source === 'astral' && rng() < 0.15 && drawMutation(rng, run.ownedIds))
       || drawItem(rng, site.pool, run.ownedIds,
-        { source, tier: world.regionOf(tileHere).tier, unlocked: meta.unlockedIds });
+        { source, tier: world.regionOf(tileHere).tier, unlocked: meta.unlockedIds, luck: run.stats.luck });
     run.clearedSites.add(site.id);
     ui.closeModal();
     if (item) grantItem(item);

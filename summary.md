@@ -462,6 +462,45 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    humans: meteor pacing at real fps, the 140-hex fallback, and whether
    first-warden is the right beat.
 
+20. **No-crit rework round** (branch reset from merged main; direct user
+   instruction — "crits are too strong… remove crits entirely"): **the
+   crit system is GONE** — no roll, no CRIT! floats, no critical-strike
+   log line; damage is earned at the bar, never rolled. `critShatter` /
+   `critDeep` behaviors removed with it. **Luck is fortune now**: the
+   stat survives on every item at its old numbers but means draw-rarity
+   tilt — `drawItem` takes `opts.luck` (all 8 main.js call sites pass
+   `run.stats.luck`, shops included) and shifts the weight brackets
+   c→u/r/a by `min(0.12, luck·0.0025)` (40% u / 40% r / 20% a). Measured:
+   luck 0 → 47% c / 2% a; luck 40 → 37% c / 4.2% a; capped at 48 luck.
+   **Bar-width upgrades became focus capacity**: the `timingBonus` and
+   `blockBonus` stats are DELETED and every item that carried them now
+   grants `focus` (max-focus in ½-stages, same magnitudes — 20 relics);
+   battle computes `this.focusMax = F.max + stats.focus·0.5`, opens full,
+   clamps `_focusShift` there, renders `ceil(focusMax)` pips, and
+   `_focusScale` divides by the deepened max (a deep well holds band
+   width longer — the old width bonus, re-expressed as resilience).
+   timingBonus's hidden +0.15 grade-mult rider is gone too (perfect/good
+   mults are now pure config). **Synergy rewrites**: GLASSWORKS = +12%
+   luck; STAINED GLASS = +12% luck +15% shard finds; FULGURITE = +2 ATK
+   + strikes Burn 2 deeper (burnOnHit); ECLIPSE = +3 ATK +1 focus stage
+   (its strike-band and lane widen riders removed — brace/poise are the
+   only wideners left). `run.power` swaps luck/8 for focus. **Lanes
+   faster + taller**: `lanes.fall` 1.05→0.95 and `.bl-window` height
+   216→290px — notes travel ~34% further at ~48% higher pixel speed
+   with only ~10% less reaction time (hit-line math reads live
+   clientHeight, so the CSS is the mechanism; the 216 fallback in
+   `_blockRun` updated to 290). UI: inventory/HUD say "luck" and show
+   "◔ focus +N"; statText renders focus in halves; item icons key
+   hourglass to focus (critShatter/blockBonus glyph rules dropped).
+   Item ids unchanged → saves stay v8-compatible; worldgen untouched.
+   Verified: node fortune-distribution test, zero crit/width remnants
+   (grep), 10-check headless battle (deepened focusMax 6.5 → 7 pips,
+   290px lane, crit-free logs, luck-labeled inventory) + a lane
+   screenshot. BUILD is 20. Untested by humans: the fortune curve's
+   feel, focus-stacking depth (max +heavy stacking ≈ 8-9 stages), and
+   the new lane speed — if it plays too hot, raise `lanes.fall` before
+   shrinking the window height.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.

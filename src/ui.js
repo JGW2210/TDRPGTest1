@@ -91,7 +91,7 @@ export const ui = {
       // the wanderer as the hoard has re-inked them — same paint as the token
       `<img id="inv-portrait" alt="" src="${paintPlayerCanvas(run.appearance).toDataURL()}" />` +
       `Star Vessels ${vesselStarsHTML(run.hp, s.maxHP)} &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
-      `✧ crit <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
+      `✧ luck <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ◔ focus <b>+${(s.focus || 0) / 2}</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
       `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>` +
       `<div class="inv-consum">` +
       `<span>✸ ×${run.consumables.charge} <i>(✸ Detonate on the map)</i></span>` +

@@ -71,7 +71,7 @@ class Run {
   _recompute() {
     const s = {
       vessel: 0, atk: CONFIG.battle.baseAtk, spd: CONFIG.battle.baseSpd,
-      luck: 0, dodge: 0, shardGain: 0, timingBonus: 0, blockBonus: 0,
+      luck: 0, dodge: 0, shardGain: 0, focus: 0,
     };
     const flags = {};
     const abilities = [];
@@ -98,16 +98,16 @@ class Run {
 
     // set synergies
     if (has('cinderhost')) { s.atk += 1; flags.burnOnHit = (flags.burnOnHit || 0) + 1; }
-    if (has('glassworks')) s.luck += 8;
+    if (has('glassworks')) s.luck += 12;
     if (has('moonbound')) { s.dodge += 10; flags.firstStrikeDodge = true; }
     if (has('high_noon')) s.atk += 2;
     if (has('tideborne')) { s.dodge += 5; flags.afterBattleHeal = (flags.afterBattleHeal || 0) + 1; }
     // grand synergies
-    if (has('fulgurite')) s.atk += 2;
-    if (has('eclipse')) s.atk += 3;
+    if (has('fulgurite')) { s.atk += 2; flags.burnOnHit = (flags.burnOnHit || 0) + 2; }
+    if (has('eclipse')) { s.atk += 3; s.focus += 2; }
     if (has('steamveil')) { s.dodge += 15; delete flags.waterWeak; flags.blockHeal = (flags.blockHeal || 0) + 2; }
     if (has('pale_hand')) flags.houndStrike = Math.max(flags.houndStrike || 0, 8);
-    if (has('stained_glass')) s.luck += 10;
+    if (has('stained_glass')) { s.luck += 12; s.shardGain += 15; }
     if (flags.noFirstDodge) delete flags.firstStrikeDodge;   // the Eyes never close
     if (flags.cooldownMinus) for (const a of abilities) a.cd = Math.max(1, a.cd - flags.cooldownMinus);
 
@@ -154,7 +154,7 @@ class Run {
   // points the old 30-HP pool did, so the expectedPower curve still holds)
   get power() {
     return Math.round(this.stats.atk * 2 + this.stats.maxHP / 2 + this.stats.spd
-      + this.stats.luck / 8 + this.items.length * 1.5);
+      + (this.stats.focus || 0) + this.items.length * 1.5);
   }
 
   gainShards(n) {

@@ -76,10 +76,13 @@ export class BattleSystem {
     // Focus: full at the bell, drained by sloppy blocks, restored by perfect
     // ones. Low focus narrows your strike-bar windows — never the lanes.
     const F = CONFIG.battle.focus;
-    this.focus = F.max;
+    // relics deepen the well: the old bar-width upgrades live here now,
+    // as extra stages of maximum focus (run.stats.focus is in ½-stages)
+    this.focusMax = F.max + (run.stats.focus || 0) * 0.5;
+    this.focus = this.focusMax;
     this._focusTold = false;
     // the gills ache on dry land: those battles start a stage down
-    if (run.flags.drylandAche && !['SEA', 'BRIDGE'].includes(team.biome)) this.focus = F.max - 1;
+    if (run.flags.drylandAche && !['SEA', 'BRIDGE'].includes(team.biome)) this.focus = this.focusMax - 1;
     this.blockHealLeft = run.flags.blockHeal || 0;      // ½★ per perfect block, per battle
     this.perfectHealLeft = run.flags.perfectHeal || 0;  // ½★ per perfect strike, per battle
     this.laneActive = false;  // the falling-note block minigame is live
@@ -315,9 +318,8 @@ export class BattleSystem {
       this.playerBurn?.turns > 0 ? '<span class="st burn">🔥 focus burning</span>' : '',
       this.playerChill > 0 ? `<span class="st chill">❄×${this.playerChill}</span>` : '',
     ].filter(Boolean).join(' ');
-    // focus pips: 5 stages, drawn in half-steps
-    const F = CONFIG.battle.focus;
-    const pips = Array.from({ length: F.max }, (_, i) => {
+    // focus pips: base 5 stages plus any relic-deepened ones, in half-steps
+    const pips = Array.from({ length: Math.ceil(this.focusMax || CONFIG.battle.focus.max) }, (_, i) => {
       const fill = Math.max(0, Math.min(1, this.focus - i));
       return `<span class="fpip${fill >= 1 ? ' full' : fill > 0 ? ' half' : ''}"></span>`;
     }).join('');
@@ -333,7 +335,7 @@ export class BattleSystem {
   _focusShift(delta, why) {
     const F = CONFIG.battle.focus;
     const before = this.focus;
-    this.focus = Math.max(F.min, Math.min(F.max, this.focus + delta));
+    this.focus = Math.max(F.min, Math.min(this.focusMax, this.focus + delta));
     if (this.focus === before) return;
     if (delta < 0) {
       this._float(this.playerMesh.position.clone().add(new THREE.Vector3(0.6, 2.4, 0)),
@@ -345,10 +347,11 @@ export class BattleSystem {
     }
   }
 
-  // how much the strike bands narrow as focus frays: 1.0 at full → minScale at 1
+  // how much the strike bands narrow as focus frays: 1.0 at full → minScale
+  // at the floor. A deepened well (relic focus) holds width longer.
   _focusScale() {
     const F = CONFIG.battle.focus;
-    return F.minScale + (1 - F.minScale) * (this.focus - F.min) / (F.max - F.min);
+    return F.minScale + (1 - F.minScale) * (this.focus - F.min) / ((this.focusMax || F.max) - F.min);
   }
 
   _healPlayer(halves) {
@@ -444,8 +447,7 @@ export class BattleSystem {
 
       // frayed focus narrows your attack windows — the lanes never suffer this
       const shrink = (opts.shrink || 1) * (kind === 'strike' ? this._focusScale() : 1);
-      let half = (kind === 'dodge' ? T.dodgeHalf : T.perfectHalf) * shrink;
-      if (run.hasSynergy('eclipse')) half += 0.015;
+      const half = (kind === 'dodge' ? T.dodgeHalf : T.perfectHalf) * shrink;
       const mid = 0.28 + this.rng() * 0.5;   // the band wanders every swing
       const pad = kind === 'dodge' ? 0 : T.goodPad * this._focusScale();
       this.zones = {
@@ -482,11 +484,10 @@ export class BattleSystem {
     el.classList.add('hidden');
     el.classList.remove('gathering');
     const t = this.timingT;
-    const bonus = (run.stats.timingBonus || 0) * 0.15;
     let grade, mult;
-    if (t >= this.zones.p0 && t <= this.zones.p1) { grade = 'perfect'; mult = CONFIG.battle.perfectMult + bonus; }
+    if (t >= this.zones.p0 && t <= this.zones.p1) { grade = 'perfect'; mult = CONFIG.battle.perfectMult; }
     else if (this.timingKind !== 'dodge' && t >= this.zones.g0 && t <= this.zones.g1) {
-      grade = 'good'; mult = CONFIG.battle.goodMult + bonus;
+      grade = 'good'; mult = CONFIG.battle.goodMult;
     } else { grade = 'miss'; mult = CONFIG.battle.missMult + bonus * 0.5; }
     this.timingResolve({ grade, mult });
   }
@@ -535,7 +536,6 @@ export class BattleSystem {
         this._log(`You land light and settle into stance — POISED, and an OPENING is marked (+${Math.round(this.opening * 100)}% next attack).`);
       }
     } else if (kind === 'heavy') {
-      const tb = (run.stats.timingBonus || 0) * 0.15;
       const perBarPlus = (run.flags.heavyPlus || 0) / A.heavy.hits;
       for (let h = 0; h < A.heavy.hits && !target.dead; h++) {
         const timing = await this._startTiming('strike', {
@@ -544,8 +544,8 @@ export class BattleSystem {
           gather: (h === 0 ? A.heavy.gather : 0.18) * this._gatherCalm(),
           label: h === 0 ? '☄ METEOR EDGE 1/3 — knife-slits!' : `☄ METEOR ${h + 1}/3 — hold the fall!`,
         });
-        const mult = timing.grade === 'perfect' ? A.heavy.mult + perBarPlus + tb
-          : timing.grade === 'good' ? A.heavy.good + tb : A.heavy.miss;
+        const mult = timing.grade === 'perfect' ? A.heavy.mult + perBarPlus
+          : timing.grade === 'good' ? A.heavy.good : A.heavy.miss;
         const interrupts = timing.grade === 'perfect' || (timing.grade === 'good' && run.flags.interruptGood);
         if (interrupts && target.charging) {
           target.charging = false;
@@ -566,7 +566,7 @@ export class BattleSystem {
         let timing;
         if (h === 0 && run.flags.firstHitPerfect && !this.usedFirstPerfect) {
           this.usedFirstPerfect = true;
-          timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult + (run.stats.timingBonus || 0) * 0.15 };
+          timing = { grade: 'perfect', mult: CONFIG.battle.perfectMult };
           this._log('The Dawn Thimble guides your hand — Perfect!');
         } else {
           timing = await this._startTiming('strike', {
@@ -621,11 +621,8 @@ export class BattleSystem {
     let dmg = this._playerAtk() * timing.mult * baseMult * (0.92 + this.rng() * 0.16);
     if (this._openingNow > 0) dmg *= 1 + this._openingNow;   // the marked opening pays off
     if (timing.grade === 'perfect' && run.hasSynergy('high_noon')) dmg *= 1.2;
-    let crit = false;
-    let luck = run.stats.luck || 0;
-    if (run.hasSynergy('stained_glass')) luck += 10;
-    if (this.rng() * 100 < luck) { crit = true; dmg *= run.hasSynergy('glassworks') ? 2.5 : 2; }
-    if (run.flags.critShatter && this.shatterNext) { dmg += this.shatterNext; this.shatterNext = 0; }
+    // crits are gone: damage is earned at the bar, never rolled. Luck is
+    // fortune now — it bends what the world offers, not what you deal.
     if (run.flags.executeBonus && target.hp / target.maxHP < 0.3) dmg *= 1.5;
     if (target.role === 'guard' && !pierce) dmg *= 0.75;
     if (target.warded) {
@@ -637,13 +634,11 @@ export class BattleSystem {
 
     this._burst(target.mesh.position.clone().add(new THREE.Vector3(0, 1, 0.3)));
     this._shake(target.mesh);
-    this._hurtEnemy(target, dmg, crit ? 'CRIT!' : timing.grade === 'perfect' ? 'Perfect!' : timing.grade === 'echo' ? 'Echo!' : '');
-    if (!silent) this._log(crit ? `Critical strike — ${dmg}!` : `You strike for ${dmg}.`);
+    this._hurtEnemy(target, dmg, timing.grade === 'perfect' ? 'Perfect!' : timing.grade === 'echo' ? 'Echo!' : '');
+    if (!silent) this._log(`You strike for ${dmg}.`);
 
     if (timing.grade === 'perfect') audio.sfxPerfect();
     else if (timing.grade === 'good') audio.sfxGood();
-    if (crit && run.flags.critShatter) this.shatterNext = run.flags.critShatter;
-    if (crit && run.hasSynergy('stained_glass')) run.gainShards(1);
     if (timing.grade === 'perfect' && this.perfectHealLeft > 0) {
       this.perfectHealLeft--;
       this._healPlayer(1);
@@ -667,10 +662,6 @@ export class BattleSystem {
     if (run.flags.burnOnHit && !target.dead) {
       target.burn = Math.max(target.burn, run.flags.burnOnHit * (run.flags.burnDouble ? 2 : 1));
       target.burnTurns = Math.max(target.burnTurns, 2);
-    }
-    if (crit && run.hasSynergy('fulgurite') && !target.dead) {
-      target.burn = Math.max(target.burn, 3 * (run.flags.burnDouble ? 2 : 1));
-      target.burnTurns = Math.max(target.burnTurns, 3);
     }
     if (run.flags.chillOnHit && !target.dead) target.chill = (target.chill || 0) + run.flags.chillOnHit;
     this._refreshCards();
@@ -1208,10 +1199,8 @@ export class BattleSystem {
       void el.offsetWidth;            // restart the coalesce animation
       el.classList.add('coalesce');
 
-      const widen = (1 + 0.3 * (run.stats.blockBonus || 0))
-        * (this.braced ? 1.5 : 1)
-        * (this.poise ? 1.25 : 1)
-        + (run.hasSynergy('eclipse') ? 0.15 : 0);
+      // width upgrades are gone — steadiness (brace/poise) is the only widener
+      const widen = (this.braced ? 1.5 : 1) * (this.poise ? 1.25 : 1);
       const slow = (1 + Math.min(0.4, run.flags.noteSlow || 0))
         * (this.braced ? 1.28 : 1) * (this.poise ? 1.15 : 1);
       const fall = L.fall * slow / Math.max(0.6, speed);
@@ -1543,7 +1532,7 @@ export class BattleSystem {
       const K = this.lane;
       K.t += dt;
       const windowEl = document.querySelector('#b-lanes .bl-window');
-      const H = windowEl ? windowEl.clientHeight : 216;
+      const H = windowEl ? windowEl.clientHeight : 290;
       const hitY = H - 30;
       for (const n of [...K.notes, ...K.traps]) {
         const p = 1 - (n.hit - K.t) / K.fall;   // 0 at spawn → 1 on the hit-line
