@@ -339,6 +339,129 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    heart"). Debug: `__vael.visit(q,r)` enters a tile's local diorama
    headlessly. BUILD is 16.
 
+17. **Crashed-visitors round** (branch `claude/celestial-crash-biomes-7ozvdc`;
+   poll held — user picked ALL FOUR recommended options: radius 50 + reserve
+   pass / walkable sunken ring / full art treatment / confirmed-refusable
+   claim): **10 crashed celestial visitors** (`VISITORS` in names.js:
+   iron_seed/glasswing/kneeling_star/patient_egg/chained_choir/mirrorshard/
+   burning_anvil/knotted_star/door_splinter/leviathan_skull — each with body
+   flavor, guardian {name/role/flavor}, bound mutation id, color/glow);
+   **1–3 per world** (worldgen **pass 7.2**, after sealing+connectivity so
+   craters can never breach a rift: seeded want 1–3, seeded roster shuffle,
+   center needs all 6 neighbors same-region land, avoids home region 0 /
+   volcano / start / landmarks, one crater per region, spacing 14 then a
+   relaxed sweep at 10; `world.crashes` = [{def, center, ring, region}]) —
+   each is a **walkable sunken crater**: center + ring stamped biome
+   **CRASH** ("Fallen Shallows", water-low height 0.52, center −0.12 deeper,
+   landmark type 'crash'), ejecta apron marked `crashDebris` on ring-2
+   tiles; later passes taught to keep out (placeable/pickShore/islet-shore/
+   secrets/vantages exclude CRASH). **World grew**: mapRadius 45→50 (~7,650
+   hexes), seedSpacing 15→16, absolute cDist constants (volcano band,
+   kingdom band, town/trader reach) rescaled to fractions of R. FOES.CRASH
+   reuses painted species (remora/gremlin/toll wraith). world3d: 10
+   hand-built half-sunk body models (tilt + seeded yaw, corona sprite 0.3,
+   PointLight, label; body scale 1.25, y −0.06) + `_buildCrashEjecta`
+   (instanced dodecahedron rocks: dense on the ring, scorched on the apron);
+   localview `crash_body` marker. **Interaction** (getSites 'crash' branch):
+   site 0 = elite guardian battle (`crash_guardian`: tier = region tier + 1,
+   single foe, boss + **elite** flag → battle.js hp ×1.9 instead of ×2.6,
+   `bossRole` respected via team.bossRole, bossKind 'visitor_<id>' → 10
+   hand-authored painters in monsters.js BOSSES), win bumps meta
+   `stats.crashes` (new feat `starfallen`); site 1 = the body
+   (`crash_body`): 'Approach the Visitor' two-step-confirms its **set
+   mutation** (fixed per visitor, `visitor:` field on the 10 new items,
+   **excluded from drawMutation** — craters are the only source), 'Refuse
+   the Gift' pays a boss-source relic + shards ONCE and leaves the change
+   claimable forever (state derives from clearedSites + ownership; guardian
+   gates both paths). **Mutations 8→18** (10 visitor-bound with appearance
+   overrides in textures.js), **Wound opens at 5** (was 3; all three main.js
+   checks + toasts, eldritch player-texture form now ≥5, feat renamed
+   'Fivefold-Changed' but id `thrice_changed` kept for meta-save compat).
+   **Retiers**: satellites tier 5→6 (regionOf, satboss landmark+team,
+   satellite packs), Wound region 6→7 → wound battles tier 8, deity team
+   7→**8**; TIER_COLORS gained 2 hues (wound green, deep rose); damage
+   table untouched (t4+ band already covers the deep sky). Save **v7**
+   (no new fields; worldgen reshuffled per-seed so older saves discarded).
+   Suite: 40 seeds green (crash count/regions/walkability/reachability/
+   tier math + all round-16 invariants); headless playtest green (block-
+   before-fight, elite fight, two-step accept, refuse-once + claim-later,
+   wound sealed at 4 / torn at 5, retier spot-checks). BUILD is 17.
+
+18. **Pre-PR polish round "17b"** (same branch; poll held — user picked
+   3 of 4 recommended: Listen cycles + sky notices / all-three biome music
+   + crater hum / deity phase 2; mutation-economy changes deliberately
+   DEFERRED to human playtest — the 1-crash worst case ships knowingly
+   RNG-gated for the fifth change): **visitors speak** — every VISITORS
+   def gains 2 cycling Listen `sets` (guardian-gated 'Listen' action on
+   the crash_body site, counter `run.skyChats['v_'+id]`, works before and
+   after the claim); **the sky notices the falls** — `CRASH_NOTICES`
+   (names.js) holds one line each for sun/third_sister/door_ajar,
+   appended at runtime by `skyDefFor` to whichever dialogue set plays
+   when `world.crashes.length > 0` (never onto quest payoffs); **audio
+   identity** — MUSIC entries for WOUND (root 36, b2-over-tritone,
+   pulse 2.8) / CRASH (root 39 sus2-bent-flat, bell, 2.6) / ISLET
+   (root 57 music-box, 0.9), each flagged `own: true` so the tier≥4
+   DARK palette swap no longer erases an authored deep palette (dread
+   still applies); main.js `musicBiomeFor` prefers the TILE biome for
+   CRASH/ISLET/WOUND (before this, islets could never key their entry —
+   region music is dominant-biome-keyed); **crater hum** — `audio.
+   setVisitorHum(level)` drives a deep detuned sine/triangle pair
+   (49 Hz) on the drone bus, fed by `visitorHumFor(tile)` each hop
+   (1 at the crater floor → 0 four hexes out; `_pendingHum` survives
+   pre-init calls); **deity phase 2** — in `_enemyPhase`, a deity below
+   half hp spends its turn on `_deityPhase2`: arena darkens (ambLight
+   0.9→0.4, keyLight 1.9→0.85, fog thickens — per-battle scene so no
+   reset needed), portrait swaps to the new `deity2` painter
+   (monsters.js: the tear is most of it now — split crown seam, 14
+   drifting eyes, sagging tendrils, the inverted star cracked in two),
+   enrage commits permanently, and `_spawnWhisperAdds(2)` pulls two
+   FOES.WOUND foes through at tier−2 × 0.8 hp (full enemy objects,
+   ids = array positions); the rotation becomes 4-beat when `phase2`
+   (charge/drink/flurry/**crush BARRAGE** = `_enemyStrike(e, {crush,
+   hits:3})`) at 0.85 aggression. Suite 40 seeds green; 21-check 17b
+   playtest green (listen gating/cycling, CRASH music key + hum on/off
+   + WOUND-at-tier-7 palette, Vael's notice line in-cinematic, phase-2
+   transition/adds/darkening/barrage — note `_log` shows only the last
+   line; tests must hook `_logHist`). BUILD is 18.
+
+19. **The arrival round** (same branch; direct user instruction reviving the
+   declined crash-cinematics poll option as a LIVE arrival — chosen to fix
+   the RNG-gated Wound path): **one more visitor falls DURING every run.**
+   Worldgen **pass 10.7** picks the next unfallen visitor from the seeded
+   roster and folds its crater into the void off a region's coast,
+   islet-style (center + ≥3 void ring tiles, biome CRASH + `fallerHidden`,
+   region = host shore's; leak-proof: neighbours may only be one region's
+   plain land, and CLAIMED void — folded bridges/islets/secrets/wound —
+   also rejects placement), so nothing rewrites live terrain at reveal;
+   `world.faller` = {def, center, ring, region, revealed},
+   `world.revealFaller()` un-voids and pushes it into `world.crashes`.
+   **Trigger**: first opened gate OR 140 hexes visited (`arrivalDue()`),
+   checked in the hop callback only (warp never auto-fires; vantage
+   summons win ties — the arrival waits for a later hop). **Cinematic**
+   (`startArrivalEvent` through the skyEvent machinery): camera flies out
+   to frame the landing coast, a meteor (`worldView.makeMeteor(glow)` —
+   core + double glow) falls with gravity's ease-in over 1.5s, impact
+   (`impactBurst` flashes processed in world3d update), the crater pops
+   in via `revealHiddenTiles` + ejecta builds (`buildEjectaFor`, extracted
+   from the boot pass), crater + surrounding tiles are marked in
+   `worldView.explored` (**the map remembers roughly where**), then 3
+   dialogue lines ("The Sky, Mid-Sentence") naming the host region; the
+   fall itself cannot be click-skipped (`advanceSkyEvent` guard); END
+   toasts the location. `run.fallerArrived` set at cinematic START so a
+   mid-event reload keeps the landing; save **v8** stores it and
+   applySave replays the reveal silently. **Wound math fixed**: 3
+   satellite bosses + ≥1 ancient crater + the faller = **5 guaranteed
+   changes in every world** — threshold 5 is reachable without RNG.
+   world3d: renderTiles/mist/rift-debris/landmark lists include faller
+   tiles (fog-state machinery shows the landmark once explored).
+   Suite: 40 seeds green incl. faller-every-seed, no double-claims,
+   leak-proof adjacency, tier = host+1, post-reveal reachability, sites
+   answer, celestial spots keep off. 18-check headless arrival test
+   green (natural trigger end-to-end, un-skippable fall, memory fog,
+   hum, guardian tier, v8 round-trip replay). BUILD is 19. Untested by
+   humans: meteor pacing at real fps, the 140-hex fallback, and whether
+   first-warden is the right beat.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -347,7 +470,8 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 ## User's locked design decisions (from poll rounds)
 
 - Three.js WebGL, "Astral Glow" art (cosmic base plane + floating low-poly
-  hex prisms with glowing runic edges), radius-45 world (~6,300 hexes)
+  hex prisms with glowing runic edges), radius-50 world (~7,650 hexes;
+  45 before round 17)
 - Camera-dive diorama for local hex view; animated path-hop movement
 - Fog: vision + dim rim + explored "memory" + mist-capped unseen
 - Kingdoms: four Celestial Courts (Solar/desert S, Pale Tarot/tundra N,
@@ -375,10 +499,11 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   text-shadow inscriptions, soft radial `--softbg` backings, bottom-sheet
   site modal, right-edge gradient sheets for inventory/echoes, floating
   battle nameplates, text-only buttons.
-- `config.js` — tunables: mapRadius 45, vision 4/rim 6, hop timings,
-  region params (count 10, seedSpacing 15, riftWidth 2.1), archipelago
+- `config.js` — tunables: mapRadius 50, vision 4/rim 6, hop timings,
+  region params (count 10, seedSpacing 16, riftWidth 2.1), archipelago
   (erosion thresholds, riverJoinDist), secrets (26), islets (count 3,
-  minLandGap, maxBridge), battle: `vessels` (base/cap/min, in HALF-vessels),
+  minLandGap, maxBridge), **crashes** (min 1/max 3, spacing 14,
+  fromStart 10), battle: `vessels` (base/cap/min, in HALF-vessels),
   `damage` (tier→halves table, heavyMult/heavyCap, bossPlus/enragePlus,
   chillPer, trap), `focus` (stage costs/gains, minScale), `enemy` quadratic
   HP curve (ATK fields vestigial — damage is table-driven now),
@@ -389,12 +514,14 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
 - `rng.js` — mulberry32, hash2, value-noise fbm, pick.
 - `hex.js` — axial math (pointy-top), disc coords, hexLine, A* `findPath`
   with `blocked` predicate (used for locked gates).
-- `names.js` — all lore tables: BIOMES (16 incl. ROAD ["Warded Shallows",
-  water-styled]/BRIDGE/LUNAR/CRIMSON/VERDANT/SECRET/**WOUND**/**ISLET**),
-  KINGDOMS, SATELLITES (luna/rubidus/viridian + bosses), **ISLETS** (3
-  forgotten-islet defs: hermit/wreck/observatory), CELESTIALS (sky
-  landmarks), FOES rosters (roles: brute/swift/mystic/guard; +WOUND and
-  ISLET rosters — ISLET reuses BRIDGE species so no new art),
+- `names.js` — all lore tables: BIOMES (17 incl. ROAD ["Warded Shallows",
+  water-styled]/BRIDGE/LUNAR/CRIMSON/VERDANT/SECRET/**WOUND**/**ISLET**/
+  **CRASH** ["Fallen Shallows"]), KINGDOMS, SATELLITES (luna/rubidus/
+  viridian + bosses), **ISLETS** (3 forgotten-islet defs: hermit/wreck/
+  observatory), **VISITORS** (10 crashed-visitor defs: body + guardian +
+  bound mutation + palette), CELESTIALS (sky landmarks), FOES rosters
+  (roles: brute/swift/mystic/guard; +WOUND/ISLET/CRASH rosters — ISLET and
+  CRASH reuse painted species so no new art),
   `speciesSlug(name)` for art lookup,
   wardenName, regionName, site/flavor generators, **BARGAINS** (5 sacrifice
   events), **SHRINE_BOONS** (5 commune offers), **SKY_VOICES** (4 celestial
@@ -434,9 +561,10 @@ A stop-hook checks for unpushed commits — always push before ending a turn.
   anchors** (4 vantage hexes) → lazy `getSites()` (+nebula/deity/whisper/
   wound_battle/islet branches).
   `revealSecret/revealBridge(i)/revealIslet(i)/revealWound()`.
-- `items.js` — **200 ordinary items** + **8 MUTATION items** (rarity 'm',
-  pool MUTATION, `mutation: true`, excluded from `drawItem`; drawn only
-  via `drawMutation(rng, ownedIds)`). `drawItem(rng, pool, ownedIds,
+- `items.js` — **200 ordinary items** + **18 MUTATION items** (rarity 'm',
+  pool MUTATION, `mutation: true`, excluded from `drawItem`; the 8 originals
+  drawn via `drawMutation(rng, ownedIds)`, the 10 `visitor:`-bound ones
+  excluded even there — claimable only at their crash craters). `drawItem(rng, pool, ownedIds,
   {source, tier, unlocked})` — source weights + tier shifts; shop table
   is harsh (62/28/9/1). RARITY colors (+m sickly green). **SETS** (7
   tags, need 3-4) + **SYNERGIES** (7 set + 6 grand two-set). CONSUMABLES
@@ -719,9 +847,8 @@ the band mid, call `battle._resolveTiming()`.
   nameplate) can sit inside the cinematic frame — they read as world
   detail, but hiding labels during `body.in-skyevent` was floated and
   deliberately deferred ("for now" per user).
-- Save VERSION is now 6 (round 16: skyChats + keepsakes + questsDone) —
-  older saves are discarded on load. Worldgen changed for identical seeds
-  again (stronger rivers, drowned landmarks, 8 new vantages), by design.
+- Save VERSION is now 7 (round 17: no new fields, but the radius bump and
+  crash craters reshuffle every seed) — older saves are discarded on load.
 - Round-16 story content is verified headless only: set-cycling, all 4
   errands end-to-end, drowned mercies, v6 round-trip, 40-seed suite
   (12 vantages + 5 drowned + spark dungeon every seed). Dialogue pacing,
@@ -738,15 +865,25 @@ the band mid, call `battle._resolveTiming()`.
   ease crush frequency or widen `lanes.dodgeWin` before touching the
   table; if too cold, move the `highTier` band down to 3.
 - **Bump `window.BUILD` in index.html (and the css href `?v=`) on every
-  release** — currently 16. Without the bump, live players keep stale
+  release** — currently 17. Without the bump, live players keep stale
   modules despite the import-map cache-buster.
+- Round-17 numbers untested by humans: elite ×1.9, refusal payout
+  (12+5·tier ☆ + boss draw), crash mutation stat swings, the tier-6/7/8
+  deep-sky curve (satboss hp ≈176, deity ≈380), and whether 5 mutations
+  is the right wound threshold now that 10 more exist. The crash-body
+  models/coronas got one headless tuning pass (corona 0.5→0.3, scale
+  ×1.25) — GPU taste pass still owed.
 - The worldgen suite (rebuild in scratchpad each session; pattern in
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
   3 islets each, satellite shores hinted + walkable, satellite bosses /
   wound deity / islets reachable post-reveal, every secret openable from
   a crack-hinted neighbor. Round 16 adds: 12 sky vantages, 5 drowned
   bodies on mainland water with sites, a spark dungeon, 6 celestial
-  spots, no vantage/landmark collisions. Keep it green. (Caveat: the
+  spots, no vantage/landmark collisions. Round 17 adds: 1–3 crashes in
+  distinct regions, center+ring walkable CRASH with clean rings (no
+  landmarks/sites/hints), guardian tier = region+1, elite+boss team
+  flags, satellites read 6 / wound 7 / deity 8, crashes reachable.
+  Keep it green. (Caveat: the
   "0 impure home tiles" claim from round 8 used some narrower metric —
   a naive cDist≤13 volcano/tundra/desert count reads 2–22 on the
   round-14 baseline too, so don't chase it as a regression.)
@@ -756,14 +893,17 @@ the band mid, call `battle._resolveTiming()`.
 - Roamer speed ratios (0.35–1.35) and battle projectile pacing
   (0.2–0.35s flights) are theory-tuned, untested by human play.
 - ISLET biome: FOES.ISLET reuses BRIDGE species (haunt/remora) so no new
-  monster art was needed; MUSIC falls back to MEADOW (no ISLET entry).
+  monster art was needed. (Its MUSIC entry exists as of round 17b.)
 - Round-7 numbers untested by humans: mutation stat swings, deity
   hp ×2.6×1.6 at tier 7, wound-battle counts, bargain prices, water-pack
   density (≈11-16/world), nebula reward rates. Suites verify structure,
   not feel.
-- The deity is one phase; a phase-2 (adds/board-clear) was floated but
-  not built. Mutations cannot be removed once taken (no cleansing
-  shrine yet).
+- The deity has a phase 2 as of round 17b (adds + barrage + torn
+  portrait); its numbers (add tier−2 × 0.8 hp, 0.85 aggression, 3-crush
+  barrage) are sim-free and untested by humans. Mutations cannot be
+  removed once taken (no cleansing shrine yet — the option was polled
+  and declined for now). The Wound-at-5 RNG gap was CLOSED in round 19:
+  the mid-run arrival guarantees a fifth reachable change everywhere.
 - The rarity skew and MEADOW/FOREST astral holes were fixed this round
   (16 retags; totals now 42c/48u/43r/17a, one astral per biome pool).
 - `summary.md` (this file) and the `__vael` debug handle ship in the repo;
@@ -782,8 +922,8 @@ the band mid, call `battle._resolveTiming()`.
   deity difficulty, bargain prices)
 - GPU taste pass on round 8-16 visuals (debris/beacon/aurora/scrim
   intensities, drowned-body models, constellation cinematic framing)
-- Deity phase 2 / Wound music+audio identity (WOUND has no MUSIC entry
-  yet — falls back by biome default; ISLET likewise)
+- ~~Deity phase 2 / Wound music identity~~ (both built in round 17b; a
+  dedicated deity battle THEME — beyond the shared taiko — remains open)
 - A mutation-cleansing shrine (mutations are currently permanent)
 - More speakers/errands if the story layer lands well (nebulas, the
   hermit, the Oxidized King's dreams; a second act of keepsakes)

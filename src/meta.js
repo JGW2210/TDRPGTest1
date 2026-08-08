@@ -28,8 +28,9 @@ export const FEATS = [
   { id: 'star_rich', name: 'Star-Rich', desc: 'Hold 150 star-shards at once', check: m => m.stats.maxShards >= 150, unlocks: 5 },
   { id: 'seamfinder', name: 'Seam-Finder', desc: 'Unfurl a hidden star-bridge', check: m => (m.stats.bridges || 0) >= 1, unlocks: 5 },
   { id: 'islefinder', name: 'Uncharted', desc: 'Reach a forgotten islet no map admits to', check: m => (m.stats.islets || 0) >= 1, unlocks: 4 },
+  { id: 'starfallen', name: 'What Fell From the Sky', desc: 'Fell the guardian of a crashed visitor', check: m => (m.stats.crashes || 0) >= 1, unlocks: 4 },
   { id: 'changed', name: 'Changed', desc: 'Carry a cosmic mutation', check: m => (m.stats.mutations || 0) >= 1, unlocks: 4 },
-  { id: 'thrice_changed', name: 'Thrice-Changed', desc: 'Tear open the Wound in the Meridian', check: m => !!m.stats.woundOpened, unlocks: 5 },
+  { id: 'thrice_changed', name: 'Fivefold-Changed', desc: 'Tear open the Wound in the Meridian', check: m => !!m.stats.woundOpened, unlocks: 5 },
   { id: 'the_other_end', name: 'The Other End', desc: 'Close the Wound: defeat what waits inside', check: m => !!m.stats.woundClosed, unlocks: 8 },
 ];
 
@@ -39,7 +40,7 @@ class Meta {
       hexes: 0, battles: 0, wardens: 0, deepWarden: false, keepers: 0,
       deaths: 0, secrets: 0, maxItems: 0, maxShards: 0, runs: 0,
       sats: [], visitedSats: [], synergies: [],
-      bridges: 0, mutations: 0, woundOpened: false, woundClosed: false, packs: 0, islets: 0,
+      bridges: 0, mutations: 0, woundOpened: false, woundClosed: false, packs: 0, islets: 0, crashes: 0,
     } };
     try {
       const raw = localStorage.getItem(KEY);

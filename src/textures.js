@@ -177,7 +177,7 @@ export function paintPlayerCanvas(appearance = null) {
   // cosmic mutations override everything: the body remembers the Wound
   const muts = ap.mutations || [];
   const mut = id => muts.includes(id);
-  const eldritch = muts.length >= 3;
+  const eldritch = muts.length >= 5;   // the fifth change is the one that shows
 
   // colors: the first (up to two) complete sets claim cloak and eyes —
   // unless mutation has already claimed the flesh
@@ -560,6 +560,90 @@ export function paintPlayerCanvas(appearance = null) {
     g.font = 'bold 15px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const [x, y] of [[-34, 60], [-10, 78], [22, 64], [40, 84], [-42, 88]]) g.fillText('ᛗ', x, y);
     g.globalAlpha = 1;
+  }
+  // ---- the visitors' set changes, each worn where it was given ----
+  if (mut('rivet_skin')) {
+    g.fillStyle = '#8a93a8';
+    for (const s of [-1, 1]) for (let i = 0; i < 5; i++) {
+      g.beginPath(); g.arc(s * (58 + i * 1.5), -70 + i * 42, 5, 0, Math.PI * 2); g.fill();
+    }
+    g.strokeStyle = '#8a93a866'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, -60); g.lineTo(0, 110); g.stroke();
+  }
+  if (mut('comet_marrow')) {
+    g.strokeStyle = '#9fe8d8'; g.lineWidth = 3; g.shadowColor = '#9fe8d8'; g.shadowBlur = 8;
+    for (const s of [-1, 1]) {
+      g.beginPath(); g.moveTo(s * 44, -60); g.quadraticCurveTo(s * 84, -30, s * 70, 30); g.stroke();
+    }
+    g.shadowBlur = 0;
+    g.fillStyle = '#c9fff0';
+    for (const [x, y] of [[-66, 40], [72, 18], [-54, -50]]) {
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + 6, y - 14); g.lineTo(x + 10, y - 2); g.closePath(); g.fill();
+    }
+  }
+  if (mut('pilgrim_tongue')) {
+    g.strokeStyle = '#ffd98a'; g.lineWidth = 4; g.shadowColor = '#ffd98a'; g.shadowBlur = 10;
+    g.beginPath(); g.ellipse(-6, -128, 20, 7, 0.4, 0, Math.PI * 2); g.stroke();
+    g.shadowBlur = 0;
+    g.fillStyle = '#ffd98a'; g.font = 'bold 16px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('ᛚ', 0, -66);
+  }
+  if (mut('patient_yolk')) {
+    g.fillStyle = '#ffb46a'; g.globalAlpha = 0.4;
+    g.beginPath(); g.ellipse(0, 34, 26, 32, 0, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+    glowDot(g, 0, 34, 6, '#ffe9b0');
+    g.fillStyle = 'rgba(120,100,70,0.6)';
+    for (const [x, y] of [[-20, 12], [18, 24], [-12, 56], [22, 52]]) {
+      g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill();
+    }
+  }
+  if (mut('link_vow')) {
+    g.strokeStyle = '#8a93a8'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(-62, -20); g.bezierCurveTo(-20, 0, 20, -36, 62, -14); g.stroke();
+    g.fillStyle = '#a8b4d8';
+    for (const [x, y] of [[-40, -14], [0, -18], [40, -18]]) {
+      g.beginPath(); g.ellipse(x, y, 5, 8, 0.5, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#4a5264';
+    g.beginPath(); g.roundRect(-8, -12, 16, 16, 3); g.fill();
+  }
+  if (mut('elsewhere_eye')) {
+    glowDot(g, 14, -84, 6, '#bfd8ff');
+    g.strokeStyle = '#bfd8ff'; g.globalAlpha = 0.4; g.lineWidth = 3;
+    g.beginPath(); g.arc(10, -86, 26, -0.6, 2.2); g.stroke();
+    g.globalAlpha = 1;
+  }
+  if (mut('anvil_arm')) {
+    g.fillStyle = '#3a3038'; g.strokeStyle = '#171938'; g.lineWidth = 4;
+    g.beginPath(); g.roundRect(46, -34, 34, 78, 6); g.fill(); g.stroke();
+    g.strokeStyle = '#ff8a3a'; g.lineWidth = 2.5; g.shadowColor = '#ff5a1f'; g.shadowBlur = 8;
+    g.beginPath(); g.moveTo(56, -30); g.lineTo(62, 10); g.lineTo(54, 40); g.stroke();
+    g.shadowBlur = 0;
+  }
+  if (mut('knot_memory')) {
+    g.strokeStyle = '#d79bff'; g.lineWidth = 4; g.shadowColor = '#d79bff'; g.shadowBlur = 8;
+    g.beginPath();
+    g.moveTo(-12, -8); g.bezierCurveTo(14, -24, 18, 8, -6, 4);
+    g.bezierCurveTo(-22, 0, -2, -20, 12, -4);
+    g.stroke();
+    g.shadowBlur = 0;
+  }
+  if (mut('threshold_step')) {
+    g.strokeStyle = '#9fb0ff'; g.globalAlpha = 0.45; g.lineWidth = 5;
+    g.strokeRect(-84, -140, 168, 270);
+    g.globalAlpha = 1;
+    g.fillStyle = '#05030c';
+    g.beginPath(); g.arc(0, 0, 7, 0, Math.PI * 2); g.fill();
+    glowDot(g, 0, 0, 3.5, '#d0daff');
+  }
+  if (mut('leviathan_gut')) {
+    g.strokeStyle = '#e8eee0'; g.lineWidth = 5; g.globalAlpha = 0.8;
+    for (let i = 0; i < 3; i++) {
+      g.beginPath(); g.arc(0, 10 + i * 26, 40 - i * 4, 0.25 * Math.PI, 0.75 * Math.PI); g.stroke();
+    }
+    g.globalAlpha = 1;
+    glowDot(g, 0, 78, 4, '#a6ff57');
   }
   if (eldritch) {
     // the full shape: tendrils where the hem used to end, and an aura

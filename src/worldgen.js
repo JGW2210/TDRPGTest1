@@ -10,7 +10,7 @@ import { keyOf, axialToWorld, worldToAxial, discCoords, neighborsOf, hexDist, he
 import {
   BIOMES, KINGDOMS, DRIFTLAND_TOWNS, SATELLITES, dungeonName, wildName, regionName, wardenName,
   makeBattle, makeTrader, makeSide, capitalSites, townSites, dungeonSites,
-  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS, ISLETS, CELESTIALS, DROWNED,
+  NEBULA_NAMES, nebulaSites, DEITY, WOUND_WHISPERS, ISLETS, CELESTIALS, DROWNED, VISITORS,
 } from './names.js';
 
 const angleDiff = (a, b) => {
@@ -154,7 +154,7 @@ export function generateWorld(seed) {
     if (t.void) continue;
     const a = Math.atan2(t.z, t.x);
     if (angleDiff(a, Math.PI) > 0.55) continue;
-    if (t.cDist < 18 || t.cDist > 30) continue;
+    if (t.cDist < Math.round(R * 0.4) || t.cDist > Math.round(R * 0.67)) continue;
     const s = t.elev + hash2(t.q, t.r, seed + 7) * 0.35;
     if (s > volScore) { volScore = s; volcano = t; }
   }
@@ -300,15 +300,15 @@ export function generateWorld(seed) {
     }
     const center = satTiles.reduce((best, t) =>
       (!best || hexDist(t.q, t.r, cq, cr) < hexDist(best.q, best.r, cq, cr)) ? t : best, null);
-    center.landmark = { type: 'satboss', name: def.boss.name, satellite: def.id, tier: 5 };
+    center.landmark = { type: 'satboss', name: def.boss.name, satellite: def.id, tier: 6 };
     const kept = keepComponent(satTiles, center, tiles);
     return { def, tiles: kept, center, cq, cr };
   });
 
   // ---- pass 4.6: the Wound in the Meridian ---------------------------------
-  // A tier-6 eldritch pocket beyond the rim, sealed outside the world's
+  // A tier-7 eldritch pocket beyond the rim, sealed outside the world's
   // sight. It exists from the first hop — but tears open only for a wanderer
-  // carrying three or more cosmic mutations.
+  // carrying five or more cosmic mutations.
   const wound = (() => {
     const angle = 1.6, cx = Math.cos(angle) * worldR * 1.42, cz = Math.sin(angle) * worldR * 1.42;
     const { q: cq, r: cr } = worldToAxial(cx, cz, size);
@@ -750,6 +750,75 @@ export function generateWorld(seed) {
   }
   const land = list.filter(t => !t.void);
 
+  // ---- pass 7.2: the crashed visitors --------------------------------------
+  // One to three bodies out of the roster of ten lie embedded in every world:
+  // each in a walkable sunken crater of fallen shallows — the visitor half-
+  // buried at the crater floor the way Vael sits in its own crater — ringed
+  // by rocky ejecta. Placed here, after sealing and connectivity, so a crater
+  // can never breach a rift; everything later (settlements, secrets, sites,
+  // vantages) is taught to keep out of the bowl.
+  const crashes = [];
+  {
+    const crng = mulberry32((seed ^ 0x37c5) >>> 0);
+    const C = CONFIG.crashes;
+    const want = C.min + Math.floor(crng() * (C.max - C.min + 1));
+    // which visitors fell on THIS world: a seeded shuffle of the roster
+    const roster = VISITORS
+      .map((v, i) => ({ v, k: hash2(i * 17 + 3, i * 29 + 11, seed + 7200) }))
+      .sort((a, b) => a.k - b.k)
+      .map(o => o.v);
+    const okCenter = (t, allowHome) => {
+      if (t.void || t.region >= 100 || (!allowHome && t.region === 0)) return false;
+      if (t.gate || t.landmark || t.biome === 'ROAD' || t.biome === 'BRIDGE') return false;
+      if (t.cDist < 10 || t.cDist > R - 4) return false;
+      if (hexDist(t.q, t.r, start.q, start.r) < C.fromStart) return false;
+      if (hexDist(t.q, t.r, volcano.q, volcano.r) <= 5) return false;
+      for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+        const n = tiles.get(keyOf(nq, nr));
+        if (!n || n.void || n.region !== t.region || n.gate || n.landmark) return false;
+        if (n.biome === 'ROAD' || n.biome === 'BRIDGE') return false;
+      }
+      return true;
+    };
+    const cands = [...land].sort((a, b) => hash2(b.q, b.r, seed + 7201) - hash2(a.q, a.r, seed + 7201));
+    // strict sweep first (deep pockets, wide spacing, one crater per region),
+    // then a relaxed one so thin worlds still receive their full fall
+    for (const [allowHome, spacing] of [[false, C.spacing], [true, 10]]) {
+      for (const t of cands) {
+        if (crashes.length >= want) break;
+        if (!okCenter(t, allowHome)) continue;
+        if (!allowHome && (regions[t.region]?.tier ?? 0) < 1) continue;
+        if (crashes.some(c => c.center.region === t.region)) continue;
+        if (crashes.some(c => hexDist(c.center.q, c.center.r, t.q, t.r) < spacing)) continue;
+        const def = roster[crashes.length];
+        const ring = [];
+        t.biome = 'CRASH';
+        t.elev = 0.3;
+        applyHeight(t, seed, volcano);
+        t.height -= 0.12;             // the crater floor sits below its ring
+        t.topY = t.floatY + t.height;
+        t.landmark = { type: 'crash', name: def.name, visitor: def.id, tier: (regions[t.region]?.tier ?? 1) + 1 };
+        for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+          const n = tiles.get(keyOf(nq, nr));
+          n.biome = 'CRASH';
+          n.elev = 0.32;
+          applyHeight(n, seed, volcano);
+          ring.push(n);
+        }
+        // the ejecta apron: rocky debris strewn over the second ring
+        for (const [dq, dr] of discCoords(2)) {
+          if (Math.max(Math.abs(dq), Math.abs(dr), Math.abs(-dq - dr)) !== 2) continue;
+          const n = tiles.get(keyOf(t.q + dq, t.r + dr));
+          if (!n || n.void || n.region !== t.region || n.gate || n.landmark) continue;
+          if (n.biome === 'ROAD' || n.biome === 'BRIDGE' || n.biome === 'CRASH') continue;
+          n.crashDebris = true;
+        }
+        crashes.push({ def, center: t, ring, region: t.region });
+      }
+      if (crashes.length >= want) break;
+    }
+  }
+
   // ---- pass 7.5: star-bridges — hidden until their seam is detonated -------
   // The wandering worlds hang visibly beyond the rim, but no road reaches
   // them: each bridge lies folded inside the void. A resonant seam waits on
@@ -772,7 +841,7 @@ export function generateWorld(seed) {
   const pickShore = (cq, cr, preferSea) => {
     let shore = null, shoreScore = Infinity;
     for (const t of land) {
-      if (t.region >= 100 || !t.biome || t.landmark || t.gate) continue;
+      if (t.region >= 100 || !t.biome || t.landmark || t.gate || t.biome === 'CRASH') continue;
       const d = hexDist(t.q, t.r, cq, cr);
       const score = d - (preferSea && t.biome === 'SEA' ? 6 : 0);
       if (score < shoreScore) { shoreScore = score; shore = t; }
@@ -813,8 +882,8 @@ export function generateWorld(seed) {
       if (t.region >= 100 || t.biome === 'SEA' || t.biome === 'ROAD' || t.biome === 'BRIDGE' || t.landmark) continue;
       const a = Math.atan2(t.z, t.x);
       if (angleDiff(a, k.angle) > 0.6) continue;
-      if (t.cDist < 18 || t.cDist > 34) continue;
-      const s = (k.biomes.includes(t.biome) ? 2.2 : 0) - Math.abs(t.cDist - 25) * 0.08 + hash2(t.q, t.r, seed + 21);
+      if (t.cDist < Math.round(R * 0.4) || t.cDist > Math.round(R * 0.76)) continue;
+      const s = (k.biomes.includes(t.biome) ? 2.2 : 0) - Math.abs(t.cDist - Math.round(R * 0.56)) * 0.08 + hash2(t.q, t.r, seed + 21);
       if (s > bestScore) { bestScore = s; best = t; }
     }
     if (!best) best = land.find(t => t.region < 100 && !t.landmark && t.biome !== 'ROAD');
@@ -836,7 +905,7 @@ export function generateWorld(seed) {
   const settlements = kingdoms.map(k => k.capitalTile);
   const rngTowns = mulberry32(seed + 31);
   const placeable = t => !t.landmark && !t.gate && t.region < 100
-    && !['SEA', 'ROAD', 'BRIDGE'].includes(t.biome);
+    && !['SEA', 'ROAD', 'BRIDGE', 'CRASH'].includes(t.biome);
   for (const k of kingdoms) {
     const names = [...k.towns].sort(() => rngTowns() - 0.5);
     const cands = land
@@ -857,7 +926,7 @@ export function generateWorld(seed) {
   {
     let placed = 1;
     const cands = land
-      .filter(t => !t.kingdom && placeable(t) && t.cDist >= 8 && t.cDist <= 40)
+      .filter(t => !t.kingdom && placeable(t) && t.cDist >= 8 && t.cDist <= R - 5)
       .sort((a, b) => hash2(b.q, b.r, seed + 33) - hash2(a.q, a.r, seed + 33));
     for (const t of cands) {
       if (placed >= DRIFTLAND_TOWNS.length) break;
@@ -914,7 +983,7 @@ export function generateWorld(seed) {
       // never breach a rift between two different regions
       const regs = new Set(landNbs.map(n => n.region));
       if (regs.size !== 1) continue;
-      if (landNbs.some(n => n.landmark || n.gate)) continue;
+      if (landNbs.some(n => n.landmark || n.gate || n.biome === 'CRASH')) continue;
       if (secrets.some(s => hexDist(s.q, s.r, v.q, v.r) < 7)) continue;
       v.secret = true;
       v.region = landNbs[0].region;
@@ -960,7 +1029,7 @@ export function generateWorld(seed) {
       let shore = null, sd = Infinity;
       for (const t of land) {
         if (t.region >= 100 || t.landmark || t.gate || t.seamHint || t.vantage) continue;
-        if (t.biome === 'ROAD' || t.biome === 'BRIDGE') continue;
+        if (t.biome === 'ROAD' || t.biome === 'BRIDGE' || t.biome === 'CRASH') continue;
         const d = hexDist(t.q, t.r, anchor.q, anchor.r);
         if (d < sd) { sd = d; shore = t; }
       }
@@ -1009,11 +1078,90 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 10.7: the one still falling ------------------------------------
+  // One more visitor has not landed yet. Its crater is chosen now — a hidden
+  // cluster in the void off a region's coast, islet-style, so nothing has to
+  // rewrite live terrain when it comes down mid-run — but the tiles stay
+  // folded until the arrival cinematic reveals them (first warden felled, or
+  // 140 hexes walked). With the three satellite bosses and at least one
+  // ancient crater, this guarantees five reachable changes in every world:
+  // the Wound can always be opened without luck.
+  const faller = (() => {
+    const roster = VISITORS
+      .map((v, i) => ({ v, k: hash2(i * 17 + 3, i * 29 + 11, seed + 7200) }))
+      .sort((a, b) => a.k - b.k)
+      .map(o => o.v);
+    const used = new Set(crashes.map(c => c.def.id));
+    const def = roster.find(v => !used.has(v.id)) || roster[0];
+    const claimed = t => t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden;
+    const cands = list
+      .filter(t => t.void && !claimed(t) && t.cDist > 10 && t.cDist < R - 3)
+      .sort((a, b) => hash2(b.q, b.r, seed + 7250) - hash2(a.q, a.r, seed + 7250));
+    for (const anchor of cands) {
+      if (hexDist(anchor.q, anchor.r, start.q, start.r) < 12) continue;
+      if (crashes.some(c => hexDist(c.center.q, c.center.r, anchor.q, anchor.r) < 10)) continue;
+      // the crater: the anchor and its free void neighbours
+      const ring = [];
+      for (const [nq, nr] of neighborsOf(anchor.q, anchor.r)) {
+        const t = tiles.get(keyOf(nq, nr));
+        if (t && t.void && !claimed(t)) ring.push(t);
+      }
+      if (ring.length < 3) continue;
+      const cluster = [anchor, ...ring];
+      // every neighbouring land tile must belong to ONE host region — a
+      // revealed crater must never hand out a free crossing
+      let shoreRegion = -1, touchesShore = false, ok = true;
+      for (const t of cluster) {
+        for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+          const n = tiles.get(keyOf(nq, nr));
+          if (!n) continue;
+          if (n.void) {
+            // claimed void is a future road or room — keep the crater clear
+            if (n.hiddenBridge || n.isletHidden || n.woundHidden || n.secret) { ok = false; break; }
+            continue;
+          }
+          if (n.gate || n.region >= 100 || n.biome === 'ROAD' || n.biome === 'BRIDGE'
+            || n.biome === 'CRASH' || n.landmark || n.seamHint || n.isletHint != null) { ok = false; break; }
+          if (shoreRegion < 0) shoreRegion = n.region;
+          if (n.region !== shoreRegion) { ok = false; break; }
+          touchesShore = true;
+        }
+        if (!ok) break;
+      }
+      if (!ok || !touchesShore || shoreRegion < 0) continue;
+      const hostTier = regions[shoreRegion]?.tier ?? 1;
+      anchor.biome = 'CRASH';
+      anchor.region = shoreRegion;
+      anchor.elev = 0.3;
+      applyHeight(anchor, seed, volcano);
+      anchor.height -= 0.12;
+      anchor.topY = anchor.floatY + anchor.height;
+      anchor.fallerHidden = true;
+      anchor.landmark = { type: 'crash', name: def.name, visitor: def.id, tier: hostTier + 1 };
+      for (const t of ring) {
+        t.biome = 'CRASH';
+        t.region = shoreRegion;
+        t.elev = 0.32;
+        applyHeight(t, seed, volcano);
+        t.fallerHidden = true;
+      }
+      // the ejecta apron waits on the neighbouring coast (built at arrival)
+      for (const [dq, dr] of discCoords(2)) {
+        const n = tiles.get(keyOf(anchor.q + dq, anchor.r + dr));
+        if (!n || n.void || n.region !== shoreRegion || n.gate || n.landmark) continue;
+        if (['ROAD', 'BRIDGE', 'CRASH'].includes(n.biome)) continue;
+        n.crashDebris = true;
+      }
+      return { def, center: anchor, ring, region: shoreRegion, revealed: false };
+    }
+    return null;   // no seed has failed placement in the suite; belt-and-braces
+  })();
+
   // ---- pass 11: wandering traders ------------------------------------------
   const traders = [];
   {
     const cands = land
-      .filter(t => placeable(t) && t.cDist >= 5 && t.cDist <= 30)
+      .filter(t => placeable(t) && t.cDist >= 5 && t.cDist <= Math.round(R * 0.67))
       .sort((a, b) => hash2(b.q, b.r, seed + 71) - hash2(a.q, a.r, seed + 71));
     for (const t of cands) {
       if (traders.length >= 3) break;
@@ -1110,7 +1258,7 @@ export function generateWorld(seed) {
       spawnIn(reg.tiles, reg.id, reg.tier, 2 + Math.floor(rrng() * 2) + (reg.tier >= 3 ? 1 : 0));
     }
     // the wandering worlds run markedly hotter than the mainland
-    satellites.forEach((sat, i) => spawnIn(sat.tiles, 100 + i, 5, 3));
+    satellites.forEach((sat, i) => spawnIn(sat.tiles, 100 + i, 6, 3));
 
     // shallows shoals: water-bound hunters that patrol lake and river alike
     // and never set a fin on dry land (post-seal components, so no shoal can
@@ -1144,7 +1292,7 @@ export function generateWorld(seed) {
   const celestialSpots = [];
   {
     const cands = list
-      .filter(t => t.void && !t.secret && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
+      .filter(t => t.void && !t.secret && !t.fallerHidden && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
       .sort((a, b) => hash2(b.q, b.r, seed + 9100) - hash2(a.q, a.r, seed + 9100));
     for (const t of cands) {
       if (celestialSpots.length >= 6) break;
@@ -1254,7 +1402,7 @@ export function generateWorld(seed) {
     }
     let best = null, bd = Infinity;
     for (const t of land) {
-      if (t.landmark || t.region >= 100 || t.biome === 'BRIDGE' || t.gate || t.siteKind
+      if (t.landmark || t.region >= 100 || t.biome === 'BRIDGE' || t.biome === 'CRASH' || t.gate || t.siteKind
         || t.seamHint || t.isletHint != null || t.vantage) continue;
       const d = (t.x - a.x) ** 2 + (t.z - a.z) ** 2;
       if (d < bd) { bd = d; best = t; }
@@ -1267,6 +1415,7 @@ export function generateWorld(seed) {
     if (t.landmark) t.name = t.landmark.name;
     else if (t.biome === 'ROAD') t.name = 'Warded Shallows';
     else if (t.biome === 'BRIDGE') t.name = 'Star-Bridge';
+    else if (t.biome === 'CRASH') t.name = 'Fallen Shallows';
     else t.name = wildName(mulberry32(Math.floor(hash2(t.q, t.r, seed + 81) * 0xffffffff)), t.biome);
   }
   // hidden tiles get their names now, ready for the day they surface
@@ -1277,14 +1426,17 @@ export function generateWorld(seed) {
     for (const t of isl.bridgeTiles) t.name = 'A Folded Footbridge';
     for (const t of isl.tiles) t.name = t.landmark ? t.landmark.name : isl.def.name;
   }
+  if (faller) for (const t of [faller.center, ...faller.ring]) {
+    t.name = t.landmark ? t.landmark.name : 'Fallen Shallows';
+  }
 
   // ---- per-hex explorable sites (lazy, deterministic, sparser) -------------
   const siteCache = new Map();
   const kingdomById = Object.fromEntries(kingdoms.map(k => [k.id, k]));
   const regionOf = t => t.region === 200
-    ? { id: 200, tier: 6, name: 'The Wound in the Meridian', dominantBiome: 'WOUND' }
+    ? { id: 200, tier: 7, name: 'The Wound in the Meridian', dominantBiome: 'WOUND' }
     : t.region >= 100
-      ? { id: t.region, tier: 5, name: SATELLITES[t.region - 100]?.name || 'The Deep Sky', dominantBiome: t.biome }
+      ? { id: t.region, tier: 6, name: SATELLITES[t.region - 100]?.name || 'The Deep Sky', dominantBiome: t.biome }
       : regions[t.region] || regions[0];
 
   function getSites(tile) {
@@ -1335,19 +1487,38 @@ export function generateWorld(seed) {
         flavor: def.boss.flavor,
         actions: ['⚔ Challenge'],
         team: {
-          biome: tile.biome, tier: 5, count: 1, boss: true,
+          biome: tile.biome, tier: 6, count: 1, boss: true,
           satellite: def.id, bossName: def.boss.name, bossKind: 'sat_' + def.id,
         },
       }, pedestalSite('ASTRAL')];
     } else if (lm?.type === 'nebula') {
       sites = nebulaSites(rng, lm.name);
       sites[1].team = { biome: 'SEA', tier: tier + 1, count: 2 };
+    } else if (lm?.type === 'crash') {
+      // the crashed visitor: an elite guardian one tier above the region,
+      // and the body itself — which offers its one set change (or, refused,
+      // whatever it clutched in the fall)
+      const def = VISITORS.find(v => v.id === lm.visitor) || VISITORS[0];
+      sites = [{
+        type: 'battle', subtype: 'crash_guardian', name: def.guardian.name, enemy: def.guardian.name,
+        flavor: def.guardian.flavor,
+        actions: ['⚔ Challenge'],
+        team: {
+          biome: 'CRASH', tier: tier + 1, count: 1, boss: true, elite: true,
+          bossName: def.guardian.name, bossRole: def.guardian.role, bossKind: 'visitor_' + def.id,
+        },
+      }, {
+        type: 'side', subtype: 'crash_body', visitor: def.id,
+        name: def.name,
+        flavor: def.flavor + ' (' + def.sub + ')',
+        actions: ['Listen', 'Approach the Visitor', 'Refuse the Gift'],
+      }];
     } else if (lm?.type === 'deity') {
       sites = [{
         type: 'battle', subtype: 'deity', name: DEITY.name, enemy: DEITY.name,
         flavor: DEITY.flavor,
         actions: ['⚔ Answer the Invitation'],
-        team: { biome: 'WOUND', tier: 7, count: 1, boss: true, deity: true, bossName: DEITY.name, bossKind: 'deity' },
+        team: { biome: 'WOUND', tier: 8, count: 1, boss: true, deity: true, bossName: DEITY.name, bossKind: 'deity' },
       }];
     } else if (lm?.type === 'islet') {
       const def = ISLETS[lm.islet] || ISLETS[0];
@@ -1451,7 +1622,7 @@ export function generateWorld(seed) {
     seed, tiles, list, land, start, volcano,
     kingdoms, kingdomById, dungeons, shrines, traders, roamerSpawns,
     regions, regionOf, gates, satellites, secrets, wound, skyAnchors, islets,
-    celestialSpots, drowned, sparkDungeonKey,
+    celestialSpots, drowned, sparkDungeonKey, crashes, faller,
     sun: { name: 'Vael, the Undying Sun', flavor: 'The world’s heart, still burning in its crater of sky.' },
     getSites,
     revealSecret(v) {
@@ -1490,7 +1661,20 @@ export function generateWorld(seed) {
       if (isl.shore) isl.shore.isletHint = null;
       return true;
     },
-    // three mutations, and the world admits what it has been hiding
+    // the last visitor comes down: its folded crater surfaces mid-run
+    revealFaller() {
+      if (!faller || faller.revealed) return null;
+      faller.revealed = true;
+      const arrTiles = [faller.center, ...faller.ring];
+      for (const t of arrTiles) {
+        t.void = false;
+        t.fallerHidden = false;
+        if (!land.includes(t)) land.push(t);
+      }
+      crashes.push({ def: faller.def, center: faller.center, ring: faller.ring, region: faller.region });
+      return arrTiles;
+    },
+    // five mutations, and the world admits what it has been hiding
     revealWound() {
       if (wound.revealed) return false;
       wound.revealed = true;
@@ -1540,6 +1724,7 @@ function applyHeight(t, seed, volcano) {
   if (t.biome === 'VOLCANO') hgt += 0.6 + (volcano && t === volcano ? 0.9 : 0);
   if (t.biome === 'ROAD') hgt = 0.55;   // shallows crossings sit low, like fords
   if (t.biome === 'BRIDGE') hgt = 0.4;
+  if (t.biome === 'CRASH') hgt = 0.52;  // the crater bowl: water-low, debris-strewn
   if (t.biome === 'SECRET') hgt = 1.1;
   if (t.biome === 'ISLET') hgt = 1.0;
   if (t.biome === 'WOUND') hgt += 0.5;

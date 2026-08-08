@@ -1141,6 +1141,313 @@ const BOSSES = {
     // whisper-runes falling out of it
     runeOrbit(g, ['ᛉ', 'ᛟ', 'ᚦ', 'ᛞ'], o.accent, 100, o.seed);
   },
+  deity2(g, o) {
+    // the second act: Vhal-Suthek torn wider — the tear is most of it now
+    g.fillStyle = '#050208';
+    g.strokeStyle = o.accent; g.lineWidth = 7;
+    g.shadowColor = o.accent; g.shadowBlur = 26;
+    g.beginPath();
+    g.moveTo(0, -104);
+    g.bezierCurveTo(52, -62, 46, 0, 22, 52);
+    g.bezierCurveTo(12, 80, -12, 80, -22, 52);
+    g.bezierCurveTo(-46, 0, -52, -62, 0, -104);
+    g.closePath(); g.fill(); g.stroke();
+    // the seam splits at the crown — a second, smaller tear opening inside
+    g.strokeStyle = o.accent; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, -104); g.lineTo(-14, -60); g.moveTo(0, -104); g.lineTo(16, -66); g.stroke();
+    g.shadowBlur = 0;
+    // the ring of eyes, doubled and drifting outward
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + o.seed;
+      const rr = 88 + (i % 2) * 14;
+      const x = Math.cos(a) * rr, y = -12 + Math.sin(a) * 70;
+      glowEye(g, x, y, i % 3 === 0 ? 7 : 4, o.eye);
+    }
+    // tendrils no longer reach — they hang, gravity finally admitted
+    g.strokeStyle = '#2a1030'; g.lineWidth = 7; g.lineCap = 'round';
+    for (const [ex, sag] of [[-88, 96], [-52, 108], [-16, 112], [24, 108], [62, 100], [92, 88]]) {
+      g.beginPath();
+      g.moveTo(ex * 0.35, 30);
+      g.bezierCurveTo(ex * 0.6, sag * 0.5, ex * 0.9, sag * 0.85, ex, sag);
+      g.stroke();
+    }
+    // the inverted star, cracked in two — both halves still burning
+    g.fillStyle = o.eye; g.shadowColor = o.eye; g.shadowBlur = 22;
+    for (const [dx, rot] of [[-9, -0.3], [11, 0.35]]) {
+      g.save();
+      g.translate(dx, -20); g.rotate(rot);
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+        const rr = i % 2 === 0 ? 13 : 5;
+        g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      g.closePath(); g.fill();
+      g.restore();
+    }
+    g.shadowBlur = 0;
+    // the whisper-runes spill instead of orbiting
+    g.fillStyle = o.accent; g.globalAlpha = 0.85;
+    g.font = '19px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    ['ᛉ', 'ᛟ', 'ᚦ', 'ᛞ', 'ᛗ'].forEach((ch, i) => {
+      g.fillText(ch, -60 + i * 30, 96 + (i % 2) * 14);
+    });
+    g.globalAlpha = 1;
+  },
+
+  // ═══ THE CRASH GUARDIANS: one elite per fallen visitor ═══
+  visitor_iron_seed(g, o) {
+    // The Husk Gardener: a person-shaped stack of bent hull-plate
+    g.fillStyle = '#5a6274'; g.strokeStyle = INK; g.lineWidth = 6;
+    for (const [y, w, h] of [[-58, 64, 34], [-22, 84, 40], [22, 72, 38], [62, 52, 26]]) {
+      g.beginPath(); g.roundRect(-w / 2, y, w, h, 7); g.fill(); g.stroke();
+    }
+    // rivets along every plate
+    g.fillStyle = '#8a93a8';
+    for (const [x, y] of [[-24, -50], [24, -50], [-34, -8], [34, -8], [-28, 36], [28, 36], [-18, 70], [18, 70]]) {
+      g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
+    }
+    // the seam of the Seed, worn like a stole
+    g.strokeStyle = '#ffb46a'; g.lineWidth = 5; g.shadowColor = '#ffb46a'; g.shadowBlur = 12;
+    g.beginPath(); g.moveTo(0, -58); g.lineTo(0, 88); g.stroke();
+    g.shadowBlur = 0;
+    // pruning-shear hand & watering arm
+    g.strokeStyle = '#4a5264'; g.lineWidth = 9; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-42, -6); g.lineTo(-76, 24); g.stroke();
+    g.beginPath(); g.moveTo(42, -6); g.lineTo(72, -34); g.stroke();
+    g.fillStyle = '#8a93a8';
+    g.beginPath(); g.moveTo(72, -34); g.lineTo(94, -52); g.lineTo(82, -26); g.closePath(); g.fill();
+    // one careful lens
+    glowEye(g, 0, -42, 8, o.eye);
+  },
+  visitor_glasswing(g, o) {
+    // The Tailless Rider: lean, forward, still riding out of habit
+    g.fillStyle = '#3f6a60'; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath();
+    g.moveTo(-56, 40); g.bezierCurveTo(-30, -30, 10, -66, 48, -58);
+    g.bezierCurveTo(66, -52, 60, -30, 40, -18);
+    g.bezierCurveTo(10, 0, -18, 30, -28, 58); g.closePath(); g.fill(); g.stroke();
+    // glass shards grown along the spine — souvenirs of the head
+    g.fillStyle = '#9fe8d8'; g.shadowColor = '#9fe8d8'; g.shadowBlur = 10;
+    for (const [x, y, s] of [[-30, -6, 12], [-8, -30, 15], [16, -48, 12], [40, -58, 9]]) {
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + s * 0.6, y - s * 1.6); g.lineTo(x + s, y - s * 0.2); g.closePath(); g.fill();
+    }
+    g.shadowBlur = 0;
+    // legs bowed around a mount that is no longer there
+    g.strokeStyle = '#3f6a60'; g.lineWidth = 8; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-24, 50); g.bezierCurveTo(-38, 68, -30, 84, -12, 88); g.stroke();
+    g.beginPath(); g.moveTo(-2, 44); g.bezierCurveTo(4, 66, 16, 80, 34, 82); g.stroke();
+    // reins of nothing, held taut
+    g.strokeStyle = '#c9fff0'; g.lineWidth = 3; g.globalAlpha = 0.8;
+    g.beginPath(); g.moveTo(52, -44); g.bezierCurveTo(80, -30, 88, -8, 84, 14); g.stroke();
+    g.globalAlpha = 1;
+    glowEye(g, 46, -48, 5, o.eye, true);
+  },
+  visitor_kneeling_star(g, o) {
+    // The Last Congregant: a robed shape that never rose from the response
+    g.fillStyle = '#7a6848'; g.strokeStyle = INK; g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(-6, -74); g.bezierCurveTo(40, -60, 56, 0, 62, 76);
+    g.lineTo(-66, 76); g.bezierCurveTo(-58, 30, -40, -56, -6, -74);
+    g.closePath(); g.fill(); g.stroke();
+    // bowed hood, empty where the face goes
+    g.fillStyle = '#2a2418';
+    g.beginPath(); g.ellipse(-8, -52, 20, 24, 0.5, 0, Math.PI * 2); g.fill();
+    // candle-rows kept lit along the hem
+    for (let i = 0; i < 5; i++) {
+      const x = -50 + i * 24;
+      g.fillStyle = BONE;
+      g.fillRect(x - 3, 58, 6, 14);
+      glowEye(g, x, 52, 3.5, '#ffd98a');
+    }
+    // its own small halo, tilted by the genuflection
+    g.strokeStyle = '#ffd98a'; g.lineWidth = 4; g.shadowColor = '#ffd98a'; g.shadowBlur = 12;
+    g.beginPath(); g.ellipse(-8, -84, 24, 9, 0.5, 0, Math.PI * 2); g.stroke();
+    g.shadowBlur = 0;
+    // praying manipulators: too many joints, honestly folded
+    g.strokeStyle = '#5a4c34'; g.lineWidth = 5; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-30, 6); g.lineTo(-14, -8); g.lineTo(-2, 8); g.lineTo(10, -6); g.stroke();
+    glowEye(g, -14, -50, 4, o.eye);
+  },
+  visitor_patient_egg(g, o) {
+    // The Brood Sentry: shell-armored, hunched, extremely spoken-for
+    body(g, o, () => blobPath(g, 70, 62, 0.07, o.seed));
+    // cracked-shell pauldrons
+    g.fillStyle = '#d8c9a8'; g.strokeStyle = INK; g.lineWidth = 5;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(s * 24, -52); g.lineTo(s * 78, -34); g.lineTo(s * 66, 4); g.lineTo(s * 30, -12);
+      g.closePath(); g.fill(); g.stroke();
+      g.strokeStyle = DARK; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(s * 46, -42); g.lineTo(s * 52, -22); g.lineTo(s * 42, -14); g.stroke();
+      g.strokeStyle = INK; g.lineWidth = 5;
+    }
+    // speckles: it has begun to match the egg
+    g.fillStyle = 'rgba(90,80,60,0.6)';
+    for (let i = 0; i < 8; i++) {
+      g.beginPath(); g.arc(-40 + (i * 37) % 80, -20 + (i * 23) % 60, 4, 0, Math.PI * 2); g.fill();
+    }
+    // beaked helm & a warning stance
+    g.fillStyle = '#8a7a58'; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(20, -30); g.lineTo(66, -16); g.lineTo(24, -2); g.closePath(); g.fill(); g.stroke();
+    legs(g, 2, 58, 30, 26, 12, '#6a5c40');
+    glowEye(g, 6, -38, 6, o.eye);
+  },
+  visitor_chained_choir(g, o) {
+    // The Warden of Links: a keeper mostly made of what it keeps
+    body(g, o, () => blobPath(g, 58, 70, 0.05, o.seed));
+    // the chains, worn in oath-wraps
+    g.strokeStyle = '#8a93a8'; g.lineWidth = 7;
+    for (const [y0, y1] of [[-44, -20], [-8, 16], [28, 50]]) {
+      g.beginPath(); g.moveTo(-60, y0); g.bezierCurveTo(-20, y0 + 16, 20, y1 - 16, 60, y1); g.stroke();
+    }
+    g.fillStyle = '#a8b4d8';
+    for (const [x, y] of [[-38, -30], [4, -4], [42, 40], [-20, 40]]) {
+      g.beginPath(); g.ellipse(x, y, 7, 10, 0.5, 0, Math.PI * 2); g.fill();
+    }
+    // padlock heart, still fastened
+    g.fillStyle = '#4a5264'; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath(); g.roundRect(-16, -6, 32, 28, 5); g.fill(); g.stroke();
+    g.strokeStyle = '#8a93a8'; g.lineWidth = 5;
+    g.beginPath(); g.arc(0, -8, 10, Math.PI, 0); g.stroke();
+    // a hum it cannot entirely contain
+    g.strokeStyle = '#cfd8ff'; g.globalAlpha = 0.6; g.lineWidth = 2;
+    for (const r of [78, 88]) { g.beginPath(); g.arc(0, -6, r, -0.6, 0.6); g.stroke(); }
+    g.globalAlpha = 1;
+    glowEye(g, -12, -44, 5, o.eye); glowEye(g, 12, -44, 5, o.eye);
+  },
+  visitor_mirrorshard(g, o) {
+    // The Reflection That Stayed: somebody's outline, arriving late
+    // the echo first — one beat behind, forever
+    g.globalAlpha = 0.35;
+    g.fillStyle = '#bfd8ff';
+    g.beginPath();
+    g.moveTo(-2, -78); g.bezierCurveTo(40, -62, 46, 10, 34, 74);
+    g.lineTo(-42, 74); g.bezierCurveTo(-48, 8, -36, -60, -2, -78); g.closePath(); g.fill();
+    g.globalAlpha = 1;
+    // the figure itself, offset the way reflections shouldn't be
+    g.fillStyle = '#5a6a94'; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath();
+    g.moveTo(8, -70); g.bezierCurveTo(48, -54, 54, 14, 42, 80);
+    g.lineTo(-32, 80); g.bezierCurveTo(-38, 12, -26, -52, 8, -70); g.closePath(); g.fill(); g.stroke();
+    // mirror-crack across the face
+    g.strokeStyle = '#e6f0ff'; g.lineWidth = 3; g.shadowColor = '#e6f0ff'; g.shadowBlur = 8;
+    g.beginPath(); g.moveTo(-6, -66); g.lineTo(6, -44); g.lineTo(-4, -30); g.lineTo(12, -12); g.stroke();
+    g.shadowBlur = 0;
+    // paired eyes: one honest, one borrowed
+    glowEye(g, 0, -48, 5, o.eye);
+    glowEye(g, 22, -46, 5, '#bfd8ff');
+  },
+  visitor_burning_anvil(g, o) {
+    // The Unfinished Work: half forged, half still an idea losing patience
+    // the finished half
+    g.fillStyle = '#5a5464'; g.strokeStyle = INK; g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(0, -76); g.bezierCurveTo(44, -66, 56, -6, 46, 70); g.lineTo(0, 70); g.closePath();
+    g.fill(); g.stroke();
+    // the molten half, still deciding on a shape
+    g.fillStyle = '#8a3a24';
+    g.beginPath();
+    g.moveTo(0, -76); g.bezierCurveTo(-40, -60, -60, 0, -38, 34);
+    g.bezierCurveTo(-52, 48, -30, 62, -44, 70); g.lineTo(0, 70); g.closePath(); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 6; g.stroke();
+    // seams of forge-light where the halves argue
+    g.strokeStyle = '#ffb63a'; g.lineWidth = 4; g.shadowColor = '#ff5a1f'; g.shadowBlur = 14;
+    g.beginPath(); g.moveTo(0, -76); g.lineTo(0, 70); g.stroke();
+    g.beginPath(); g.moveTo(-38, 34); g.lineTo(-14, 20); g.stroke();
+    g.shadowBlur = 0;
+    // hammerhead fist on the finished side
+    g.fillStyle = '#3a3038'; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath(); g.roundRect(42, -18, 44, 26, 5); g.fill(); g.stroke();
+    // drips that never quite land
+    g.fillStyle = '#ff8a3a';
+    for (const [x, y] of [[-48, 44], [-34, 58], [-56, 24]]) {
+      g.beginPath(); g.ellipse(x, y, 4, 7, 0, 0, Math.PI * 2); g.fill();
+    }
+    glowEye(g, 14, -46, 6, '#ffd24a'); glowEye(g, -14, -46, 6, '#ff5a1f');
+  },
+  visitor_knotted_star(g, o) {
+    // The Untier: grown for one task, centuries into it
+    body(g, o, () => blobPath(g, 46, 64, 0.09, o.seed));
+    // the practice-knot it wears at the sternum
+    g.strokeStyle = '#d79bff'; g.lineWidth = 5; g.shadowColor = '#d79bff'; g.shadowBlur = 10;
+    g.beginPath();
+    g.moveTo(-14, -6); g.bezierCurveTo(16, -26, 22, 14, -6, 10);
+    g.bezierCurveTo(-26, 6, -2, -22, 14, -2);
+    g.stroke();
+    g.shadowBlur = 0;
+    // the fingers: many-jointed, purpose-built, unsettling in repose
+    g.strokeStyle = o.base; g.lineWidth = 5; g.lineCap = 'round';
+    for (const s of [-1, 1]) {
+      for (let f = 0; f < 3; f++) {
+        g.beginPath();
+        g.moveTo(s * 34, -10 + f * 12);
+        g.lineTo(s * (58 + f * 8), -24 + f * 18);
+        g.lineTo(s * (76 + f * 6), -12 + f * 20);
+        g.lineTo(s * (88 + f * 4), -22 + f * 22);
+        g.stroke();
+      }
+    }
+    // a pulled thread of starlight, mid-untie
+    g.strokeStyle = '#eccfff'; g.lineWidth = 2.5; g.globalAlpha = 0.9;
+    g.beginPath(); g.moveTo(-88, -18); g.bezierCurveTo(-40, -60, 40, -60, 88, -16); g.stroke();
+    g.globalAlpha = 1;
+    glowEye(g, -10, -40, 5, o.eye); glowEye(g, 10, -40, 5, o.eye);
+    glowEye(g, 0, -26, 3.5, '#eccfff');
+  },
+  visitor_door_splinter(g, o) {
+    // The Hinge-Keeper: a door's worth of duty with nothing left to close
+    g.fillStyle = '#4a3e57'; g.strokeStyle = INK; g.lineWidth = 6;
+    g.beginPath(); g.roundRect(-40, -78, 80, 150, 6); g.fill(); g.stroke();
+    // panels
+    g.strokeStyle = DARK; g.lineWidth = 4;
+    g.strokeRect(-26, -62, 52, 54);
+    g.strokeRect(-26, 2, 52, 54);
+    // hinge shoulders, kept oiled out of respect
+    g.fillStyle = '#8a7a48';
+    for (const y of [-58, 30]) {
+      g.beginPath(); g.roundRect(-52, y, 14, 26, 3); g.fill();
+      g.beginPath(); g.arc(-45, y + 6, 3, 0, Math.PI * 2); g.arc(-45, y + 20, 3, 0, Math.PI * 2); g.fill();
+    }
+    // the keyhole it guards — light from the wrong side leaks through
+    g.fillStyle = '#05030c';
+    g.beginPath(); g.arc(12, -18, 9, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(8, -14); g.lineTo(16, -14); g.lineTo(20, 8); g.lineTo(4, 8); g.closePath(); g.fill();
+    g.fillStyle = '#d0daff'; g.shadowColor = '#d0daff'; g.shadowBlur = 14;
+    g.beginPath(); g.arc(12, -18, 4, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0;
+    // the knocker: a face after all
+    g.strokeStyle = '#8a7a48'; g.lineWidth = 5;
+    g.beginPath(); g.arc(0, -44, 14, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+    glowEye(g, -8, -52, 4, o.eye); glowEye(g, 8, -52, 4, o.eye);
+  },
+  visitor_leviathan_skull(g, o) {
+    // What Nested Inside: wearing the front room as a helmet
+    // the bone dome, carried off
+    g.fillStyle = '#cfd8c8'; g.strokeStyle = INK; g.lineWidth = 6;
+    g.beginPath(); g.arc(0, -34, 56, Math.PI, 0); g.lineTo(56, -10); g.lineTo(-56, -10); g.closePath();
+    g.fill(); g.stroke();
+    g.strokeStyle = DARK; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(-30, -78); g.lineTo(-22, -50); g.moveTo(18, -84); g.lineTo(24, -52); g.stroke();
+    // the socket it looks out of
+    g.fillStyle = '#181c24';
+    g.beginPath(); g.ellipse(-20, -34, 16, 13, 0.1, 0, Math.PI * 2); g.fill();
+    glowEye(g, -20, -34, 6, '#a6ff57');
+    // the nester below: soft, many-armed, quite comfortable
+    g.fillStyle = o.base; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath(); g.ellipse(0, 24, 44, 34, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.strokeStyle = o.base; g.lineWidth = 8; g.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const x = -44 + i * 22;
+      g.beginPath();
+      g.moveTo(x, 48);
+      g.bezierCurveTo(x - 8, 68, x + 12, 76, x + (i % 2 ? -4 : 8), 88);
+      g.stroke();
+    }
+    // baleen curtain where the two of them meet
+    teeth(g, -40, 40, -10, 9, 12, '#e8eee0');
+    glowEye(g, 16, 14, 5, o.eye);
+  },
 };
 
 export function paintSpecies(g, slug, o) {

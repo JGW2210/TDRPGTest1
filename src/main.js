@@ -12,8 +12,8 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem, fmtV } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS } from './names.js';
-import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS, VISITORS, CRASH_NOTICES } from './names.js';
+import { drawItem, drawMutation, CONSUMABLES, RARITY, ITEMS } from './items.js';
 import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
 import { RoamerSystem } from './roamers.js';
@@ -94,7 +94,7 @@ let restoredRun = false;
     restoredRun = true;
     exploreHintShown = true;
     player.setAppearance(run.appearance, run.appearanceSig);
-    if (run.mutationCount >= 3) openWound({ announce: false });
+    if (run.mutationCount >= 5) openWound({ announce: false });
   }
 }
 
@@ -118,9 +118,10 @@ function refreshHud(tile) {
   ui.setStats(run);
   updateSkyButton(tile);
   audio.setRegionMusic({
-    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    biome: musicBiomeFor(tile, reg), tier: reg.tier, id: reg.id, seed: world.seed,
     town: tile.landmark?.type === 'town' || tile.landmark?.type === 'capital',
   });
+  audio.setVisitorHum(visitorHumFor(tile));
   announceFeats(meta.bump(s => {
     s.maxItems = Math.max(s.maxItems, run.items.length);
     s.maxShards = Math.max(s.maxShards, run.shards);
@@ -316,6 +317,19 @@ function travelTo(target, onArrive = null) {
           setTimeout(tryStart, 400);
         }
       }
+      // the sky finishes its sentence: the last visitor comes down (the
+      // vantage summon above wins ties — arrivalDue stays true for later)
+      if (arrivalDue()) {
+        player.path = [];
+        player.onDone = null;
+        saveNow(true);
+        const tryFall = () => {
+          if (skyEvent || mode !== 'world') return;
+          if (player.isMoving) { setTimeout(tryFall, 250); return; }
+          startArrivalEvent();
+        };
+        setTimeout(tryFall, 600);
+      }
       if ((tile.seamHint || tile.isletHint != null) && !seamNudged.has(keyOf(tile.q, tile.r))) {
         seamNudged.add(keyOf(tile.q, tile.r));
         ui.toast('✸ The shore HUMS beneath your feet — something folded waits in the void. A star-charge detonated here would answer it.', true);
@@ -376,9 +390,15 @@ function skyDefFor(tile) {
   if (!sp) return null;
   const questReady = sp.quest && run.keepsakes.includes(sp.quest.token) && !run.questsDone.has(sp.id);
   const n = run.skyChats[sp.id] || 0;
+  let lines = questReady ? sp.quest.payoff : sp.sets[n % sp.sets.length];
+  // three of the sky's voices notice what fell: one extra line, in worlds
+  // that hold craters (never folded into a quest payoff)
+  if (!questReady && CRASH_NOTICES[sp.id] && world.crashes?.length) {
+    lines = [...lines, CRASH_NOTICES[sp.id]];
+  }
   return {
     id: sp.id, name: sp.name,
-    lines: questReady ? sp.quest.payoff : sp.sets[n % sp.sets.length],
+    lines,
     gift: sp.gift, voice: !!sp.summons, grants: sp.grants,
     quest: questReady ? sp.quest : null,
   };
@@ -443,6 +463,7 @@ function showSkyLine() {
 function advanceSkyEvent() {
   const se = skyEvent;
   if (!se || se.phase !== 'hold') return;
+  if (se.arrival && se.arrival.state !== 'done') return;   // the fall cannot be skipped
   se.idx++;
   if (se.idx < se.def.lines.length) {
     audio.sfxHop?.();
@@ -494,11 +515,88 @@ function advanceSkyEvent() {
     }
     announceFeats(meta.bump(s => { s.errands = (s.errands || 0) + 1; }));
   }
+  if (se.arrival && world.faller) {
+    ui.toast(`☄ <b>${world.faller.def.name}</b> lies in its new crater off `
+      + `${world.regions[world.faller.region]?.name || 'the far coast'} — held in your memory of the map.`, true);
+  }
   saveNow(true);
   se.phase = 'back';
   se.t = 0;
   se.dur = 1.3;
   se.backFrom = { pos: worldCamera.position.clone(), look: se.to.look.clone() };
+}
+
+// ---------------------------------------------- the arrival (the last fall) ---
+// One visitor has not landed when the run begins. When the first warden
+// falls (or 140 hexes have been walked), the sky answers: the camera goes
+// out to watch the fall, the crater surfaces where it lands, and the map
+// remembers the spot. This is the guaranteed fifth change — the Wound can
+// always be opened without luck.
+function arrivalDue() {
+  return world.faller && !world.faller.revealed && !run.fallerArrived
+    && (run.openedGates.size >= 1 || run.hexesVisited.size >= 140);
+}
+
+function startArrivalEvent() {
+  if (skyEvent || mode !== 'world' || player.isMoving) return false;
+  const f = world.faller;
+  if (!f || f.revealed) return false;
+  run.fallerArrived = true;   // even a mid-cinematic reload keeps the landing
+  mode = 'skyEvent';
+  document.body.classList.add('in-skyevent');
+  worldView.setSkyLabelsVisible(false);
+  worldRig.enabled = false;
+  worldRig.velocity.set(0, 0, 0);
+  worldRig.tween = null;
+  worldView.setHighlight(null);
+  ui.tooltip(null);
+  audio.sfxReveal?.();
+  const from = {
+    pos: worldCamera.position.clone(),
+    look: worldRig.focus.clone().add(new THREE.Vector3(0, 0.5, 0)),
+  };
+  const B = new THREE.Vector3(f.center.x, f.center.topY + 0.6, f.center.z);
+  const dir = worldCamera.position.clone().sub(B);
+  dir.y = 0;
+  if (dir.lengthSq() < 1) dir.set(1, 0, 0);
+  dir.normalize();
+  const frame = 30;
+  const to = {
+    pos: B.clone().addScaledVector(dir, frame).add(new THREE.Vector3(0, frame * 0.45, 0)),
+    look: B.clone(),
+  };
+  const hostName = world.regions[f.region]?.name || 'the far coast';
+  skyEvent = {
+    def: {
+      id: 'arrival', name: 'The Sky, Mid-Sentence',
+      lines: [
+        'Light crosses the sky — burning, and keeping no schedule any comet keeps.',
+        `It comes down off the coast of ${hostName}, hard enough to be felt through the page.`,
+        `${f.def.name} has arrived, ${f.def.sub}. Something is already standing guard over it.`,
+      ],
+    },
+    idx: 0, phase: 'out', t: 0, dur: 1.7, from, to, backFrom: null, drift: 0,
+    arrival: { state: 'falling', t: 0, dur: 1.5, target: B, meteor: null },
+  };
+  updateSkyButton(player.tile);
+  saveNow(true);
+  return true;
+}
+
+// the crater surfaces, and the map keeps a memory of roughly where
+function revealArrival() {
+  const tiles = world.revealFaller();
+  if (!tiles) return;
+  worldView.revealHiddenTiles(tiles);
+  worldView.buildEjectaFor([world.crashes[world.crashes.length - 1]]);
+  for (const t of tiles) {
+    worldView.explored.add(keyOf(t.q, t.r));
+    for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+      const n = world.tiles.get(keyOf(nq, nr));
+      if (n && !n.void) worldView.explored.add(keyOf(nq, nr));
+    }
+  }
+  worldView.updateFog(player.tile, { animate: false });
 }
 
 function endSkyEvent() {
@@ -524,9 +622,35 @@ function updateSkyEvent(dt) {
     worldCamera.lookAt(look);
     if (se.t >= 1) {
       se.phase = 'hold';
-      showSkyLine();
+      if (se.arrival) {
+        // the meteor takes the frame before any words do
+        se.arrival.meteor = worldView.makeMeteor(world.faller?.def.glow);
+        se.arrival.meteor.position.copy(se.arrival.target).add(new THREE.Vector3(26, 46, -18));
+      } else {
+        showSkyLine();
+      }
     }
   } else if (se.phase === 'hold') {
+    const ar = se.arrival;
+    if (ar && ar.state !== 'done') {
+      ar.t += dt / (ar.state === 'falling' ? ar.dur : 0.9);
+      if (ar.state === 'falling') {
+        const k = Math.min(1, ar.t);
+        const start = ar.target.clone().add(new THREE.Vector3(26, 46, -18));
+        ar.meteor.position.lerpVectors(start, ar.target, k * k);   // gravity's ease-in
+        if (ar.t >= 1) {
+          worldView.removeMeteor(ar.meteor);
+          worldView.impactBurst(ar.target);
+          audio.sfxDetonate?.();
+          revealArrival();
+          ar.state = 'settling';
+          ar.t = 0;
+        }
+      } else if (ar.t >= 1) {   // settling: the tiles finish popping in
+        ar.state = 'done';
+        showSkyLine();
+      }
+    }
     // a slow, reverent drift while the body speaks
     se.drift += dt;
     const off = se.to.pos.clone().sub(se.to.look);
@@ -877,7 +1001,7 @@ function resolveBargain(site) {
 
 // ------------------------------------------------------------ site actions ---
 
-// Three mutations, and the world admits what it has been hiding.
+// Five mutations, and the world admits what it has been hiding.
 function openWound({ announce = true } = {}) {
   if (run.woundOpen) return;
   run.woundOpen = true;
@@ -886,7 +1010,7 @@ function openWound({ announce = true } = {}) {
   worldView.updateFog(player.tile, { animate: false });
   if (announce) {
     audio.sfxReveal();
-    ui.toast('☒ Your third change is answered. Far past the rim, something TEARS…', true);
+    ui.toast('☒ Your fifth change is answered. Far past the rim, something TEARS…', true);
     ui.toast('☒ <b>The Wound in the Meridian</b> lies open. A scar-tissue bridge waits at the edge of the map.', true);
     ui.toast('☒ What is inside is beyond every warden you have faced. It sent the invitation anyway.', true);
   }
@@ -903,7 +1027,7 @@ function grantItem(item) {
   if (item.mutation) {
     ui.toast('☒ The change goes deeper than cloth. Your paper body remembers a different shape…', true);
     announceFeats(meta.bump(s => { s.mutations = (s.mutations || 0) + 1; }));
-    if (run.mutationCount >= 3) openWound();
+    if (run.mutationCount >= 5) openWound();
   }
   // the hoard marks the wanderer: repaint the paper self if the look changed
   if (run.appearanceSig !== sigBefore) {
@@ -1045,6 +1169,9 @@ function handleAction(site, label, btn) {
         // the deep sky pays in changed flesh: satellite bosses seed mutations
         const m = drawMutation(mulberry32((Math.random() * 2 ** 31) | 0), run.ownedIds);
         if (m) grantItem(m);
+      } : site.subtype === 'crash_guardian' ? () => {
+        ui.toast('☄ The guardian falls. In the crater, the visitor stirs…', true);
+        announceFeats(meta.bump(s => { s.crashes = (s.crashes || 0) + 1; }));
       } : null,
     });
     return;
@@ -1052,6 +1179,63 @@ function handleAction(site, label, btn) {
   if (site.bargain && label === site.bargain.action) {
     resolveBargain(site);
     return;
+  }
+  // The crashed visitor's body: its one set change, offered — or refused for
+  // whatever it clutched in the fall. Either way, the guardian goes first.
+  if (site.subtype === 'crash_body') {
+    const def = VISITORS.find(v => v.id === site.visitor) || VISITORS[0];
+    const tileHere = currentLocalTile || player.tile;
+    const guard = world.getSites(tileHere).find(s => s.subtype === 'crash_guardian');
+    if (guard && !run.clearedSites.has(guard.id)) {
+      ui.modalOutcome(`${def.guardian.name} steps between you and the visitor. The introduction is not optional.`);
+      return;
+    }
+    // the visitor speaks — before, after, and regardless of its gift
+    if (label === 'Listen') {
+      const n = run.skyChats['v_' + def.id] || 0;
+      run.skyChats['v_' + def.id] = n + 1;
+      for (const line of def.sets[n % def.sets.length]) ui.modalOutcome(line);
+      saveNow(true);
+      return;
+    }
+    const mutItem = ITEMS.find(i => i.id === def.mutation);
+    if (!mutItem || run.ownedIds.has(def.mutation)) {
+      ui.modalOutcome('The visitor has given what it came to give. It sleeps now, and the crater keeps it.');
+      return;
+    }
+    if (label === 'Approach the Visitor') {
+      if (!site._offered) {
+        site._offered = true;
+        ui.modalOutcome(`The visitor stirs and offers its change: <b>${mutItem.name}</b> — ${mutItem.desc} `
+          + `A change is forever, and the fifth tears the Wound open. Approach again to accept.`);
+        return;
+      }
+      site._offered = false;
+      grantItem(mutItem);
+      run.clearedSites.add(site.id);
+      refreshHud(player.tile);
+      saveNow(true);
+      return;
+    }
+    if (label === 'Refuse the Gift') {
+      site._offered = false;
+      if (run.clearedSites.has(site.id)) {
+        ui.modalOutcome('The fall’s cargo is already yours. Only the change remains — and the visitor can wait far longer than you can.');
+        return;
+      }
+      run.clearedSites.add(site.id);
+      const rngC = mulberry32(Math.floor(hash2(tileHere.q, tileHere.r, world.seed + 7300) * 0xffffffff));
+      const tier = world.regionOf(tileHere).tier;
+      const got = run.gainShards(12 + tier * 5);
+      const item = drawItem(rngC, world.regionOf(tileHere).dominantBiome, run.ownedIds,
+        { source: 'boss', tier, unlocked: meta.unlockedIds });
+      ui.modalOutcome(`You refuse the change. The visitor, unoffended, lets the fall’s cargo go instead. (+${got} ☆) `
+        + `The change itself remains in the crater, for the day you want it.`);
+      if (item) grantItem(item);
+      refreshHud(player.tile);
+      saveNow(true);
+      return;
+    }
   }
   if (label === 'Refuse') {
     ui.closeModal();
@@ -1391,14 +1575,28 @@ ui.inventoryHandlers = {
   },
 };
 
+// Standing IN one of the deep places sounds like that place, whatever the
+// region around it plays: craters hum, islets tinkle, the Wound is the Wound.
+function musicBiomeFor(tile, reg) {
+  return ['CRASH', 'ISLET', 'WOUND'].includes(tile.biome) ? tile.biome : reg.dominantBiome;
+}
+
+// 1 at a crater's floor, fading to silence four hexes out
+function visitorHumFor(tile) {
+  if (!world.crashes?.length) return 0;
+  const d = Math.min(...world.crashes.map(c => hexDist(tile.q, tile.r, c.center.q, c.center.r)));
+  return d > 4 ? 0 : 1 - d / 5;
+}
+
 // the music of the spheres begins on the first human touch (autoplay policy)
 const bootAudio = () => {
   audio.init();
   const reg = world.regionOf(player.tile);
   audio.setRegionMusic({
-    biome: reg.dominantBiome, tier: reg.tier, id: reg.id, seed: world.seed,
+    biome: musicBiomeFor(player.tile, reg), tier: reg.tier, id: reg.id, seed: world.seed,
     town: player.tile.landmark?.type === 'town' || player.tile.landmark?.type === 'capital',
   });
+  audio.setVisitorHum(visitorHumFor(player.tile));
   updateAudioButton();
 };
 window.addEventListener('pointerdown', bootAudio, { once: true });
@@ -1554,6 +1752,8 @@ window.__vael = {
   },
   startSkyEvent: () => { const def = skyDefFor(player.tile); if (def) startSkyEvent(def); return !!def; },
   advanceSkyEvent,
+  startArrival: () => startArrivalEvent(),   // headless tests fire the fall directly
+  arrivalDue,
   shopOffers: (q, r) => {
     const t = world.tiles.get(q + ',' + r);
     if (!t) return null;
@@ -1569,7 +1769,7 @@ window.__vael = {
     if (!it) return;
     run.addItem(it);
     player.setAppearance(run.appearance, run.appearanceSig);
-    if (it.mutation && run.mutationCount >= 3) openWound();
+    if (it.mutation && run.mutationCount >= 5) openWound();
     refreshHud(player.tile);
     saveNow(true);
   }); },

@@ -25,6 +25,7 @@ export const BIOMES = {
   VERDANT: { name: 'Verdant Drift',   color: 0x3c8a5e, accent: 0x8affc4, deco: 'crystal'},
   SECRET:  { name: 'Hollowed Secret', color: 0x54406e, accent: 0xffd98a, deco: 'crystal'},
   WOUND:   { name: 'The Wound',       color: 0x3a1430, accent: 0xa6ff57, deco: 'crystal'},
+  CRASH:   { name: 'Fallen Shallows', color: 0x35476b, accent: 0xffb46a, deco: 'sea'    },
 };
 
 // ------------------------------------------------------------- satellites ---
@@ -79,6 +80,225 @@ export const ISLETS = [
   },
 ];
 
+// ------------------------------------------------------ crashed visitors ---
+// Ten bodies that did not stay in the sky. One to three of them lie embedded
+// in every world, each in a crater of fallen shallows ringed with its own
+// debris; each came down with a guardian (or grew one on the way), and each
+// carries exactly one set change for whoever survives the introduction.
+
+export const VISITORS = [
+  {
+    id: 'iron_seed',
+    name: 'The Iron Seed',
+    sub: 'dropped, never planted',
+    flavor: 'A riveted ovoid taller than a chapel, split along a single seam. Whatever was meant to grow from it is still inside, holding its breath. It has been holding it a very long time, and it is getting good at it.',
+    guardian: { name: 'The Husk Gardener', role: 'guard',
+      flavor: 'It tends the Seed with hands of bent hull-plate. Watering has not worked. Singing has not worked. It has lately begun considering what a seed this size might want to be fed.' },
+    mutation: 'rivet_skin',
+    sets: [
+      [
+        'Put your ear to the seam. Inside: a heartbeat, spaced like winters.',
+        'It is not waiting to hatch, you realize. It is waiting to be ALLOWED to. Somebody very old said "not yet," and it is still minding them.',
+      ],
+      [
+        'The Gardener polishes the rivets in an order that never varies. Seventeen, then the seam, then seventeen more.',
+        'You realize the polishing is a lullaby. You realize the Seed knows it.',
+      ],
+    ],
+    color: '#aab4c8', glow: '#ffb46a',
+  },
+  {
+    id: 'glasswing',
+    name: 'The Glasswing',
+    sub: 'the head of a comet that lost its argument',
+    flavor: 'The comet came down mid-sentence. Its head survives as a teardrop of green-white glass; its tail lies strewn across the crater as a thousand bright commas. The argument, by all readings, is still going.',
+    guardian: { name: 'The Tailless Rider', role: 'swift',
+      flavor: 'Something rode that comet for an age, steering with its knees. It walked away from the landing. It has not yet forgiven the landing.' },
+    mutation: 'comet_marrow',
+    sets: [
+      [
+        'The glass hums the tail-end of an argument: “…and STILL I say the long way round is faster…”',
+        'Whatever it argued with, it argued about the route. The crater suggests the debate was lost on points.',
+      ],
+      [
+        'Each shard of the strewn tail chimes a slightly different “never.”',
+        'Rearranged rightly, the bright commas might spell the sentence it was halfway through. The Rider forbids rearranging.',
+      ],
+    ],
+    color: '#9fe8d8', glow: '#c9fff0',
+  },
+  {
+    id: 'kneeling_star',
+    name: 'The Kneeling Star',
+    sub: 'it did not crash; it landed, and knelt',
+    flavor: 'Every other visitor fell. This one descended. It rests in its crater in an attitude of perfect genuflection, light pooled around it like spilled prayer. Nobody knows what it is kneeling to. The candidates are all worrying.',
+    guardian: { name: 'The Last Congregant', role: 'mystic',
+      flavor: 'The star came down with a congregation. The others finished their worship and left. This one found something in the liturgy it cannot put down.' },
+    mutation: 'pilgrim_tongue',
+    sets: [
+      [
+        'The pooled light rises and drains in slow breaths, in the rhythm of a litany.',
+        'It is not praying FOR anything, you realize. It is apologizing. Steadily. To someone directly below it.',
+      ],
+      [
+        'The genuflection has deepened by the width of a hair since the last measuring. The Congregant measures daily, and weeps about the arithmetic.',
+        'At this rate it will finish kneeling long after the last page of the world. It seems to know. It kneels anyway.',
+      ],
+    ],
+    color: '#ffd98a', glow: '#fff0c0',
+  },
+  {
+    id: 'patient_egg',
+    name: 'The Egg of Something Patient',
+    sub: 'warm on the side facing away from the sun',
+    flavor: 'A speckled stone egg the size of a watch-tower, sitting in its crater with the smugness of a thing exactly where it means to be. It is warm — but only on the side facing away from Vael, which the scholars agree is the wrong side, and do not discuss further.',
+    guardian: { name: 'The Brood Sentry', role: 'brute',
+      flavor: 'Whatever laid the egg left a sentry. The sentry has waited so long it has begun to think of the egg as its own, which will make the hatching awkward for everyone.' },
+    mutation: 'patient_yolk',
+    sets: [
+      [
+        'Through the shell: a slow settling, like something making itself comfortable for another century.',
+        'It is not growing, you realize. It is CHOOSING — deciding what to be, and declining to be rushed about it.',
+      ],
+      [
+        'The Sentry has scratched tallies into the crater rim. The count runs to the tens of thousands, and the units are not days.',
+        'Beside the newest tally, in smaller, tireder strokes: “any year now.”',
+      ],
+    ],
+    color: '#d8c9a8', glow: '#ffe9b0',
+  },
+  {
+    id: 'chained_choir',
+    name: 'The Chained Choir',
+    sub: 'a meteor wrapped in chains older than its fall',
+    flavor: 'A black meteor bound in seven great chains — and the chains show more wear than the fall could account for. Put an ear to the stone and it hums in close harmony. The chains, one supposes, are the reason it only hums.',
+    guardian: { name: 'The Warden of Links', role: 'guard',
+      flavor: 'Someone forged a warden to keep the chains taut. It does not know what the Choir sings about. It has standing orders never to learn.' },
+    mutation: 'link_vow',
+    sets: [
+      [
+        'Through the links the harmony leaks: nine voices at least, in a chord your ear keeps trying to file under “warning.”',
+        'The song does not want out, you realize. The song IS the out. The chains are for the audience’s protection.',
+      ],
+      [
+        'One link near the base is worn brighter than the rest — kissed smooth, over centuries.',
+        'The Warden denies this hotly, and afterward goes and stands somewhere else.',
+      ],
+    ],
+    color: '#a8b4d8', glow: '#cfd8ff',
+  },
+  {
+    id: 'mirrorshard',
+    name: 'The Sky’s Mirrorshard',
+    sub: 'a piece of sky showing somewhere else’s weather',
+    flavor: 'A shard of the firmament itself, snapped off in the Shattering and fallen point-first into the shallows. It still shows sky — just not this one. The clouds in it move against the wind, and once a day something very large swims across it.',
+    guardian: { name: 'The Reflection That Stayed', role: 'swift',
+      flavor: 'Stand before the shard and your reflection arrives a heartbeat late. This one belonged to somebody who walked away. It has had a long time to practice being them.' },
+    mutation: 'elsewhere_eye',
+    sets: [
+      [
+        'In the shard: rain, elsewhere, falling upward past a coastline this world has never had.',
+        'The very large swimming thing crosses the glass again. It is nearer than last time. In the reflection, so are you.',
+      ],
+      [
+        'Your reflection arrives late, as always — but this time it mouths something first, before matching you.',
+        'You cannot read the words. Your reflection, watching you fail to, clearly could.',
+      ],
+    ],
+    color: '#bfd8ff', glow: '#e6f0ff',
+  },
+  {
+    id: 'burning_anvil',
+    name: 'The Anvil That Fell Burning',
+    sub: 'the forge-heart of an unfinished star',
+    flavor: 'Stars are forged somewhere, on something. This is one of the somethings — an anvil the size of a barrow, still too hot to touch, its face scarred with the first draft of a sun that never went to press.',
+    guardian: { name: 'The Unfinished Work', role: 'brute',
+      flavor: 'The last thing on the anvil came down with it, half-made. It is angry the way only an unfinished thing can be: at everything, and specifically at you, who are finished.' },
+    mutation: 'anvil_arm',
+    sets: [
+      [
+        'Heat with no fire under it. The anvil’s face still rings, faintly, with the last blow that never landed.',
+        'The half-made thing glows brighter when you look straight at it. Unfinished work loves a witness.',
+      ],
+      [
+        'Beneath the failed sun’s first draft, smaller marks are scarred into the face: practice stars. Dozens of them.',
+        'Every smith starts somewhere. Somewhere is scattered across this crater.',
+      ],
+    ],
+    color: '#ff8a5a', glow: '#ffc27a',
+  },
+  {
+    id: 'knotted_star',
+    name: 'The Knotted Star',
+    sub: 'someone tied it; no one has untied it',
+    flavor: 'A small star tied in a knot no sailor will admit to knowing. The knot predates the fall, the fall predates the maps, and the light leaks out along the crossings in thin, indignant lines.',
+    guardian: { name: 'The Untier', role: 'mystic',
+      flavor: 'It has worked at the knot for centuries with fingers grown specifically for the task. It is nearly certain the knot ties something IN. It picks at it anyway. It has to know.' },
+    mutation: 'knot_memory',
+    sets: [
+      [
+        'The light leaking along the crossings pulses in sequence — over, under, over — as if the star is showing you the knot from inside.',
+        'It is not struggling, you realize. It is TEACHING. It has demonstrated the untying, patiently, for centuries, to anyone who leans close.',
+      ],
+      [
+        'The Untier’s newest fingers are shaped precisely for a crossing it has not yet attempted.',
+        'The star’s leak brightens near those fingers — the way a tutor leans, despite themselves, toward a promising student.',
+      ],
+    ],
+    color: '#d79bff', glow: '#eccfff',
+  },
+  {
+    id: 'door_splinter',
+    name: 'A Splinter of the Door',
+    sub: 'it fell when the Door was leaned upon',
+    flavor: 'When the eldest daughter leaned past the Door Ajar, the frame gave — a little. This is the little: one splinter of a door that stands in the sky, buried here point-down like a thrown knife. The grain of it shows hinges all the way through.',
+    guardian: { name: 'The Hinge-Keeper', role: 'guard',
+      flavor: 'Doors have keepers on both sides. When the splinter fell, one came down with it — still keeping, out of principle, a door that is no longer attached to anything.' },
+    mutation: 'threshold_step',
+    sets: [
+      [
+        'Wood that remembers being sky. Hinges run along the grain all the way down — and every one of them is oiled.',
+        'From somewhere inside the splinter, very faint: a hallway. A conversation in it pauses when you lean in.',
+      ],
+      [
+        'Each dusk the Hinge-Keeper polishes the keyhole’s light, then checks the latch of a door that is mostly elsewhere.',
+        'It keeps the splinter locked, you realize — not to keep you out. To keep the hallway’s draft in.',
+      ],
+    ],
+    color: '#9fb0ff', glow: '#d0daff',
+  },
+  {
+    id: 'leviathan_skull',
+    name: 'The Leviathan’s Skull',
+    sub: 'the sky remembers when it swam',
+    flavor: 'Before the Shattering, things swam between the moons the way whales swim between islands. This is the skull of one — vast, bleached by starlight, fallen brow-first so its empty gaze watches the crater rim like a tide line it still expects to turn.',
+    guardian: { name: 'What Nested Inside', role: 'brute',
+      flavor: 'A skull that size does not stay empty. Something moved in, redecorated, and has strong opinions about visitors — being, itself, the second one.' },
+    mutation: 'leviathan_gut',
+    sets: [
+      [
+        'Hold still, and the bone hums: the note the great swimmers struck when the water was about to change.',
+        'The skull is not mourning its body, you realize. It is expecting it back. Bone is patient; tide is tide.',
+      ],
+      [
+        'What Nested Inside has decorated: shell-scrap constellations glued across the vault of the brow, in the old sky’s arrangement.',
+        'One constellation is wrong — four stars where every map says three. The nester insists. The nester was THERE.',
+      ],
+    ],
+    color: '#cfd8c8', glow: '#f0f5e8',
+  },
+];
+
+
+// When a world holds crashed visitors, three of the sky's voices notice —
+// one extra line folded onto whichever dialogue set plays (main.js appends
+// these at runtime; quest payoffs are never interrupted).
+export const CRASH_NOTICES = {
+  sun: 'And little page — not everything that fell in the breaking was mine. Count the craters. I did not invite those guests, and I cannot read what they offer you.',
+  third_sister: 'Some of what fell past my watch in the breaking was not falling. It was arriving. I marked where each of them came down. So should you.',
+  door_ajar: 'From the hinge-side, barely: “…some of what came through did not use the door.”',
+};
+
 // ------------------------------------------------------ cosmic landmarks ---
 
 export const CELESTIALS = {
@@ -130,6 +350,8 @@ export const FOES = {
   SECRET:  [{ n: 'Hoard Mimic', r: 'brute' }],
   ISLET:   [{ n: 'Bridge Haunt', r: 'mystic' }, { n: 'Star Remora', r: 'swift' }],
   WOUND:   [{ n: 'Meridian Leech', r: 'swift' }, { n: 'Unfolded Pilgrim', r: 'mystic' }, { n: 'The Choir Below', r: 'brute' }],
+  // fallen shallows scavengers: species that follow anything that falls
+  CRASH:   [{ n: 'Star Remora', r: 'swift' }, { n: 'Rockslide Gremlin', r: 'brute' }, { n: 'Toll Wraith', r: 'mystic' }],
 };
 
 // species slug for art lookup: 'Sun-Bleached Revenant' -> 'sun_bleached_revenant'

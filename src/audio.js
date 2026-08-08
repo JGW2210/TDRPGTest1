@@ -41,6 +41,14 @@ const MUSIC = {
              mode: [0, 2, 4, 6, 7, 9, 11], timbre: 'pluck', pulse: 1.25 }, // c blooms on iii9
   SECRET:  { root: 42, a: [0, 3, 6, 9, 15],  b: [0, 3, 6, 10, 16],  c: [-3, 3, 6, 12, 15],
              mode: [0, 3, 6, 9], timbre: 'bell', pulse: 2.2 },            // c sinks the diminished floor
+  // the three deep identities own their sound outright: `own` keeps the
+  // tier>=4 DARK swap from erasing an authored palette (dread still applies)
+  WOUND:   { root: 36, a: [0, 1, 6, 8, 13],  b: [0, 3, 6, 11, 13],  c: [-1, 1, 6, 12, 18],
+             mode: [0, 1, 3, 6, 8, 10], timbre: 'dark', pulse: 2.8, own: true },  // the seam's key: b2 over a tritone floor
+  CRASH:   { root: 39, a: [0, 2, 7, 12, 14], b: [-1, 5, 7, 12, 16], c: [0, 3, 7, 10, 14],
+             mode: [0, 2, 3, 7, 10], timbre: 'bell', pulse: 2.6, own: true },     // the visitors' hum: sus2 bent flat at the edges
+  ISLET:   { root: 57, a: [0, 4, 7, 12],     b: [0, 5, 9, 12],      c: [-3, 2, 7, 12],
+             mode: [0, 2, 4, 7, 9], timbre: 'bell', pulse: 0.9, own: true },      // a music-box over near-silence
 };
 // deep pockets sour toward dread: tier >= 4 swaps the whole palette; below
 // that, detune / filter dimming / the sub-rumble scale smoothly with `dread`
@@ -148,10 +156,28 @@ class AudioEngine {
     w1.start(); w2.start();
     this.warmOscs = [w1, w2];
 
+    // the visitors' hum: a deep detuned pair that swells near crash craters
+    this.humGain = ctx.createGain(); this.humGain.gain.value = 0;
+    const h1 = ctx.createOscillator(); h1.type = 'sine'; h1.frequency.value = 49;
+    const h2 = ctx.createOscillator(); h2.type = 'triangle'; h2.frequency.value = 49; h2.detune.value = 14;
+    const hg = ctx.createGain(); hg.gain.value = 0.5;
+    h1.connect(hg); h2.connect(hg);
+    hg.connect(this.humGain).connect(this.droneBus);
+    h1.start(); h2.start();
+    if (this._pendingHum) this.setVisitorHum(this._pendingHum);
+
     this.started = true;
     this._tick = setInterval(() => this._scheduler(), 1000);
     this._chordTimer = 0;
     if (this.currentDef) this._applyChord(this.currentDef, 4);
+  }
+
+  // How near the wanderer stands to something that fell: 0 = out of earshot,
+  // 1 = at the crater floor. Called on every hop by main.js.
+  setVisitorHum(level) {
+    this._pendingHum = level;
+    if (!this.started || !this.humGain) return;
+    this.humGain.gain.setTargetAtTime(0.055 * Math.max(0, Math.min(1, level)), this.ctx.currentTime, 1.4);
   }
 
   setEnabled(on) {
@@ -178,7 +204,7 @@ class AudioEngine {
     if (key === this.regionKey) return;
     this.regionKey = key;
     const base = MUSIC[biome] || MUSIC.MEADOW;
-    const dark = tier >= 4;
+    const dark = tier >= 4 && !base.own;   // authored deep palettes stand
     const dread = Math.max(0, Math.min(1, (tier - 1) / 4)); // sours from tier 2 up
     this.currentDef = {
       root: base.root - (dark ? 2 : 0),
