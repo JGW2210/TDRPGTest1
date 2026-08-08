@@ -118,6 +118,7 @@ export const CONFIG = {
     // press. Traps mix in at depth — press one and the feint bites.
     lanes: {
       fall: 0.95,          // seconds a note takes to descend (round 20: faster again)
+      tierFall: 0.03,      // each foe tier clips the fall this much shorter (round 21)
       lead: 0.38,          // panel coalesces this long before the first note
       perfectWin: 0.07,    // |Δt| from the hit-line for a PERFECT
       goodWin: 0.15,       // |Δt| for a good press

@@ -501,6 +501,23 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    the new lane speed — if it plays too hot, raise `lanes.fall` before
    shrinking the window height.
 
+21. **Tier-clipped falls** (direct user instruction): every foe tier clips
+   the lane note fall by a flat **0.03s** (`lanes.tierFall`, applied to
+   the base before player modifiers, floored at 0.55s so the deepest sky
+   stays readable) — STACKED on the existing gentle `speed` divisor
+   (1 + tier·0.04 + crush/heavy + chill), so tier is now the dominant
+   timing-difficulty axis. Plain-attack falls: t0 0.95 → t1 0.885 →
+   t4 0.72 → t6 0.62 → t8 0.54; a tier-6 crush leap runs 0.50s. noteSlow
+   relics and brace/poise counterweigh, and matter more with depth.
+   Verified in live battles (t1 0.885 exact; t6 crush 0.500 exact —
+   confirms both the subtraction and the divisor). Rode along: HOTFIX
+   for a round-20 crasher — `_resolveTiming`'s pressed-miss branch still
+   referenced the deleted `bonus` (any pressed strike-bar miss threw a
+   ReferenceError; round-20's all-perfect autoplay never walked that
+   path). BUILD is 21. Untested by humans: whether 0.03/tier over the
+   deep sky (t6-8) overshoots — ease `lanes.tierFall` before touching
+   base `fall`.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.

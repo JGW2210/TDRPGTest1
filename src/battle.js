@@ -488,7 +488,7 @@ export class BattleSystem {
     if (t >= this.zones.p0 && t <= this.zones.p1) { grade = 'perfect'; mult = CONFIG.battle.perfectMult; }
     else if (this.timingKind !== 'dodge' && t >= this.zones.g0 && t <= this.zones.g1) {
       grade = 'good'; mult = CONFIG.battle.goodMult;
-    } else { grade = 'miss'; mult = CONFIG.battle.missMult + bonus * 0.5; }
+    } else { grade = 'miss'; mult = CONFIG.battle.missMult; }
     this.timingResolve({ grade, mult });
   }
 
@@ -1203,7 +1203,9 @@ export class BattleSystem {
       const widen = (this.braced ? 1.5 : 1) * (this.poise ? 1.25 : 1);
       const slow = (1 + Math.min(0.4, run.flags.noteSlow || 0))
         * (this.braced ? 1.28 : 1) * (this.poise ? 1.15 : 1);
-      const fall = L.fall * slow / Math.max(0.6, speed);
+      // depth is read in the hands: every tier of foe clips the fall 0.03s
+      // shorter (floored so the deepest sky stays humanly readable)
+      const fall = Math.max(0.55, L.fall - tier * (L.tierFall || 0)) * slow / Math.max(0.6, speed);
       // pattern shape: flurries ride one note per swing; a single blow
       // falls as 1–3 notes with the depth of the region
       const perSwing = crush || swings > 1 ? 1 : 1 + (tier >= 2 ? 1 : 0) + (tier >= 4 ? 1 : 0);
