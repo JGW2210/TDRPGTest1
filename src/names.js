@@ -83,16 +83,16 @@ export const ISLETS = [
 
 export const CELESTIALS = {
   giant: { name: 'Thal-Vaur, the Sleeping Giant', sub: 'it has not turned over in an age' },
-  comet: { name: 'The Errand', sub: 'always going, never arriving' },
+  comet: { id: 'errand', name: 'The Errand', sub: 'always going, never arriving' },
   shattermoons: [
-    { name: 'The Sundered Daughter', sub: 'a moon that argued with the tide' },
-    { name: 'Grief-of-Glass', sub: 'still falling, very slowly' },
+    { id: 'm_sundered', name: 'The Sundered Daughter', sub: 'a moon that argued with the tide' },
+    { id: 'm_grief', name: 'Grief-of-Glass', sub: 'still falling, very slowly' },
   ],
   constellations: [
-    { name: 'The Ferryman', sub: 'constellation' },
-    { name: 'The Spilled Cup', sub: 'constellation' },
-    { name: 'The Patient Hound', sub: 'constellation' },
-    { name: 'The Second Cartographer', sub: 'constellation' },
+    { id: 'c_ferryman', name: 'The Ferryman', sub: 'constellation' },
+    { id: 'c_cup', name: 'The Spilled Cup', sub: 'constellation' },
+    { id: 'c_hound', name: 'The Patient Hound', sub: 'constellation' },
+    { id: 'c_cartographer', name: 'The Second Cartographer', sub: 'constellation' },
   ],
 };
 
@@ -373,7 +373,7 @@ const MYSTERY_OUTCOMES = [
   { text: 'It was a trap, of the polite kind. You pay the toll and are complimented on your grace.', shards: -5 },
   { text: 'A voice explains, at length, the arrangement of the heavens. You emerge older but luckier.', shards: 0, boon: { id: 'starlore', name: 'Starlore', stats: { luck: 4 } } },
   { text: 'Something small and cold climbs into your pack and refuses to leave. It seems protective.', shards: 0, boon: { id: 'small_cold', name: 'A Small Cold Companion', stats: { dodge: 4 } } },
-  { text: 'You touch it. The world flinches. Somewhere a bell you cannot hear stops ringing.', shards: 0, hp: -4 },
+  { text: 'You touch it. The world flinches. Somewhere a bell you cannot hear stops ringing.', shards: 0, hp: -1 },
 ];
 
 // ------------------------------------------------- sacrifice bargains ---
@@ -390,14 +390,14 @@ export const BARGAINS = [
   {
     id: 'tithe_stone', name: 'The Tithe-Stone',
     flavor: 'A basalt altar with a bowl worn smooth by centuries of palms. The inscription is one word: MORE. It wants blood, or what passes for it in paper.',
-    cost: { hp: 8 }, gain: { boon: { id: 'tithe_edge', name: 'Tithe-Sharpened Edge', stats: { atk: 2 } } },
-    action: 'Bleed into the bowl (−8 HP)',
+    cost: { hp: 2 }, gain: { boon: { id: 'tithe_edge', name: 'Tithe-Sharpened Edge', stats: { atk: 2 } } },
+    action: 'Bleed into the bowl (−1★)',
   },
   {
     id: 'moth_court', name: 'The Court of Moths',
     flavor: 'A thousand moths arranged in the shape of a judge. They will trade fortune for warmth — a piece of your flame, forever this run.',
-    cost: { maxHP: 4 }, gain: { boon: { id: 'moth_favor', name: 'The Moths’ Favor', stats: { luck: 10, dodge: 5 } } },
-    action: 'Give up your warmth (−4 max HP)',
+    cost: { vessel: 2 }, gain: { boon: { id: 'moth_favor', name: 'The Moths’ Favor', stats: { luck: 10, dodge: 5 } } },
+    action: 'Give up your warmth (−1 Star Vessel)',
   },
   {
     id: 'unlit_door', name: 'A Door, Priced',
@@ -419,86 +419,434 @@ export const BARGAINS = [
 export const SHRINE_BOONS = [
   { id: 'pilgrim_stride', name: 'Pilgrim’s Stride', cost: { shards: 14 }, boon: { stats: { spd: 2 } },
     line: 'The shrine blesses your steps: the road will be shorter, both ways.' },
-  { id: 'lantern_heart', name: 'Lantern Heart', cost: { shards: 14 }, boon: { stats: { maxHP: 6 } },
+  { id: 'lantern_heart', name: 'Lantern Heart', cost: { shards: 14 }, boon: { stats: { vessel: 1 } },
     line: 'A small light takes up residence behind your chest-rune.' },
   { id: 'keen_omen', name: 'Keen Omen', cost: { shards: 16 }, boon: { stats: { luck: 6 } },
     line: 'The shrine shows you, briefly, where everything is going to be.' },
-  { id: 'wardens_grace', name: 'Warden’s Grace', cost: { hp: 6 }, boon: { stats: { dodge: 6 } },
+  { id: 'wardens_grace', name: 'Warden’s Grace', cost: { hp: 2 }, boon: { stats: { dodge: 6 } },
     line: 'The shrine takes a little of your ink and redraws your outline, slightly to the left of danger.' },
   { id: 'sharpened_meridian', name: 'Sharpened Meridian', cost: { shards: 20 }, boon: { stats: { atk: 2 } },
     line: 'The shrine hones your shadow to an edge.' },
 ];
 
 // ------------------------------------------------ voices in the sky ---
-// Standing on a vantage hex beneath a celestial body earns its attention.
+// Every named body in the sky can be beheld from its vantage hex. Each
+// speaker carries 2–3 SETS of dialogue that cycle per visit (never the
+// same twice running), and together they converge on the one story:
+// Vael burned alone and folded daughters from its light; the Meridian —
+// the seam lacing sky to sea — held the world as one page; the eldest
+// daughter leaned past the Door Ajar, something answered through her
+// (the Wound), the seam snapped, and most of the daughters shattered.
+// The wanderer is the newest page folded from the Meridian's book, sent
+// to re-thread the world. Some speakers hide an errand in their FIRST
+// set — a clue, never a prompt; carry the named keepsake back to them
+// and the story pays out.
+//
+// def: { id, name, sets:[[lines]], summons?, gift?, quest? }
+//   summons — the original four voices still arrest you on first arrival
+//   gift    — granted once per run when a summoning voice first finishes
+//   quest   — { token, payoff:[lines], reward } — played instead of a
+//             set when the keepsake is carried; reward keys are handled
+//             in main.js (vessel | boon | astral)
 
-export const SKY_VOICES = [
+export const SKY_SPEAKERS = [
   {
-    id: 'giant', name: 'Thal-Vaur, the Sleeping Giant',
-    lines: [
-      '…you are standing on my dream again.',
-      'Little wick. When I turn over, mind the tide of hills.',
-      'Sleep is a country. I am its king. Go quietly.',
-    ],
+    id: 'giant', name: 'Thal-Vaur, the Sleeping Giant', summons: true,
     gift: { shards: 6 },
+    sets: [
+      [
+        '…you are standing on my dream again.',
+        'Little wick. When I turn over, mind the tide of hills.',
+        'Sleep is a country. I am its king. Go quietly.',
+      ],
+      [
+        'Before the daughters there was my dream, and before my dream there was nothing worth waking for. Vael folded them of light; I dreamed them somewhere to stand. We do not compare labor.',
+        'The breaking reached me as weather. I slept through the end of the world. I recommend it.',
+      ],
+      [
+        'The Wound gnaws at the seam that laces my dream to your ground.',
+        'If it frays through, little wick — wake me. You will know how. Everyone knows how. No one has dared.',
+      ],
+    ],
   },
   {
-    id: 'third_sister', name: 'The Third Sister',
-    lines: [
-      'My siblings shattered and I did not. Do you know why? Neither do I.',
-      'I have watched every wanderer since the breaking. You walk like the fourth one. She made it further than most.',
-    ],
+    id: 'third_sister', name: 'The Third Sister', summons: true,
     gift: { boon: { id: 'sisters_eye', name: 'The Sister’s Eye', flags: { visionPlus: 1 } } },
+    quest: {
+      token: 'sister_shard',
+      payoff: [
+        '…oh. Oh, she is warm. She was always warm, even mid-argument.',
+        'You give a sister back a piece of her sister, and ask nothing. So take something anyway.',
+        'The sky keeps its instruments sharp. You are one of ours now.',
+      ],
+      reward: 'astral',
+    },
+    sets: [
+      [
+        'My siblings shattered and I did not. Do you know why? Neither do I.',
+        'I have watched every wanderer since the breaking. You walk like the fourth one. She made it further than most.',
+        'If your road passes the Sundered Daughter — my sister, in seven pieces — bring me a splinter of her. I would hold her hand once more. Even a knuckle of it.',
+      ],
+      [
+        'We were four who kept the near sky: the eldest at the Door, the Pale at the tides, the Sundered at the argument, and I at the watch.',
+        'I watched. That is all I did. That is the whole of what I did.',
+      ],
+      [
+        'The eldest leaned past the Door because something on the far side said her name in our mother’s voice.',
+        'Nothing on the far side had a mother. Remember that, when a thing knows your name.',
+      ],
+    ],
   },
   {
-    id: 'ferry_lantern', name: 'The Ferry Lantern',
-    lines: [
-      'The ferryman hung me here and went to find his river. Hold your course; I am watching your feet.',
-      'Left at the rift. He always said that. Left at the rift.',
-    ],
+    id: 'ferry_lantern', name: 'The Ferry Lantern', summons: true,
     gift: { shards: 4 },
+    quest: {
+      token: 'ferrymans_oar',
+      payoff: [
+        '…that is his oar. That is HIS OAR. Hold it up — no, higher.',
+        'There. He will know the shape of it against my light from anywhere in the world.',
+        'Go with the current, wanderer. You have made a lantern useful again.',
+      ],
+      reward: 'boon',
+      boon: { id: 'ferrymans_blessing', name: 'The Ferryman’s Blessing', stats: { spd: 1 }, flags: { fastTravel: true } },
+    },
+    sets: [
+      [
+        'The ferryman hung me here and went to find his river. Hold your course; I am watching your feet.',
+        'Left at the rift. He always said that. Left at the rift.',
+        'If you ever walk a river to its end and find an oar laid down — bring it beneath me. I will burn the way home for him.',
+      ],
+      [
+        'He rowed the daughters’ light down every river the Meridian inked. Passengers of light, and he never once tipped a fare into the sea.',
+        'The rivers scattered at the breaking. A ferryman without his river is just a man holding the sky’s smallest fire.',
+      ],
+    ],
   },
   {
-    id: 'door_ajar', name: 'A Door, Ajar (in the sky)',
-    lines: [
-      'From the other side: the smell of bread, and a conversation that pauses when you look up.',
-      '…no. Not yet. But it is kind of you to knock.',
-    ],
+    id: 'door_ajar', name: 'A Door, Ajar (in the sky)', summons: true,
     gift: null,
+    sets: [
+      [
+        'From the other side: the smell of bread, and a conversation that pauses when you look up.',
+        '…no. Not yet. But it is kind of you to knock.',
+      ],
+      [
+        'Through the gap: a hallway, and hung along it, portraits of five daughters. One frame is empty.',
+        'The nail is bent, as if the picture was taken down in a hurry.',
+        'You did not open this door. It has been ajar since she went through. Doors remember who leaned on them last.',
+      ],
+      [
+        'The bread smell is bait, something whispers from the hinge-side.',
+        'The pause in the conversation is a held breath. Knock less.',
+      ],
+    ],
   },
-];
-
-// ---------------------------------------------------------- sky gazes ---
-// Standing on a wandering world, its body hangs close enough to study.
-// These are quieter than the SKY_VOICES — no gift, no summons; the view
-// waits to be chosen, and can be chosen again.
-
-export const SKY_GAZES = [
+  // ---- the quiet vantages: beheld at will, never a summons --------------
+  {
+    id: 'sun', name: 'Vael, the Undying Sun',
+    quest: {
+      token: 'fallen_spark',
+      payoff: [
+        '…my spark. You carried it gently, and it remembers being mine.',
+        'Then take a vessel of my keeping — a small star, fired hollow.',
+        'Fill it with staying alive.',
+      ],
+      reward: 'vessel',
+    },
+    sets: [
+      [
+        'Little page. Stand out of my light; you are too flammable for a long audience.',
+        'I burned alone before the daughters. I do not recommend it. The sky echoes, and the echo is you.',
+        'In the breaking I shed sparks. The fire-mountain hoards one still, in the deep vault its keeper guards. Bring my spark home, and I will kindle you a vessel to carry it in.',
+      ],
+      [
+        'You wear a binding-rune. I remember when it was written the first time — the ink was my noon, thinned with the sea.',
+        'I made the daughters from my own light, because my reflection was lonely company. Do not tell them. They believe they were always.',
+      ],
+      [
+        'I do not set. If I set, the page turns.',
+        'And I am not finished reading you.',
+      ],
+    ],
+  },
+  {
+    id: 'errand', name: 'The Errand',
+    sets: [
+      [
+        'It slows, fractionally, as if noticing you — the way a courier nods without stopping.',
+        'Its satchel of ice has been sealed since the world was one page. Whatever it carries, it was signed for.',
+      ],
+      [
+        'They say the First Cartographer posted it before the breaking, addressed to the far side of the Door.',
+        'It is still going. The Door is still ajar. Neither will yield first.',
+        'You could swear it waved.',
+      ],
+      [
+        'One day it will arrive, and the sky will have to decide what it was carrying all along.',
+      ],
+    ],
+  },
+  {
+    id: 'c_ferryman', name: 'The Ferryman',
+    sets: [
+      [
+        'Five stars in the shape of a man leaning on an oar. The sky drew him from memory, and missed him while drawing.',
+        'He carried the daughters’ light down the rivers, once. The Meridian’s ink runs to the sea, and someone had to row it.',
+      ],
+      [
+        'When the seam snapped, the rivers scattered like dropped string. He hung his lantern in the sky and went to find his water on foot.',
+        'The constellation leans. Whatever he is now, some part of him is still listening for a current.',
+      ],
+      [
+        'LEFT AT THE RIFT, the stars seem to spell. It is either directions or an epitaph.',
+      ],
+    ],
+  },
+  {
+    id: 'c_cup', name: 'The Spilled Cup',
+    sets: [
+      [
+        'A tilted bowl of stars, forever pouring. What it spills does not fall — it hangs, and glows, and is drunk by the grass at dawn.',
+        'Star-dew is the spill. Every drop you have ever tasted left this cup before the breaking.',
+      ],
+      [
+        'It held the first water — the sea the daughters were washed in when Vael folded them warm.',
+        'The breaking knocked it over. It has not stopped pouring since, and it is not empty yet.',
+      ],
+      [
+        'Some nights the cup rights itself a degree. Nobody speaks of it, in case it stops.',
+      ],
+    ],
+  },
+  {
+    id: 'c_hound', name: 'The Patient Hound',
+    sets: [
+      [
+        'A dog of stars, sitting. Not lying down — sitting. Waiting is work, and it is working.',
+        'It belonged to the eldest daughter. It watched her lean past the Door, and it has faced that quarter of the sky ever since.',
+      ],
+      [
+        'It does not howl. A howl is for grief, and the Hound has not agreed to grieve. She went through a door; doors open twice.',
+        'When you stand here, its head tilts a fraction toward you. You smell faintly of her ink.',
+      ],
+    ],
+  },
+  {
+    id: 'c_cartographer', name: 'The Second Cartographer',
+    sets: [
+      [
+        'Stars in the shape of someone drawing — arm out, forever mid-line.',
+        'The First Cartographer drew the Meridian itself: one clean seam, sky laced to sea. The world was the map. Then the seam snapped, and the First put down the pen.',
+      ],
+      [
+        'The Second maps what broke. Every island, every rift, every warded ford — redrawn nightly, patiently, wrong by morning.',
+        'Your memory of the hexes you have walked — the way the fog keeps them — that is the Second’s hand, sketching along behind you.',
+      ],
+      [
+        'Two cartographers, one map, no argument: the First drew what should be, the Second draws what is.',
+        'You walk the difference.',
+      ],
+    ],
+  },
+  {
+    id: 'm_sundered', name: 'The Sundered Daughter',
+    grants: 'sister_shard',   // a splinter falls into your hand at first behold
+    sets: [
+      [
+        'A moon in seven pieces, holding formation out of habit. The cracks glow faintly, like a letter read too often.',
+        'She argued with the tide — refused to let the sea go when the seam snapped, and held on until holding on was what broke her.',
+        'A splinter of her drifts down, slow as a decision, and lands in your open hand. It is warm. You keep it.',
+      ],
+      [
+        'The pieces keep her shape. On some nights they drift a hair closer together, as if she is remembering how.',
+        'The Third Sister watches this quarter of the sky more than any other. Sisters know which grief is theirs.',
+      ],
+      [
+        'Hold the splinter up: it hums toward the rest of her.',
+        'Everything broken keeps one wish.',
+      ],
+    ],
+  },
+  {
+    id: 'm_grief', name: 'Grief-of-Glass',
+    sets: [
+      [
+        'A shattered moon falling so slowly that falling has become a place to live.',
+        'She was the youngest. She shattered last — not from the snap, but from watching it. Glass breaks at the sound of glass.',
+      ],
+      [
+        'Her pieces are mirrors. In each one, a different sky — some whole, some worse. She is deciding which one to land in.',
+        'Do not look too long. One of the reflections looks back, and it prefers you to the view.',
+      ],
+    ],
+  },
+  // ---- the wandering worlds, beheld from their own ground ---------------
   {
     id: 'luna', name: 'The Pale Daughter',
-    lines: [
-      'She hangs close enough to touch — a silver daughter, her craters like thumbprints in unfired clay.',
-      'The tide she keeps has no sea left to pull. She pulls anyway. Somewhere beneath your feet, the dust obeys.',
-      'Her light settles on your shoulders like a hand that has decided not to weigh anything.',
+    sets: [
+      [
+        'She hangs close enough to touch — a silver daughter, her craters like thumbprints in unfired clay.',
+        'The tide she keeps has no sea left to pull. She pulls anyway. Somewhere beneath your feet, the dust obeys.',
+        'Her light settles on your shoulders like a hand that has decided not to weigh anything.',
+      ],
+      [
+        'Her sea dried when the seam snapped — the Meridian was its bed, and beds do not survive their rivers.',
+        'She keeps the tide anyway. Duty outlives its object; ask any lighthouse.',
+      ],
+      [
+        'She was made second, and kindest. When the eldest went through the Door, the Pale Daughter pulled the sea up over the world’s shoulders like a blanket.',
+        'It was not enough. It was still kind.',
+      ],
     ],
   },
   {
     id: 'rubidus', name: 'Rubidus, the Rust Wanderer',
-    lines: [
-      'The red wanderer turns overhead, wearing its two rings like argument and rebuttal.',
-      'Flakes of oxidized sky drift down so slowly they may never land. The ground here is the color of patience.',
-      'Something inside it still cycles — one great piston-beat, once an age. You feel it in your teeth.',
+    sets: [
+      [
+        'The red wanderer turns overhead, wearing its two rings like argument and rebuttal.',
+        'Flakes of oxidized sky drift down so slowly they may never land. The ground here is the color of patience.',
+        'Something inside it still cycles — one great piston-beat, once an age. You feel it in your teeth.',
+      ],
+      [
+        'It is no daughter. It wandered in from a sky that ended, wearing its rings like luggage straps, and Vael let it stay.',
+        'The sun is not lonely by choice. But it is hospitable by nature.',
+      ],
+      [
+        'The Oxidized King below dreams of being this world’s heart again.',
+        'The planet’s actual heart beats once an age, and wants nothing. That is why it is still beating.',
+      ],
     ],
   },
   {
     id: 'viridian', name: 'The Viridian Comet',
-    lines: [
-      'A garden falls forever above you, its frozen tail streaming like a hedge that lost an argument with the wind.',
-      'Seeds ride the tail. Some have waited ten thousand years for soil. One of them has noticed yours.',
-      'The green head flares gently as it turns — a lighthouse for things that grow.',
+    sets: [
+      [
+        'A garden falls forever above you, its frozen tail streaming like a hedge that lost an argument with the wind.',
+        'Seeds ride the tail. Some have waited ten thousand years for soil. One of them has noticed yours.',
+        'The green head flares gently as it turns — a lighthouse for things that grow.',
+      ],
+      [
+        'The comet-garden was seeded from the Spilled Cup — one drop, one seed, ten thousand years of falling.',
+        'Patience is a green thing.',
+      ],
+      [
+        'When the world is bound whole again, they say, the Long Fall ends in soil.',
+        'Every seed in the tail is aimed at that promise.',
+      ],
     ],
   },
 ];
+
+// ------------------------------------------------- drowned celestials ---
+// Bodies that fell into the water and stayed. Each is a landmark hex in
+// the shallows with cycling dialogue; some hold a keepsake or a small
+// mercy. Their one-time effects are keyed by main.js on first Listen.
+
+export const DROWNED = [
+  {
+    id: 'drowned_star', name: 'The Drowned Star', sub: 'face-down in the silt',
+    quest: { token: 'star_name_page', action: 'Read Her Name', reward: 'astral' },
+    payoff: [
+      'You unfold the ledger page. Beneath a sketch of a falling light: her name. You read it aloud, and the water carries it down like a coin.',
+      'The star turns over. The lake glows gold to its floor. I was HER, she says. I was her. And I am again.',
+      'She presses something up through the water between you: her thanks, folded small, and blazing.',
+    ],
+    sets: [
+      [
+        'Below the surface: a star, face-down in the silt, its light thinned to a coin’s worth. It notices your shadow and stirs.',
+        'I fell whole, it says, through the crack the breaking made — and the water closed over my name. I had one. It had three syllables. The fish wear it now.',
+        'The watchers on the torn hill wrote us all in a brass-eyed ledger before the fall. If my name is anywhere, it is there. Read it to me, and I will remember the rest.',
+      ],
+      [
+        'Names are how light finds its way home, it murmurs. Yours is stitched on your chest, little page. Guard the thread.',
+      ],
+      [
+        'The water is kind, in the way of things with no bones. But kindness is not a name.',
+      ],
+    ],
+  },
+  {
+    id: 'ferry_river', name: 'The Ferryman’s Mooring', sub: 'a river’s end, an oar laid down',
+    grants: 'ferrymans_oar',
+    sets: [
+      [
+        'A river ends here — or begins; the water is coy about direction. A mooring post leans in the shallows, a flat boat tied to nothing.',
+        'Across the seat: an oar, laid down the way a tired man sets a tool he means to pick back up.',
+        'You take the oar. The river does not object. Somewhere overhead, a lantern burns a fraction brighter.',
+      ],
+      [
+        'The boat waits with the patience of furniture. The current combs the reeds.',
+        'Any moment now, the water seems to say. Any moment now.',
+      ],
+    ],
+  },
+  {
+    id: 'mirror_font', name: 'The Mirror-Font', sub: 'the sky will not look at it',
+    mercy: 'heal',
+    sets: [
+      [
+        'A round basin of starlit water, still as held breath. The sky refuses to look at it directly.',
+        'This is where Vael first saw itself, before the daughters — and found the reflection unbearable company. Creation is what a lonely fire does with a mirror.',
+        'You look. For one moment your reflection has five sisters standing behind it. Then it is only you — which is almost the same thing.',
+      ],
+      [
+        'The font shows what is whole. Lean over it, and it insists — briefly, generously — that you are.',
+      ],
+    ],
+  },
+  {
+    id: 'salt_bell', name: 'The Salt Bell', sub: 'its mouth full of sea',
+    mercy: 'shards',
+    sets: [
+      [
+        'A great bell lies half-sunk in the shallows, greened bronze, its mouth full of sea.',
+        'It rang the tides for the Pale Daughter — flood, ebb, and the third ring: the one for weather that was really a warning about the sky.',
+        'It rang once more, the day the seam snapped — so hard it jumped its tower and walked here on the sound. Bells take breaking personally.',
+      ],
+      [
+        'Put your ear to the bronze. The third ring is still in there, circling, waiting for someone to need warning.',
+      ],
+    ],
+  },
+  {
+    id: 'first_rain', name: 'The First Rain', sub: 'hanging, unfallen',
+    mercy: 'dew',
+    sets: [
+      [
+        'Rain hangs above the water, unfallen — a held shower of bright drops, each one round as a beginning.',
+        'When the daughters shattered, Vael wept exactly once. Being fire, it wept upward. The rain has been deciding where to land ever since.',
+        'One drop settles into your flask — cool, and impossibly heavy.',
+      ],
+      [
+        'The rain waits. Grief is patient here: it will fall on the day the world is bound whole,',
+        'and it will be the kind of rain gardens argue about for a thousand years.',
+      ],
+    ],
+  },
+];
+
+// ------------------------------------------------------- keepsakes ---
+// Statless tokens for the sky's errands. Never prompted — each is named
+// only inside a speaker's first dialogue set.
+
+export const KEEPSAKES = {
+  fallen_spark: {
+    name: 'A Fallen Spark', icon: '🜂',
+    desc: 'A coal of the sun’s own noon, cool to every hand but one. Vael misses it.',
+  },
+  star_name_page: {
+    name: 'A Ledger Page', icon: '⎘',
+    desc: 'Torn from the observatory’s brass-eyed ledger. Under a sketch of a falling light, a name in careful ink.',
+  },
+  ferrymans_oar: {
+    name: 'The Ferryman’s Oar', icon: '⑃',
+    desc: 'Worn smooth by a thousand crossings of light. Laid down, never abandoned. The lantern would know it anywhere.',
+  },
+  sister_shard: {
+    name: 'A Splinter of the Sundered Daughter', icon: '☽',
+    desc: 'A warm sliver of a broken moon. It hums toward its sisters — all of them.',
+  },
+};
 
 // ------------------------------------------------------ nebula sites ---
 
@@ -523,12 +871,12 @@ export function nebulaSites(rng, name) {
       type: 'side', subtype: 'bargain', bargain: {
         id: 'nebula_shape', name: 'A Shape in the Dust',
         flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
-        cost: { maxHP: 5 }, gain: 'mutation',
-        action: 'Let it improve you (−5 max HP)',
+        cost: { vessel: 2 }, gain: 'mutation',
+        action: 'Let it improve you (−1 Star Vessel)',
       },
       name: 'A Shape in the Dust',
       flavor: 'Deeper in the veil, the dust arranges itself into an outline of you — improved, according to its own opinions. It offers the trade with open, wrong hands.',
-      actions: ['Let it improve you (−5 max HP)'],
+      actions: ['Let it improve you (−1 Star Vessel)'],
     },
   ];
 }

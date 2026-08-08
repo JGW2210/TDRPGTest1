@@ -637,7 +637,7 @@ function iconKindFor(item) {
   if (f.houndStrike || f.chargeDmg || f.chargeDropBonus) return 'burst';
   const s = item.stats || {};
   const w = [
-    ['sword', (s.atk || 0) * 3], ['heart', (s.maxHP || 0)], ['wing', (s.spd || 0) * 2.5],
+    ['sword', (s.atk || 0) * 3], ['heart', (s.vessel || 0) * 6], ['wing', (s.spd || 0) * 2.5],
     ['star', (s.luck || 0) * 0.9], ['swoosh', (s.dodge || 0) * 0.9], ['coin', (s.shardGain || 0) * 0.4],
     ['hourglass', (s.timingBonus || 0) * 8], ['shield', (s.blockBonus || 0) * 8],
   ].sort((a, b) => b[1] - a[1]);

@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 4; // v4: archipelago worldgen + revealed islets; older saves discarded
+const VERSION = 6; // v6: sky-chat cycling + keepsakes + errands (round 16); older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -16,10 +16,14 @@ export function saveRun(world, player, worldView, roamers = null) {
       consumables: run.consumables,
       shards: run.shards,
       hp: run.hp,
+      vesselBonus: run.vesselBonus,
       shrineHeals: run.shrineHeals,
       boons: run.boons,
       shrineBoons: [...run.shrineBoons],
       vantageSeen: [...run.vantageSeen],
+      skyChats: run.skyChats,
+      keepsakes: run.keepsakes,
+      questsDone: [...run.questsDone],
       revealedBridges: world.satellites.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       revealedIslets: world.islets.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       roamers: roamers ? roamers.serialize() : null,
@@ -61,12 +65,16 @@ export function applySave(data, world, worldView, roamers = null) {
     if (item) run.items.push(item);
   }
   run.boons = Array.isArray(data.boons) ? data.boons : [];
+  run.vesselBonus = data.vesselBonus | 0;
   run._recompute();
   run.consumables = { charge: 0, dew: 0, feather: 0, ...data.consumables };
   run.shards = data.shards;
   run.shrineHeals = data.shrineHeals | 0;
   run.shrineBoons = new Set(data.shrineBoons || []);
   run.vantageSeen = new Set(data.vantageSeen || []);
+  run.skyChats = data.skyChats || {};
+  run.keepsakes = Array.isArray(data.keepsakes) ? data.keepsakes : [];
+  run.questsDone = new Set(data.questsDone || []);
   for (const idx of data.revealedBridges || []) {
     if (world.revealBridge(idx)) {
       worldView.revealHiddenTiles(world.satellites[idx].bridgeTiles);

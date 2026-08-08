@@ -43,14 +43,35 @@ export const CONFIG = {
   },
 
   battle: {
-    baseHP: 30,
+    // Star Vessels: your life is 5 star-shaped vessels, counted internally
+    // in HALF-vessel units. Damage only comes in halves — no numeric chip.
+    vessels: { base: 10, cap: 20, min: 4 },   // half-vessels: 5★ start, 10★ cap, 2★ floor
     baseAtk: 5,
     baseSpd: 5,
-    // Enemy stat curve. Gently quadratic: the deep tiers outpace linear
-    // farming, tuned (Monte-Carlo, round 12) to a wanderer who gathered
-    // ~70% of the previous areas' relics and lands ~60% perfects while
-    // spending their specials — even-tier fights stay winnable but the
-    // deep ones demand brace/interrupt/consumable play.
+    // What a fully MISSED block costs, in half-vessels, by region tier.
+    // Perfect and good blocks nullify damage outright (their price is
+    // focus); heavies/crushes double the base; nothing exceeds 3 vessels.
+    damage: {
+      low: 1, mid: 2, high: 3,   // halves per missed hit: t0–1 / t2–3 / t4+
+      midTier: 2, highTier: 4,
+      heavyMult: 2, heavyCap: 6, // charged & crushing blows, capped at 3★
+      bossPlus: 1, enragePlus: 1,
+      chillPer: 3,               // every 3 Chill stacks soften a foe's hits by ½★
+      trap: 1,                   // springing a trap-shape costs ½★
+    },
+    // Focus: 5 stages, full at each battle's start. Sloppy blocks drain it,
+    // perfect blocks restore it, and low focus narrows your ATTACK windows
+    // (never the block lanes — defense stays winnable at any focus).
+    focus: {
+      max: 5, min: 1,
+      good: 0.5, missBlock: 1, trap: 0.5, burnTick: 0.5,
+      heavyLanded: 1,            // a landed heavy/crush costs this EXTRA
+      perfectBlock: 0.5, brace: 0.5,
+      minScale: 0.6,             // strike-band width at focus 1
+    },
+    // Enemy HP curve (their ATK no longer drives player damage — the
+    // damage table above does). Gently quadratic: tuned (Monte-Carlo,
+    // round 12) against player offense, which is unchanged this round.
     enemy: { hp0: 13, hpT: 7, hpQ: 0.35, atk0: 2.4, atkT: 1.45, atkQ: 0.09 },
     // The strike minigame: the gold band lands somewhere new every swing,
     // the marker's speed and direction vary, and the bands are narrow.
@@ -81,16 +102,9 @@ export const CONFIG = {
         speed: 1.32, ramp: 0.12, band: 0.62, shrinkRamp: 0.94, gather: 0.3,
       },
     },
-    // Rattled: the mark big blows leave on YOUR bars — deep brutes and
-    // bosses whose heavy/crushing hits land will rattle your hands, so
-    // strike bands narrow and markers run wilder. Swift Cut's wide band
-    // is the consistent answer.
-    rattle: { shrink: 0.75, speed: 1.15, turns: 2 },
     perfectMult: 1.5,
     goodMult: 1.2,
     missMult: 0.5,         // a dropped beat truly costs now
-    blockPerfect: 0.15,    // damage multiplier on a perfect block
-    blockGood: 0.6,        // …on a good block
     comboHits: 3,          // Star Strike chains up to this many bars
     comboMult: 0.5,        // each landed combo hit carries this share of ATK
     // Blocking is a falling-note minigame: shapes descend three lanes

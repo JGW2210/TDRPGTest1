@@ -2,10 +2,23 @@
 
 import { RARITY, SETS } from './items.js';
 import { FEATS } from './meta.js';
-import { BIOMES } from './names.js';
+import { BIOMES, KEEPSAKES } from './names.js';
 import { makeItemIconURL, paintPlayerCanvas } from './textures.js';
 
 const $ = id => document.getElementById(id);
+
+// Star Vessels: hp and max are counted in HALF-vessels. Renders a row of
+// stars — full, half-filled, or hollow — used by the HUD, the inventory
+// sheet and the battle nameplate alike.
+export function vesselStarsHTML(hp, max) {
+  const stars = Math.ceil(max / 2);
+  let out = '';
+  for (let i = 0; i < stars; i++) {
+    const fill = Math.max(0, Math.min(2, hp - i * 2));
+    out += `<span class="vstar${fill === 2 ? ' full' : fill === 1 ? ' half' : ''}"><span class="vs-fill">★</span>★</span>`;
+  }
+  return `<span class="vstars" title="Star Vessels — your paper life, in halves">${out}</span>`;
+}
 
 export const ui = {
   init(world) {
@@ -57,7 +70,7 @@ export const ui = {
   setStats(run) {
     const s = run.stats;
     $('hud-stats').innerHTML =
-      `❤ <b>${run.hp}</b>/${s.maxHP} · ⚔ <b>${s.atk}</b> · ➟ <b>${s.spd}</b>` +
+      `${vesselStarsHTML(run.hp, s.maxHP)} · ⚔ <b>${s.atk}</b> · ➟ <b>${s.spd}</b>` +
       (s.luck ? ` · ✧ ${s.luck}%` : '') +
       ` · <span style="color:#ffd98a">power ${run.power}</span>`;
     $('hud-consum').textContent =
@@ -77,14 +90,21 @@ export const ui = {
     $('inv-stats').innerHTML =
       // the wanderer as the hoard has re-inked them — same paint as the token
       `<img id="inv-portrait" alt="" src="${paintPlayerCanvas(run.appearance).toDataURL()}" />` +
-      `❤ HP <b>${run.hp} / ${s.maxHP}</b> &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
+      `Star Vessels ${vesselStarsHTML(run.hp, s.maxHP)} &nbsp; ⚔ ATK <b>${s.atk}</b> &nbsp; ➟ SPD <b>${s.spd}</b><br>` +
       `✧ crit <b>${s.luck}%</b> &nbsp; ⛊ dodge <b>${s.dodge}%</b> &nbsp; ☆ shard gain <b>${s.shardGain >= 0 ? '+' : ''}${s.shardGain}%</b><br>` +
       `power score <b style="color:var(--gold)">${run.power}</b> · bosses felled <b>${run.bossesDown}</b> · battles won <b>${run.battlesWon}</b>` +
       `<div class="inv-consum">` +
       `<span>✸ ×${run.consumables.charge} <i>(✸ Detonate on the map)</i></span>` +
       `<span>❋ ×${run.consumables.dew} <button id="inv-use-dew" ${canDew ? '' : 'disabled'}>Drink</button></span>` +
       `<span>➳ ×${run.consumables.feather} <button id="inv-use-feather" ${canFeather ? '' : 'disabled'}>Fly home</button></span>` +
-      `</div>`;
+      `</div>` +
+      // keepsakes: the sky's errands, carried until someone asks for them
+      (run.keepsakes?.length
+        ? `<div class="inv-keepsakes">` + run.keepsakes.map(id => {
+          const kp = KEEPSAKES[id];
+          return kp ? `<span class="keepsake" title="${kp.desc.replace(/"/g, '&quot;')}">${kp.icon} ${kp.name}</span>` : '';
+        }).join('') + `</div>`
+        : '');
     if (h) {
       $('inv-use-dew')?.addEventListener('click', () => h.useDew());
       $('inv-use-feather')?.addEventListener('click', () => h.useFeather());
