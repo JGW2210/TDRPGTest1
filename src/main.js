@@ -12,8 +12,8 @@ import { CameraRig } from './cameraRig.js';
 import { LocalView } from './localview.js';
 import { BattleSystem, fmtV } from './battle.js';
 import { ui } from './ui.js';
-import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS } from './names.js';
-import { drawItem, drawMutation, CONSUMABLES, RARITY } from './items.js';
+import { makeTrader, mysteryOutcome, BIOMES, FOES, SHRINE_BOONS, SKY_SPEAKERS, DROWNED, KEEPSAKES, ISLETS, VISITORS } from './names.js';
+import { drawItem, drawMutation, CONSUMABLES, RARITY, ITEMS } from './items.js';
 import { makeItemIconURL } from './textures.js';
 import { run } from './run.js';
 import { RoamerSystem } from './roamers.js';
@@ -94,7 +94,7 @@ let restoredRun = false;
     restoredRun = true;
     exploreHintShown = true;
     player.setAppearance(run.appearance, run.appearanceSig);
-    if (run.mutationCount >= 3) openWound({ announce: false });
+    if (run.mutationCount >= 5) openWound({ announce: false });
   }
 }
 
@@ -877,7 +877,7 @@ function resolveBargain(site) {
 
 // ------------------------------------------------------------ site actions ---
 
-// Three mutations, and the world admits what it has been hiding.
+// Five mutations, and the world admits what it has been hiding.
 function openWound({ announce = true } = {}) {
   if (run.woundOpen) return;
   run.woundOpen = true;
@@ -886,7 +886,7 @@ function openWound({ announce = true } = {}) {
   worldView.updateFog(player.tile, { animate: false });
   if (announce) {
     audio.sfxReveal();
-    ui.toast('☒ Your third change is answered. Far past the rim, something TEARS…', true);
+    ui.toast('☒ Your fifth change is answered. Far past the rim, something TEARS…', true);
     ui.toast('☒ <b>The Wound in the Meridian</b> lies open. A scar-tissue bridge waits at the edge of the map.', true);
     ui.toast('☒ What is inside is beyond every warden you have faced. It sent the invitation anyway.', true);
   }
@@ -903,7 +903,7 @@ function grantItem(item) {
   if (item.mutation) {
     ui.toast('☒ The change goes deeper than cloth. Your paper body remembers a different shape…', true);
     announceFeats(meta.bump(s => { s.mutations = (s.mutations || 0) + 1; }));
-    if (run.mutationCount >= 3) openWound();
+    if (run.mutationCount >= 5) openWound();
   }
   // the hoard marks the wanderer: repaint the paper self if the look changed
   if (run.appearanceSig !== sigBefore) {
@@ -1045,6 +1045,9 @@ function handleAction(site, label, btn) {
         // the deep sky pays in changed flesh: satellite bosses seed mutations
         const m = drawMutation(mulberry32((Math.random() * 2 ** 31) | 0), run.ownedIds);
         if (m) grantItem(m);
+      } : site.subtype === 'crash_guardian' ? () => {
+        ui.toast('☄ The guardian falls. In the crater, the visitor stirs…', true);
+        announceFeats(meta.bump(s => { s.crashes = (s.crashes || 0) + 1; }));
       } : null,
     });
     return;
@@ -1052,6 +1055,55 @@ function handleAction(site, label, btn) {
   if (site.bargain && label === site.bargain.action) {
     resolveBargain(site);
     return;
+  }
+  // The crashed visitor's body: its one set change, offered — or refused for
+  // whatever it clutched in the fall. Either way, the guardian goes first.
+  if (site.subtype === 'crash_body') {
+    const def = VISITORS.find(v => v.id === site.visitor) || VISITORS[0];
+    const tileHere = currentLocalTile || player.tile;
+    const guard = world.getSites(tileHere).find(s => s.subtype === 'crash_guardian');
+    if (guard && !run.clearedSites.has(guard.id)) {
+      ui.modalOutcome(`${def.guardian.name} steps between you and the visitor. The introduction is not optional.`);
+      return;
+    }
+    const mutItem = ITEMS.find(i => i.id === def.mutation);
+    if (!mutItem || run.ownedIds.has(def.mutation)) {
+      ui.modalOutcome('The visitor has given what it came to give. It sleeps now, and the crater keeps it.');
+      return;
+    }
+    if (label === 'Approach the Visitor') {
+      if (!site._offered) {
+        site._offered = true;
+        ui.modalOutcome(`The visitor stirs and offers its change: <b>${mutItem.name}</b> — ${mutItem.desc} `
+          + `A change is forever, and the fifth tears the Wound open. Approach again to accept.`);
+        return;
+      }
+      site._offered = false;
+      grantItem(mutItem);
+      run.clearedSites.add(site.id);
+      refreshHud(player.tile);
+      saveNow(true);
+      return;
+    }
+    if (label === 'Refuse the Gift') {
+      site._offered = false;
+      if (run.clearedSites.has(site.id)) {
+        ui.modalOutcome('The fall’s cargo is already yours. Only the change remains — and the visitor can wait far longer than you can.');
+        return;
+      }
+      run.clearedSites.add(site.id);
+      const rngC = mulberry32(Math.floor(hash2(tileHere.q, tileHere.r, world.seed + 7300) * 0xffffffff));
+      const tier = world.regionOf(tileHere).tier;
+      const got = run.gainShards(12 + tier * 5);
+      const item = drawItem(rngC, world.regionOf(tileHere).dominantBiome, run.ownedIds,
+        { source: 'boss', tier, unlocked: meta.unlockedIds });
+      ui.modalOutcome(`You refuse the change. The visitor, unoffended, lets the fall’s cargo go instead. (+${got} ☆) `
+        + `The change itself remains in the crater, for the day you want it.`);
+      if (item) grantItem(item);
+      refreshHud(player.tile);
+      saveNow(true);
+      return;
+    }
   }
   if (label === 'Refuse') {
     ui.closeModal();
@@ -1569,7 +1621,7 @@ window.__vael = {
     if (!it) return;
     run.addItem(it);
     player.setAppearance(run.appearance, run.appearanceSig);
-    if (it.mutation && run.mutationCount >= 3) openWound();
+    if (it.mutation && run.mutationCount >= 5) openWound();
     refreshHud(player.tile);
     saveNow(true);
   }); },

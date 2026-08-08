@@ -826,11 +826,12 @@ export const ITEMS = [
     desc: '+2 ATK. A fully perfect Meteor Edge chain lands +0.8× harder.',
     flavor: 'Aim like a millennium. Land like the end of one.' }),
 
-  // ═════════════════════════════════════════════════════ MUTATIONS (8) ═══
+  // ════════════════════════════════════════════════════ MUTATIONS (18) ═══
   // Cosmic mutations never appear in ordinary draws — they come only from
   // the deep places (satellite bosses, tier-3+ keepers, astral pedestals,
-  // nebulas). Each rewrites the wanderer's body: great power, real cost.
-  // Carrying three tears open the Wound in the Meridian.
+  // nebulas) and from the crashed visitors, each of whom carries exactly
+  // one. Each rewrites the wanderer's body: great power, real cost.
+  // Carrying five tears open the Wound in the Meridian.
   I('maw_beneath', 'MUTATION', 'm', 'The Maw Beneath', {
     core: true, mutation: true, stats: { atk: 8, vessel: -2 }, tags: [], flags: { shopMarkup: 0.4 },
     desc: '+8 ATK, −1 Star Vessel. Merchants see the teeth: shop prices +40%.',
@@ -865,6 +866,60 @@ export const ITEMS = [
     core: true, mutation: true, stats: { luck: 8, shardGain: -30 }, tags: [], flags: { chillOnHit: 1 },
     desc: '+8% crit, your strikes Chill — but the whispers cost you: shard finds −30%.',
     flavor: 'You speak your own language now. Only the rift speaks it back.' }),
+
+  // ---- the ten set changes of the crashed visitors. Each is bound to its
+  // ---- visitor (`visitor` id) and never enters the random mutation draw:
+  // ---- the only way to carry one is to win it at the crater it fell in.
+  I('rivet_skin', 'MUTATION', 'm', 'Skin of Rivets', {
+    core: true, mutation: true, visitor: 'iron_seed',
+    stats: { vessel: 2, spd: -2 }, tags: [], flags: { trapWard: 1 },
+    desc: '+1 Star Vessel, and hull-plating turns the first trap you spring each battle — but the plates are heavy: −2 SPD.',
+    flavor: 'The Seed shares its casing. You are, technically, now partly ajar.' }),
+  I('comet_marrow', 'MUTATION', 'm', 'Marrow of Falling Glass', {
+    core: true, mutation: true, visitor: 'glasswing',
+    stats: { spd: 4, luck: 12, vessel: -2 }, tags: [],
+    desc: '+4 SPD, +12% crit. Glass is quick, and glass is thin: −1 Star Vessel.',
+    flavor: 'Your bones ring faintly now when you run. The argument continues in you.' }),
+  I('pilgrim_tongue', 'MUTATION', 'm', 'The Pilgrim’s Tongue', {
+    core: true, mutation: true, visitor: 'kneeling_star',
+    stats: { luck: 6, shardGain: -20 }, tags: [], flags: { perfectHeal: 1 },
+    desc: '+6% crit, and one Perfect strike each battle knits ½★ — but alms flow outward: shard finds −20%.',
+    flavor: 'You know the liturgy now. It is mostly apology, said forward.' }),
+  I('patient_yolk', 'MUTATION', 'm', 'Yolk of the Patient Egg', {
+    core: true, mutation: true, visitor: 'patient_egg',
+    stats: { vessel: 1 }, tags: [], flags: { afterBattleHeal: 1, dewMuted: true },
+    desc: '+½ Star Vessel and heal ½★ after every battle — but your hunger is changed: star-dew only half-nourishes you.',
+    flavor: 'Something in you is incubating now. It is very patient. You are the warm side.' }),
+  I('link_vow', 'MUTATION', 'm', 'The Vow of Links', {
+    core: true, mutation: true, visitor: 'chained_choir',
+    stats: { vessel: 1, blockBonus: 1 }, tags: [], flags: { heavyGait: true },
+    desc: '+½ Star Vessel and your block windows widen — but a link is a leash: you can never travel fast again.',
+    flavor: 'One chain found your wrist and called it home. The Choir hums approvingly through it.' }),
+  I('elsewhere_eye', 'MUTATION', 'm', 'An Eye from Elsewhere', {
+    core: true, mutation: true, visitor: 'mirrorshard',
+    stats: { dodge: 12, vessel: -1 }, tags: [], flags: { seeIntent: true, veilSight: true },
+    desc: '+12% dodge, you read every foe’s intent and no veil blinds you — but half your gaze lives elsewhere: −½ Star Vessel.',
+    flavor: 'One of your eyes shows this sky. The other shows the weather where your reflection went.' }),
+  I('anvil_arm', 'MUTATION', 'm', 'The Anvil Arm', {
+    core: true, mutation: true, visitor: 'burning_anvil',
+    stats: { spd: -2, vessel: -1 }, tags: [], flags: { heavyPlus: 0.6, interruptGood: true },
+    desc: 'Meteor Edge chains land +0.6× harder and even good bars interrupt — but the arm was made for a larger smith: −2 SPD, −½ Star Vessel.',
+    flavor: 'It remembers striking suns. It considers your enemies a rest day.' }),
+  I('knot_memory', 'MUTATION', 'm', 'A Memory, Knotted', {
+    core: true, mutation: true, visitor: 'knotted_star',
+    stats: { dodge: -6 }, tags: [], flags: { cooldownMinus: 1, chainKeeper: 1 },
+    desc: 'Ability cooldowns −1 turn and one slipped Star Strike bar is caught each battle — but the knot pulls your step: −6% dodge.',
+    flavor: 'The Untier tied a small copy into you, for practice. You feel it tighten when you turn.' }),
+  I('threshold_step', 'MUTATION', 'm', 'The Threshold Step', {
+    core: true, mutation: true, visitor: 'door_splinter',
+    stats: { vessel: -1 }, tags: [], flags: { firstStrikeDodge: true, openingPlus: 0.2 },
+    desc: 'You always dodge a battle’s first blow, and your OPENINGS strike +0.2× harder — but part of you stays in the doorway: −½ Star Vessel.',
+    flavor: 'You are never entirely in the room anymore. Neither is anything trying to hit you.' }),
+  I('leviathan_gut', 'MUTATION', 'm', 'The Leviathan’s Gut', {
+    core: true, mutation: true, visitor: 'leviathan_skull',
+    stats: { vessel: 3, atk: -1, spd: -2 }, tags: [], flags: { shopMarkup: 0.2 },
+    desc: '+1½ Star Vessels. It takes room: −1 ATK, −2 SPD, and merchants charge you for two (+20% prices).',
+    flavor: 'Vast, bleached appetite, inherited whole. The tide in you still expects to turn.' }),
 ];
 
 // Sets & synergies. Every tag is a set; carry enough relics of one set and
@@ -952,9 +1007,11 @@ export function drawItem(rng, pool, ownedIds, opts = {}) {
   return any.length ? pick(rng, any) : null;
 }
 
-// Mutations come only from the deep places, never the ordinary draw.
+// Mutations come only from the deep places, never the ordinary draw — and
+// the visitor-bound ten are excluded even here: each can be won only at the
+// crater its visitor fell in.
 export function drawMutation(rng, ownedIds) {
-  const cands = ITEMS.filter(i => i.rarity === 'm' && !ownedIds.has(i.id));
+  const cands = ITEMS.filter(i => i.rarity === 'm' && !i.visitor && !ownedIds.has(i.id));
   return cands.length ? pick(rng, cands) : null;
 }
 

@@ -25,6 +25,7 @@ export const BIOMES = {
   VERDANT: { name: 'Verdant Drift',   color: 0x3c8a5e, accent: 0x8affc4, deco: 'crystal'},
   SECRET:  { name: 'Hollowed Secret', color: 0x54406e, accent: 0xffd98a, deco: 'crystal'},
   WOUND:   { name: 'The Wound',       color: 0x3a1430, accent: 0xa6ff57, deco: 'crystal'},
+  CRASH:   { name: 'Fallen Shallows', color: 0x35476b, accent: 0xffb46a, deco: 'sea'    },
 };
 
 // ------------------------------------------------------------- satellites ---
@@ -79,6 +80,115 @@ export const ISLETS = [
   },
 ];
 
+// ------------------------------------------------------ crashed visitors ---
+// Ten bodies that did not stay in the sky. One to three of them lie embedded
+// in every world, each in a crater of fallen shallows ringed with its own
+// debris; each came down with a guardian (or grew one on the way), and each
+// carries exactly one set change for whoever survives the introduction.
+
+export const VISITORS = [
+  {
+    id: 'iron_seed',
+    name: 'The Iron Seed',
+    sub: 'dropped, never planted',
+    flavor: 'A riveted ovoid taller than a chapel, split along a single seam. Whatever was meant to grow from it is still inside, holding its breath. It has been holding it a very long time, and it is getting good at it.',
+    guardian: { name: 'The Husk Gardener', role: 'guard',
+      flavor: 'It tends the Seed with hands of bent hull-plate. Watering has not worked. Singing has not worked. It has lately begun considering what a seed this size might want to be fed.' },
+    mutation: 'rivet_skin',
+    color: '#aab4c8', glow: '#ffb46a',
+  },
+  {
+    id: 'glasswing',
+    name: 'The Glasswing',
+    sub: 'the head of a comet that lost its argument',
+    flavor: 'The comet came down mid-sentence. Its head survives as a teardrop of green-white glass; its tail lies strewn across the crater as a thousand bright commas. The argument, by all readings, is still going.',
+    guardian: { name: 'The Tailless Rider', role: 'swift',
+      flavor: 'Something rode that comet for an age, steering with its knees. It walked away from the landing. It has not yet forgiven the landing.' },
+    mutation: 'comet_marrow',
+    color: '#9fe8d8', glow: '#c9fff0',
+  },
+  {
+    id: 'kneeling_star',
+    name: 'The Kneeling Star',
+    sub: 'it did not crash; it landed, and knelt',
+    flavor: 'Every other visitor fell. This one descended. It rests in its crater in an attitude of perfect genuflection, light pooled around it like spilled prayer. Nobody knows what it is kneeling to. The candidates are all worrying.',
+    guardian: { name: 'The Last Congregant', role: 'mystic',
+      flavor: 'The star came down with a congregation. The others finished their worship and left. This one found something in the liturgy it cannot put down.' },
+    mutation: 'pilgrim_tongue',
+    color: '#ffd98a', glow: '#fff0c0',
+  },
+  {
+    id: 'patient_egg',
+    name: 'The Egg of Something Patient',
+    sub: 'warm on the side facing away from the sun',
+    flavor: 'A speckled stone egg the size of a watch-tower, sitting in its crater with the smugness of a thing exactly where it means to be. It is warm — but only on the side facing away from Vael, which the scholars agree is the wrong side, and do not discuss further.',
+    guardian: { name: 'The Brood Sentry', role: 'brute',
+      flavor: 'Whatever laid the egg left a sentry. The sentry has waited so long it has begun to think of the egg as its own, which will make the hatching awkward for everyone.' },
+    mutation: 'patient_yolk',
+    color: '#d8c9a8', glow: '#ffe9b0',
+  },
+  {
+    id: 'chained_choir',
+    name: 'The Chained Choir',
+    sub: 'a meteor wrapped in chains older than its fall',
+    flavor: 'A black meteor bound in seven great chains — and the chains show more wear than the fall could account for. Put an ear to the stone and it hums in close harmony. The chains, one supposes, are the reason it only hums.',
+    guardian: { name: 'The Warden of Links', role: 'guard',
+      flavor: 'Someone forged a warden to keep the chains taut. It does not know what the Choir sings about. It has standing orders never to learn.' },
+    mutation: 'link_vow',
+    color: '#a8b4d8', glow: '#cfd8ff',
+  },
+  {
+    id: 'mirrorshard',
+    name: 'The Sky’s Mirrorshard',
+    sub: 'a piece of sky showing somewhere else’s weather',
+    flavor: 'A shard of the firmament itself, snapped off in the Shattering and fallen point-first into the shallows. It still shows sky — just not this one. The clouds in it move against the wind, and once a day something very large swims across it.',
+    guardian: { name: 'The Reflection That Stayed', role: 'swift',
+      flavor: 'Stand before the shard and your reflection arrives a heartbeat late. This one belonged to somebody who walked away. It has had a long time to practice being them.' },
+    mutation: 'elsewhere_eye',
+    color: '#bfd8ff', glow: '#e6f0ff',
+  },
+  {
+    id: 'burning_anvil',
+    name: 'The Anvil That Fell Burning',
+    sub: 'the forge-heart of an unfinished star',
+    flavor: 'Stars are forged somewhere, on something. This is one of the somethings — an anvil the size of a barrow, still too hot to touch, its face scarred with the first draft of a sun that never went to press.',
+    guardian: { name: 'The Unfinished Work', role: 'brute',
+      flavor: 'The last thing on the anvil came down with it, half-made. It is angry the way only an unfinished thing can be: at everything, and specifically at you, who are finished.' },
+    mutation: 'anvil_arm',
+    color: '#ff8a5a', glow: '#ffc27a',
+  },
+  {
+    id: 'knotted_star',
+    name: 'The Knotted Star',
+    sub: 'someone tied it; no one has untied it',
+    flavor: 'A small star tied in a knot no sailor will admit to knowing. The knot predates the fall, the fall predates the maps, and the light leaks out along the crossings in thin, indignant lines.',
+    guardian: { name: 'The Untier', role: 'mystic',
+      flavor: 'It has worked at the knot for centuries with fingers grown specifically for the task. It is nearly certain the knot ties something IN. It picks at it anyway. It has to know.' },
+    mutation: 'knot_memory',
+    color: '#d79bff', glow: '#eccfff',
+  },
+  {
+    id: 'door_splinter',
+    name: 'A Splinter of the Door',
+    sub: 'it fell when the Door was leaned upon',
+    flavor: 'When the eldest daughter leaned past the Door Ajar, the frame gave — a little. This is the little: one splinter of a door that stands in the sky, buried here point-down like a thrown knife. The grain of it shows hinges all the way through.',
+    guardian: { name: 'The Hinge-Keeper', role: 'guard',
+      flavor: 'Doors have keepers on both sides. When the splinter fell, one came down with it — still keeping, out of principle, a door that is no longer attached to anything.' },
+    mutation: 'threshold_step',
+    color: '#9fb0ff', glow: '#d0daff',
+  },
+  {
+    id: 'leviathan_skull',
+    name: 'The Leviathan’s Skull',
+    sub: 'the sky remembers when it swam',
+    flavor: 'Before the Shattering, things swam between the moons the way whales swim between islands. This is the skull of one — vast, bleached by starlight, fallen brow-first so its empty gaze watches the crater rim like a tide line it still expects to turn.',
+    guardian: { name: 'What Nested Inside', role: 'brute',
+      flavor: 'A skull that size does not stay empty. Something moved in, redecorated, and has strong opinions about visitors — being, itself, the second one.' },
+    mutation: 'leviathan_gut',
+    color: '#cfd8c8', glow: '#f0f5e8',
+  },
+];
+
 // ------------------------------------------------------ cosmic landmarks ---
 
 export const CELESTIALS = {
@@ -130,6 +240,8 @@ export const FOES = {
   SECRET:  [{ n: 'Hoard Mimic', r: 'brute' }],
   ISLET:   [{ n: 'Bridge Haunt', r: 'mystic' }, { n: 'Star Remora', r: 'swift' }],
   WOUND:   [{ n: 'Meridian Leech', r: 'swift' }, { n: 'Unfolded Pilgrim', r: 'mystic' }, { n: 'The Choir Below', r: 'brute' }],
+  // fallen shallows scavengers: species that follow anything that falls
+  CRASH:   [{ n: 'Star Remora', r: 'swift' }, { n: 'Rockslide Gremlin', r: 'brute' }, { n: 'Toll Wraith', r: 'mystic' }],
 };
 
 // species slug for art lookup: 'Sun-Bleached Revenant' -> 'sun_bleached_revenant'

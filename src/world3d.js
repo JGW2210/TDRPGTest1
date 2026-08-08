@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { hash2 } from './rng.js';
 import { keyOf, hexDist, neighborsOf } from './hex.js';
-import { BIOMES, CELESTIALS, FOES, speciesSlug } from './names.js';
+import { BIOMES, CELESTIALS, FOES, speciesSlug, VISITORS } from './names.js';
 import { run } from './run.js';
 import {
   makeNebulaTexture, makeRuneRingTexture, makeMistTexture, makeStarTexture,
@@ -20,7 +20,7 @@ const DARK_BLUE = new THREE.Color(0x0a0d20);
 const tmpColor = new THREE.Color();
 const dummy = new THREE.Object3D();
 
-export const TIER_COLORS = [0x9aa3cf, 0x6fe0c8, 0xf0c46a, 0xff7a45, 0xd94f8e, 0xb48aff];
+export const TIER_COLORS = [0x9aa3cf, 0x6fe0c8, 0xf0c46a, 0xff7a45, 0xd94f8e, 0xb48aff, 0xa6ff57, 0xff5a8a];
 
 export function hexRingGeometry(outer, inner) {
   const shape = new THREE.Shape();
@@ -74,6 +74,7 @@ export class WorldView {
     this._buildTraders();
     this._buildHighlight();
     this._buildDebris();
+    this._buildCrashEjecta();
     this._buildUndersides();
     this._buildWeather();
   }
@@ -1156,6 +1157,195 @@ export class WorldView {
           }
         }
         g.add(label(lm.name, lm.sub || 'a drowned celestial', '#9fd4ff', 2.3));
+      } else if (lm.type === 'crash') {
+        // a crashed visitor: half-buried in its crater the way Vael sits in
+        // its own — corona, light, and a body that clearly did not grow here
+        const def = VISITORS.find(v => v.id === lm.visitor) || VISITORS[0];
+        const glowC = new THREE.Color(def.glow);
+        const body = new THREE.Group();
+        if (def.id === 'iron_seed') {
+          const shell = new THREE.Mesh(new THREE.SphereGeometry(0.56, 10, 8), std(0x6a7284, { roughness: 0.35 }));
+          shell.scale.set(1, 1.35, 1);
+          body.add(shell);
+          const seam = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 1.3), glowPlane(glowC, { opacity: 0.9 }));
+          seam.position.set(0, 0.1, 0.57);
+          body.add(seam);
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const riv = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 4), std(0x8a93a8, { roughness: 0.3 }));
+            riv.position.set(Math.cos(a) * 0.55, 0.15 + Math.sin(i * 2.4) * 0.3, Math.sin(a) * 0.55);
+            body.add(riv);
+          }
+        } else if (def.id === 'glasswing') {
+          const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.44, 9, 7),
+            std(0x9fe8d8, { emissive: 0x64d9a0, emissiveIntensity: 0.8, roughness: 0.15 })
+          );
+          head.scale.set(1, 0.9, 1.2);
+          const tailStub = new THREE.Mesh(
+            new THREE.ConeGeometry(0.3, 0.7, 7),
+            std(0x7ac8b8, { emissive: 0x64d9a0, emissiveIntensity: 0.5, roughness: 0.2 })
+          );
+          tailStub.position.set(0, 0.1, -0.6);
+          tailStub.rotation.x = -Math.PI / 2 + 0.4;
+          body.add(head, tailStub);
+          for (let i = 0; i < 6; i++) {
+            const comma = new THREE.Mesh(
+              new THREE.TetrahedronGeometry(0.09),
+              std(0xc9fff0, { emissive: 0x9fe8d8, emissiveIntensity: 1.2, roughness: 0.1 })
+            );
+            const a = i * 1.7;
+            comma.position.set(Math.cos(a) * (0.7 + i * 0.1), -0.1 + (i % 3) * 0.08, Math.sin(a) * (0.7 + i * 0.1));
+            body.add(comma);
+          }
+        } else if (def.id === 'kneeling_star') {
+          const star = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.5),
+            std(0xc8a050, { emissive: 0xffd98a, emissiveIntensity: 1.5, roughness: 0.3 })
+          );
+          star.position.y = 0.34;
+          star.rotation.set(0.75, 0.4, 0.15);   // bowed forward: genuflection
+          star.scale.y = 0.85;
+          const pool = new THREE.Mesh(
+            new THREE.CircleGeometry(0.85, 16),
+            new THREE.MeshBasicMaterial({
+              color: 0xffe9a0, transparent: true, opacity: 0.3,
+              blending: THREE.AdditiveBlending, depthWrite: false,
+            })
+          );
+          pool.rotation.x = -Math.PI / 2;
+          pool.position.y = 0.05;
+          body.add(star, pool);
+        } else if (def.id === 'patient_egg') {
+          const egg = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), std(0xd8c9a8, {
+            roughness: 0.55, emissive: 0x664422, emissiveIntensity: 0.25,
+          }));
+          egg.scale.set(1, 1.4, 1);
+          egg.position.y = 0.25;
+          body.add(egg);
+          for (let i = 0; i < 7; i++) {
+            const a = (i / 7) * Math.PI * 2;
+            const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.11), std(0x5a5244));
+            rock.position.set(Math.cos(a) * 0.52, -0.08, Math.sin(a) * 0.52);
+            rock.rotation.set(i, i * 2, 0);
+            body.add(rock);
+          }
+        } else if (def.id === 'chained_choir') {
+          const stone = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.5, 0),
+            std(0x1c1f2e, { roughness: 0.6, emissive: 0x2a2f4a, emissiveIntensity: 0.3 })
+          );
+          body.add(stone);
+          for (const [tilt, yaw] of [[0.4, 0], [1.2, 1.1], [0.8, 2.3]]) {
+            const chain = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.05, 6, 20), std(0x8a93a8, { roughness: 0.35 }));
+            chain.rotation.set(tilt, yaw, 0.3);
+            body.add(chain);
+          }
+        } else if (def.id === 'mirrorshard') {
+          const shard = new THREE.Mesh(
+            new THREE.ConeGeometry(0.5, 1.7, 3),
+            std(0xbfd8ff, { emissive: 0x6f9bff, emissiveIntensity: 0.9, roughness: 0.08 })
+          );
+          shard.rotation.set(Math.PI, 0.5, 0);   // point-first into the ground
+          shard.position.y = 0.7;
+          const face = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 1.0), glowPlane(0xe6f0ff, { opacity: 0.45 }));
+          face.position.set(0.12, 0.85, 0.22);
+          face.rotation.y = 0.5;
+          body.add(shard, face);
+        } else if (def.id === 'burning_anvil') {
+          const base = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.5), std(0x3a3038, {
+            roughness: 0.5, emissive: 0xff5a1f, emissiveIntensity: 0.3,
+          }));
+          base.position.y = 0.2;
+          const top = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.26, 0.44), std(0x453a42, {
+            roughness: 0.45, emissive: 0xff5a1f, emissiveIntensity: 0.45,
+          }));
+          top.position.y = 0.53;
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 6), std(0x453a42, {
+            emissive: 0xff5a1f, emissiveIntensity: 0.45,
+          }));
+          horn.position.set(0.68, 0.53, 0);
+          horn.rotation.z = -Math.PI / 2;
+          const work = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.14),
+            std(0x804a10, { emissive: 0xffb63a, emissiveIntensity: 2.2 })
+          );
+          work.position.set(-0.2, 0.73, 0);
+          body.add(base, top, horn, work);
+        } else if (def.id === 'knotted_star') {
+          const knot = new THREE.Mesh(
+            new THREE.TorusKnotGeometry(0.34, 0.1, 48, 8),
+            std(0x6d4a94, { emissive: 0xd79bff, emissiveIntensity: 1.1, roughness: 0.3 })
+          );
+          knot.position.y = 0.3;
+          body.add(knot);
+          for (let i = 0; i < 4; i++) {
+            const leak = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.5), glowPlane(0xeccfff, { opacity: 0.7 }));
+            const a = i * 1.6;
+            leak.position.set(Math.cos(a) * 0.35, 0.32, Math.sin(a) * 0.35);
+            leak.rotation.set(0.4 * (i % 2 ? 1 : -1), a, 0.5);
+            body.add(leak);
+          }
+        } else if (def.id === 'door_splinter') {
+          const plank = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.8, 0.13), std(0x4a3e57, {
+            roughness: 0.6, emissive: 0x2a2244, emissiveIntensity: 0.4,
+          }));
+          plank.position.y = 0.8;
+          plank.rotation.set(0.14, 0.4, 0.2);   // thrown-knife lean
+          body.add(plank);
+          for (const hy of [0.45, 1.15]) {
+            const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.05), std(0x8a7a48, { roughness: 0.3 }));
+            hinge.position.set(0.05, hy, 0.1);
+            hinge.rotation.set(0.14, 0.4, 0.2);
+            body.add(hinge);
+          }
+          const keyglow = new THREE.Mesh(new THREE.CircleGeometry(0.05, 8), glowPlane(0xd0daff, { opacity: 0.95 }));
+          keyglow.position.set(0.11, 0.9, 0.13);
+          keyglow.rotation.y = 0.4;
+          body.add(keyglow);
+        } else {   // leviathan_skull
+          const dome = new THREE.Mesh(
+            new THREE.SphereGeometry(0.62, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2),
+            std(0xcfd8c8, { roughness: 0.7 })
+          );
+          dome.position.y = 0.05;
+          dome.rotation.z = 0.25;    // fallen brow-first
+          body.add(dome);
+          for (const s of [-1, 1]) {
+            const socket = new THREE.Mesh(new THREE.SphereGeometry(0.14, 7, 5), std(0x181c24));
+            socket.position.set(s * 0.26, 0.3, 0.5);
+            body.add(socket);
+          }
+          const dweller = new THREE.Mesh(
+            new THREE.SphereGeometry(0.05, 6, 5),
+            std(0x223322, { emissive: 0xa6ff57, emissiveIntensity: 2.6 })
+          );
+          dweller.position.set(0.26, 0.3, 0.53);
+          body.add(dweller);
+          for (let i = 0; i < 4; i++) {
+            const rib = new THREE.Mesh(new THREE.TorusGeometry(0.3 - i * 0.04, 0.035, 5, 10, Math.PI), std(0xbfc8b8));
+            rib.position.set(-0.5 - i * 0.24, 0.12, 0);
+            rib.rotation.set(0, 0, 0.15);
+            body.add(rib);
+          }
+        }
+        // shared crash treatment: half-sunk, tilted, corona, its own light
+        body.position.y = -0.06;
+        body.scale.setScalar(1.25);
+        body.rotation.y = hash2(tile.q, tile.r, 921) * Math.PI * 2;
+        body.rotation.z = 0.1 + hash2(tile.q, tile.r, 922) * 0.14;
+        g.add(body);
+        const corona = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: makeGlowTexture(def.glow), transparent: true, opacity: 0.3,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        }));
+        corona.scale.setScalar(3.0);
+        corona.position.y = 0.5;
+        corona.raycast = () => {};
+        dimmables.push({ mat: corona.material, color: corona.material.color.clone() });
+        g.add(corona);
+        g.add(new THREE.PointLight(glowC, 10, 9, 2));
+        g.add(label(lm.name, def.sub, def.color, 2.6));
       }
 
       const hit = new THREE.Mesh(
@@ -1490,6 +1680,57 @@ export class WorldView {
         this.debrisSpinners.push({ obj: m, sx: 0.12 + p.s * 0.1, sy: 0.2 - p.s * 0.06, y0: p.y, phase: p.rx });
       }
     }
+  }
+
+  // ----------------------------------------------------- crash-site ejecta ---
+  // Every crashed visitor threw a skirt of rock when it landed: shattered
+  // stone across the fallen-shallows ring, heavier scorched pieces flung out
+  // onto the apron beyond (tiles marked crashDebris by the worldgen pass).
+  _buildCrashEjecta() {
+    const { world } = this;
+    if (!world.crashes?.length) return;
+    const spots = [];
+    for (const c of world.crashes) {
+      for (const t of c.ring) spots.push({ t, dense: true });
+      for (const [dq, dr] of [[2, 0], [0, 2], [-2, 0], [0, -2], [2, -2], [-2, 2], [1, 1], [-1, -1]]) {
+        const n = world.tiles.get(keyOf(c.center.q + dq, c.center.r + dr));
+        if (n?.crashDebris) spots.push({ t: n, dense: false });
+      }
+    }
+    const geo = new THREE.DodecahedronGeometry(0.1, 0);
+    const placements = [];
+    for (const { t, dense } of spots) {
+      const n = dense ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const ha = hash2(t.q + i * 13, t.r - i * 7, 4370);
+        const hb = hash2(t.q - i * 5, t.r + i * 17, 4371);
+        placements.push({
+          x: t.x + (ha - 0.5) * 1.5,
+          y: t.topY + 0.06,
+          z: t.z + (hb - 0.5) * 1.5,
+          s: 0.6 + ha * (dense ? 1.6 : 2.4),
+          rx: ha * Math.PI * 2, ry: hb * Math.PI * 2, rz: (ha + hb) * Math.PI,
+          scorch: !dense,
+        });
+      }
+    }
+    const mesh = new THREE.InstancedMesh(
+      geo,
+      new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }),
+      Math.max(1, placements.length)
+    );
+    mesh.frustumCulled = false;
+    mesh.raycast = () => {};
+    placements.forEach((p, i) => {
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.scale.setScalar(p.s);
+      dummy.rotation.set(p.rx, p.ry, p.rz);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      tmpColor.set(p.scorch ? 0x33302e : 0x4a4f72).offsetHSL(0, 0, (p.s - 1.2) * 0.05);
+      mesh.setColorAt(i, tmpColor);
+    });
+    this.layer.add(mesh);
   }
 
   // --------------------------------------------------- island undersides ---

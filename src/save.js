@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 6; // v6: sky-chat cycling + keepsakes + errands (round 16); older saves discarded
+const VERSION = 7; // v7: crashed-visitor worldgen reshuffles every seed (round 17); older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {

@@ -218,7 +218,7 @@ export class BattleSystem {
 
     this.enemies = spots.map(([x, z], i) => {
       // a roamer pack fights as the species its map icon promised
-      const spec = team.boss ? { n: team.bossName || 'The Warden', r: 'brute' }
+      const spec = team.boss ? { n: team.bossName || 'The Warden', r: team.bossRole || 'brute' }
         : team.species
           ? (roster.find(f => f.n === team.species) || { n: team.species, r: team.speciesRole || 'brute' })
           : pick(this.rng, roster);
@@ -228,7 +228,9 @@ export class BattleSystem {
       let hp = Math.round((E.hp0 + E.hpT * tier + E.hpQ * tier * tier) * mods.hp * varr);
       let atk = Math.round((E.atk0 + E.atkT * tier + E.atkQ * tier * tier) * mods.atk * 10) / 10;
       let spd = Math.round((4 + tier) * mods.spd);
-      if (team.boss) { hp = Math.round(hp * 2.6); atk = Math.round(atk * 1.2 * 10) / 10; }
+      // elites (crash guardians) are a lean cut of boss: meaner than a
+      // keeper's chamber, softer than a warden's full 2.6
+      if (team.boss) { hp = Math.round(hp * (team.elite ? 1.9 : 2.6)); atk = Math.round(atk * 1.2 * 10) / 10; }
       if (team.deity) { hp = Math.round(hp * 1.6); atk = Math.round(atk * 1.15 * 10) / 10; }
 
       const bodyC = '#' + new THREE.Color(biome.color).offsetHSL(0.02 * i, 0.12, -0.1).getHexString();

@@ -354,6 +354,22 @@ export class LocalView {
         parent.add(tripod, scope);
         break;
       }
+      case 'crash_body': {
+        // the visitor itself, half-buried and still faintly lit
+        const bulk = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(0.5, 0),
+          std(0x565a74, { emissive: 0xffb46a, emissiveIntensity: site.cleared ? 0.25 : 0.9, roughness: 0.4 })
+        );
+        bulk.position.y = 0.22;
+        bulk.rotation.set(0.5, 0.8, 0.3);
+        parent.add(bulk);
+        for (const [dx, dz, s] of [[-0.6, 0.2, 0.16], [0.55, -0.25, 0.12], [0.3, 0.55, 0.14]]) {
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s), std(0x3c3c50));
+          rock.position.set(dx, s * 0.7, dz);
+          parent.add(rock);
+        }
+        break;
+      }
       default: {
         const stone = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 0), std(0x565a86));
         stone.position.y = 0.3;

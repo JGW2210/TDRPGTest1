@@ -6,7 +6,7 @@ export const CONFIG = {
     return s == null ? 77 : (Number.isFinite(+s) ? Math.abs(Math.trunc(+s)) : hashCode(s));
   })(),
 
-  mapRadius: 45,          // hexes from center to rim (~6,200 tiles)
+  mapRadius: 50,          // hexes from center to rim (~7,650 tiles)
   hexSize: 1.0,           // world units, center to corner
   tileGap: 0.05,
   baseY: -7.5,            // altitude of the cosmic base plane below the tiles
@@ -21,8 +21,14 @@ export const CONFIG = {
 
   regions: {
     count: 10,            // target region pockets
-    seedSpacing: 15,      // min hex distance between region seeds
+    seedSpacing: 16,      // min hex distance between region seeds
     riftWidth: 2.1,       // voronoi-border band converted to void rift
+  },
+
+  crashes: {
+    min: 1, max: 3,       // crashed visitors embedded per world
+    spacing: 14,          // min hex distance between crash craters
+    fromStart: 10,        // craters keep this far from Starfall Vale
   },
 
   archipelago: {
