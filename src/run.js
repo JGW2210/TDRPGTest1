@@ -25,6 +25,7 @@ class Run {
     this.keepsakes = [];           // statless errand tokens (names.KEEPSAKES ids)
     this.questsDone = new Set();   // speakers whose errands have paid out
     this.woundOpen = false;        // the Wound has torn open this run
+    this.fallerArrived = false;    // the last visitor has come down this run
     this._recompute();
   }
 

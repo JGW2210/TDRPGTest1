@@ -1078,6 +1078,85 @@ export function generateWorld(seed) {
     }
   }
 
+  // ---- pass 10.7: the one still falling ------------------------------------
+  // One more visitor has not landed yet. Its crater is chosen now — a hidden
+  // cluster in the void off a region's coast, islet-style, so nothing has to
+  // rewrite live terrain when it comes down mid-run — but the tiles stay
+  // folded until the arrival cinematic reveals them (first warden felled, or
+  // 140 hexes walked). With the three satellite bosses and at least one
+  // ancient crater, this guarantees five reachable changes in every world:
+  // the Wound can always be opened without luck.
+  const faller = (() => {
+    const roster = VISITORS
+      .map((v, i) => ({ v, k: hash2(i * 17 + 3, i * 29 + 11, seed + 7200) }))
+      .sort((a, b) => a.k - b.k)
+      .map(o => o.v);
+    const used = new Set(crashes.map(c => c.def.id));
+    const def = roster.find(v => !used.has(v.id)) || roster[0];
+    const claimed = t => t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden;
+    const cands = list
+      .filter(t => t.void && !claimed(t) && t.cDist > 10 && t.cDist < R - 3)
+      .sort((a, b) => hash2(b.q, b.r, seed + 7250) - hash2(a.q, a.r, seed + 7250));
+    for (const anchor of cands) {
+      if (hexDist(anchor.q, anchor.r, start.q, start.r) < 12) continue;
+      if (crashes.some(c => hexDist(c.center.q, c.center.r, anchor.q, anchor.r) < 10)) continue;
+      // the crater: the anchor and its free void neighbours
+      const ring = [];
+      for (const [nq, nr] of neighborsOf(anchor.q, anchor.r)) {
+        const t = tiles.get(keyOf(nq, nr));
+        if (t && t.void && !claimed(t)) ring.push(t);
+      }
+      if (ring.length < 3) continue;
+      const cluster = [anchor, ...ring];
+      // every neighbouring land tile must belong to ONE host region — a
+      // revealed crater must never hand out a free crossing
+      let shoreRegion = -1, touchesShore = false, ok = true;
+      for (const t of cluster) {
+        for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+          const n = tiles.get(keyOf(nq, nr));
+          if (!n) continue;
+          if (n.void) {
+            // claimed void is a future road or room — keep the crater clear
+            if (n.hiddenBridge || n.isletHidden || n.woundHidden || n.secret) { ok = false; break; }
+            continue;
+          }
+          if (n.gate || n.region >= 100 || n.biome === 'ROAD' || n.biome === 'BRIDGE'
+            || n.biome === 'CRASH' || n.landmark || n.seamHint || n.isletHint != null) { ok = false; break; }
+          if (shoreRegion < 0) shoreRegion = n.region;
+          if (n.region !== shoreRegion) { ok = false; break; }
+          touchesShore = true;
+        }
+        if (!ok) break;
+      }
+      if (!ok || !touchesShore || shoreRegion < 0) continue;
+      const hostTier = regions[shoreRegion]?.tier ?? 1;
+      anchor.biome = 'CRASH';
+      anchor.region = shoreRegion;
+      anchor.elev = 0.3;
+      applyHeight(anchor, seed, volcano);
+      anchor.height -= 0.12;
+      anchor.topY = anchor.floatY + anchor.height;
+      anchor.fallerHidden = true;
+      anchor.landmark = { type: 'crash', name: def.name, visitor: def.id, tier: hostTier + 1 };
+      for (const t of ring) {
+        t.biome = 'CRASH';
+        t.region = shoreRegion;
+        t.elev = 0.32;
+        applyHeight(t, seed, volcano);
+        t.fallerHidden = true;
+      }
+      // the ejecta apron waits on the neighbouring coast (built at arrival)
+      for (const [dq, dr] of discCoords(2)) {
+        const n = tiles.get(keyOf(anchor.q + dq, anchor.r + dr));
+        if (!n || n.void || n.region !== shoreRegion || n.gate || n.landmark) continue;
+        if (['ROAD', 'BRIDGE', 'CRASH'].includes(n.biome)) continue;
+        n.crashDebris = true;
+      }
+      return { def, center: anchor, ring, region: shoreRegion, revealed: false };
+    }
+    return null;   // no seed has failed placement in the suite; belt-and-braces
+  })();
+
   // ---- pass 11: wandering traders ------------------------------------------
   const traders = [];
   {
@@ -1213,7 +1292,7 @@ export function generateWorld(seed) {
   const celestialSpots = [];
   {
     const cands = list
-      .filter(t => t.void && !t.secret && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
+      .filter(t => t.void && !t.secret && !t.fallerHidden && t.cDist > 10 && t.cDist < CONFIG.mapRadius - 4)
       .sort((a, b) => hash2(b.q, b.r, seed + 9100) - hash2(a.q, a.r, seed + 9100));
     for (const t of cands) {
       if (celestialSpots.length >= 6) break;
@@ -1346,6 +1425,9 @@ export function generateWorld(seed) {
   for (const isl of islets) {
     for (const t of isl.bridgeTiles) t.name = 'A Folded Footbridge';
     for (const t of isl.tiles) t.name = t.landmark ? t.landmark.name : isl.def.name;
+  }
+  if (faller) for (const t of [faller.center, ...faller.ring]) {
+    t.name = t.landmark ? t.landmark.name : 'Fallen Shallows';
   }
 
   // ---- per-hex explorable sites (lazy, deterministic, sparser) -------------
@@ -1540,7 +1622,7 @@ export function generateWorld(seed) {
     seed, tiles, list, land, start, volcano,
     kingdoms, kingdomById, dungeons, shrines, traders, roamerSpawns,
     regions, regionOf, gates, satellites, secrets, wound, skyAnchors, islets,
-    celestialSpots, drowned, sparkDungeonKey, crashes,
+    celestialSpots, drowned, sparkDungeonKey, crashes, faller,
     sun: { name: 'Vael, the Undying Sun', flavor: 'The world’s heart, still burning in its crater of sky.' },
     getSites,
     revealSecret(v) {
@@ -1578,6 +1660,19 @@ export function generateWorld(seed) {
       }
       if (isl.shore) isl.shore.isletHint = null;
       return true;
+    },
+    // the last visitor comes down: its folded crater surfaces mid-run
+    revealFaller() {
+      if (!faller || faller.revealed) return null;
+      faller.revealed = true;
+      const arrTiles = [faller.center, ...faller.ring];
+      for (const t of arrTiles) {
+        t.void = false;
+        t.fallerHidden = false;
+        if (!land.includes(t)) land.push(t);
+      }
+      crashes.push({ def: faller.def, center: faller.center, ring: faller.ring, region: faller.region });
+      return arrTiles;
     },
     // five mutations, and the world admits what it has been hiding
     revealWound() {

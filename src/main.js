@@ -317,6 +317,19 @@ function travelTo(target, onArrive = null) {
           setTimeout(tryStart, 400);
         }
       }
+      // the sky finishes its sentence: the last visitor comes down (the
+      // vantage summon above wins ties — arrivalDue stays true for later)
+      if (arrivalDue()) {
+        player.path = [];
+        player.onDone = null;
+        saveNow(true);
+        const tryFall = () => {
+          if (skyEvent || mode !== 'world') return;
+          if (player.isMoving) { setTimeout(tryFall, 250); return; }
+          startArrivalEvent();
+        };
+        setTimeout(tryFall, 600);
+      }
       if ((tile.seamHint || tile.isletHint != null) && !seamNudged.has(keyOf(tile.q, tile.r))) {
         seamNudged.add(keyOf(tile.q, tile.r));
         ui.toast('✸ The shore HUMS beneath your feet — something folded waits in the void. A star-charge detonated here would answer it.', true);
@@ -450,6 +463,7 @@ function showSkyLine() {
 function advanceSkyEvent() {
   const se = skyEvent;
   if (!se || se.phase !== 'hold') return;
+  if (se.arrival && se.arrival.state !== 'done') return;   // the fall cannot be skipped
   se.idx++;
   if (se.idx < se.def.lines.length) {
     audio.sfxHop?.();
@@ -501,11 +515,88 @@ function advanceSkyEvent() {
     }
     announceFeats(meta.bump(s => { s.errands = (s.errands || 0) + 1; }));
   }
+  if (se.arrival && world.faller) {
+    ui.toast(`☄ <b>${world.faller.def.name}</b> lies in its new crater off `
+      + `${world.regions[world.faller.region]?.name || 'the far coast'} — held in your memory of the map.`, true);
+  }
   saveNow(true);
   se.phase = 'back';
   se.t = 0;
   se.dur = 1.3;
   se.backFrom = { pos: worldCamera.position.clone(), look: se.to.look.clone() };
+}
+
+// ---------------------------------------------- the arrival (the last fall) ---
+// One visitor has not landed when the run begins. When the first warden
+// falls (or 140 hexes have been walked), the sky answers: the camera goes
+// out to watch the fall, the crater surfaces where it lands, and the map
+// remembers the spot. This is the guaranteed fifth change — the Wound can
+// always be opened without luck.
+function arrivalDue() {
+  return world.faller && !world.faller.revealed && !run.fallerArrived
+    && (run.openedGates.size >= 1 || run.hexesVisited.size >= 140);
+}
+
+function startArrivalEvent() {
+  if (skyEvent || mode !== 'world' || player.isMoving) return false;
+  const f = world.faller;
+  if (!f || f.revealed) return false;
+  run.fallerArrived = true;   // even a mid-cinematic reload keeps the landing
+  mode = 'skyEvent';
+  document.body.classList.add('in-skyevent');
+  worldView.setSkyLabelsVisible(false);
+  worldRig.enabled = false;
+  worldRig.velocity.set(0, 0, 0);
+  worldRig.tween = null;
+  worldView.setHighlight(null);
+  ui.tooltip(null);
+  audio.sfxReveal?.();
+  const from = {
+    pos: worldCamera.position.clone(),
+    look: worldRig.focus.clone().add(new THREE.Vector3(0, 0.5, 0)),
+  };
+  const B = new THREE.Vector3(f.center.x, f.center.topY + 0.6, f.center.z);
+  const dir = worldCamera.position.clone().sub(B);
+  dir.y = 0;
+  if (dir.lengthSq() < 1) dir.set(1, 0, 0);
+  dir.normalize();
+  const frame = 30;
+  const to = {
+    pos: B.clone().addScaledVector(dir, frame).add(new THREE.Vector3(0, frame * 0.45, 0)),
+    look: B.clone(),
+  };
+  const hostName = world.regions[f.region]?.name || 'the far coast';
+  skyEvent = {
+    def: {
+      id: 'arrival', name: 'The Sky, Mid-Sentence',
+      lines: [
+        'Light crosses the sky — burning, and keeping no schedule any comet keeps.',
+        `It comes down off the coast of ${hostName}, hard enough to be felt through the page.`,
+        `${f.def.name} has arrived, ${f.def.sub}. Something is already standing guard over it.`,
+      ],
+    },
+    idx: 0, phase: 'out', t: 0, dur: 1.7, from, to, backFrom: null, drift: 0,
+    arrival: { state: 'falling', t: 0, dur: 1.5, target: B, meteor: null },
+  };
+  updateSkyButton(player.tile);
+  saveNow(true);
+  return true;
+}
+
+// the crater surfaces, and the map keeps a memory of roughly where
+function revealArrival() {
+  const tiles = world.revealFaller();
+  if (!tiles) return;
+  worldView.revealHiddenTiles(tiles);
+  worldView.buildEjectaFor([world.crashes[world.crashes.length - 1]]);
+  for (const t of tiles) {
+    worldView.explored.add(keyOf(t.q, t.r));
+    for (const [nq, nr] of neighborsOf(t.q, t.r)) {
+      const n = world.tiles.get(keyOf(nq, nr));
+      if (n && !n.void) worldView.explored.add(keyOf(nq, nr));
+    }
+  }
+  worldView.updateFog(player.tile, { animate: false });
 }
 
 function endSkyEvent() {
@@ -531,9 +622,35 @@ function updateSkyEvent(dt) {
     worldCamera.lookAt(look);
     if (se.t >= 1) {
       se.phase = 'hold';
-      showSkyLine();
+      if (se.arrival) {
+        // the meteor takes the frame before any words do
+        se.arrival.meteor = worldView.makeMeteor(world.faller?.def.glow);
+        se.arrival.meteor.position.copy(se.arrival.target).add(new THREE.Vector3(26, 46, -18));
+      } else {
+        showSkyLine();
+      }
     }
   } else if (se.phase === 'hold') {
+    const ar = se.arrival;
+    if (ar && ar.state !== 'done') {
+      ar.t += dt / (ar.state === 'falling' ? ar.dur : 0.9);
+      if (ar.state === 'falling') {
+        const k = Math.min(1, ar.t);
+        const start = ar.target.clone().add(new THREE.Vector3(26, 46, -18));
+        ar.meteor.position.lerpVectors(start, ar.target, k * k);   // gravity's ease-in
+        if (ar.t >= 1) {
+          worldView.removeMeteor(ar.meteor);
+          worldView.impactBurst(ar.target);
+          audio.sfxDetonate?.();
+          revealArrival();
+          ar.state = 'settling';
+          ar.t = 0;
+        }
+      } else if (ar.t >= 1) {   // settling: the tiles finish popping in
+        ar.state = 'done';
+        showSkyLine();
+      }
+    }
     // a slow, reverent drift while the body speaks
     se.drift += dt;
     const off = se.to.pos.clone().sub(se.to.look);
@@ -1635,6 +1752,8 @@ window.__vael = {
   },
   startSkyEvent: () => { const def = skyDefFor(player.tile); if (def) startSkyEvent(def); return !!def; },
   advanceSkyEvent,
+  startArrival: () => startArrivalEvent(),   // headless tests fire the fall directly
+  arrivalDue,
   shopOffers: (q, r) => {
     const t = world.tiles.get(q + ',' + r);
     if (!t) return null;

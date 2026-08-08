@@ -60,6 +60,7 @@ export class WorldView {
       ...world.wound.bridgeTiles,
       ...world.wound.tiles.filter(t => t.void),
       ...world.islets.flatMap(i => [...i.bridgeTiles, ...i.tiles]),
+      ...(world.faller ? [world.faller.center, ...world.faller.ring] : []),
     ];
 
     this._buildLights();
@@ -728,6 +729,7 @@ export class WorldView {
     const landmarkTiles = [
       ...world.land,
       ...world.islets.flatMap(i => i.tiles),
+      ...(world.faller && !world.faller.revealed ? [world.faller.center] : []),
     ];
     for (const tile of landmarkTiles) {
       const lm = tile.landmark;
@@ -1399,8 +1401,9 @@ export class WorldView {
     rts.forEach((tile, i) => {
       tile.capPos = new THREE.Vector3(tile.x, tile.topY + 0.5, tile.z);
       tile.capYaw = hash2(tile.q, tile.r, 907) * Math.PI * 2;
-      // unrevealed secrets / folded bridges / islets / the Wound hide entirely
-      this._setCapScale(i, tile.secret || tile.hiddenBridge || tile.woundHidden || tile.isletHidden ? 0 : 1);
+      // unrevealed secrets / folded bridges / islets / the Wound / the one
+      // still falling hide entirely
+      this._setCapScale(i, tile.secret || tile.hiddenBridge || tile.woundHidden || tile.isletHidden || tile.fallerHidden ? 0 : 1);
     });
     this.layer.add(this.mistMesh);
   }
@@ -1625,7 +1628,7 @@ export class WorldView {
     this.debrisSpinners = [];
     const spots = [];
     for (const t of world.list) {
-      if (!t.void || t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden) continue;
+      if (!t.void || t.secret || t.hiddenBridge || t.woundHidden || t.isletHidden || t.fallerHidden) continue;
       if (t.cDist <= 3) continue;
       if (hash2(t.q, t.r, 4242) < 0.16) spots.push(t);
     }
@@ -1687,10 +1690,16 @@ export class WorldView {
   // stone across the fallen-shallows ring, heavier scorched pieces flung out
   // onto the apron beyond (tiles marked crashDebris by the worldgen pass).
   _buildCrashEjecta() {
+    this.buildEjectaFor(this.world.crashes || []);
+  }
+
+  // Also called at the arrival: the faller's skirt of rock builds the moment
+  // its crater surfaces.
+  buildEjectaFor(crashList) {
     const { world } = this;
-    if (!world.crashes?.length) return;
+    if (!crashList?.length) return;
     const spots = [];
-    for (const c of world.crashes) {
+    for (const c of crashList) {
       for (const t of c.ring) spots.push({ t, dense: true });
       for (const [dq, dr] of [[2, 0], [0, 2], [-2, 0], [0, -2], [2, -2], [-2, 2], [1, 1], [-1, -1]]) {
         const n = world.tiles.get(keyOf(c.center.q + dq, c.center.r + dr));
@@ -1731,6 +1740,45 @@ export class WorldView {
       mesh.setColorAt(i, tmpColor);
     });
     this.layer.add(mesh);
+  }
+
+  // ------------------------------------------------- the arrival cinematic ---
+  // A burning core in a glow shroud, flown by main.js from high sky to the
+  // crater; and the flash it leaves when it lands.
+  makeMeteor(colorHex = '#ffd9a0') {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.55, 0),
+      new THREE.MeshBasicMaterial({ color: 0xfff2d0, fog: false })
+    );
+    g.add(core);
+    for (const [s, o] of [[7, 0.9], [13, 0.35]]) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(colorHex), transparent: true, opacity: o,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      glow.scale.setScalar(s);
+      g.add(glow);
+    }
+    g.raycast = () => {};
+    this.scene.add(g);
+    return g;
+  }
+
+  removeMeteor(g) { this.scene.remove(g); }
+
+  impactBurst(pos) {
+    for (const [color, scale, grow] of [['#fff2d0', 3, 60], ['#ffb46a', 5, 34]]) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(color), transparent: true, opacity: 1,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      sp.position.copy(pos);
+      sp.scale.setScalar(scale);
+      sp.raycast = () => {};
+      this.scene.add(sp);
+      (this.impactFlashes ??= []).push({ sp, grow });
+    }
   }
 
   // --------------------------------------------------- island undersides ---
@@ -2013,6 +2061,16 @@ export class WorldView {
   update(dt, camera) {
     this.time += dt;
     const t = this.time;
+
+    // impact flashes bloom out and die fast
+    if (this.impactFlashes?.length) {
+      for (const f of this.impactFlashes) {
+        f.sp.scale.addScalar(f.grow * dt);
+        f.sp.material.opacity -= dt * 1.4;
+        if (f.sp.material.opacity <= 0) this.scene.remove(f.sp);
+      }
+      this.impactFlashes = this.impactFlashes.filter(f => f.sp.material.opacity > 0);
+    }
 
     for (const ring of this.baseRings) ring.rotation.y += ring.userData.speed * dt;
     this.dust.rotation.y += dt * 0.008;

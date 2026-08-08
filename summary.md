@@ -424,6 +424,44 @@ Run with any static server from repo root (`python3 -m http.server 8080`).
    transition/adds/darkening/barrage — note `_log` shows only the last
    line; tests must hook `_logHist`). BUILD is 18.
 
+19. **The arrival round** (same branch; direct user instruction reviving the
+   declined crash-cinematics poll option as a LIVE arrival — chosen to fix
+   the RNG-gated Wound path): **one more visitor falls DURING every run.**
+   Worldgen **pass 10.7** picks the next unfallen visitor from the seeded
+   roster and folds its crater into the void off a region's coast,
+   islet-style (center + ≥3 void ring tiles, biome CRASH + `fallerHidden`,
+   region = host shore's; leak-proof: neighbours may only be one region's
+   plain land, and CLAIMED void — folded bridges/islets/secrets/wound —
+   also rejects placement), so nothing rewrites live terrain at reveal;
+   `world.faller` = {def, center, ring, region, revealed},
+   `world.revealFaller()` un-voids and pushes it into `world.crashes`.
+   **Trigger**: first opened gate OR 140 hexes visited (`arrivalDue()`),
+   checked in the hop callback only (warp never auto-fires; vantage
+   summons win ties — the arrival waits for a later hop). **Cinematic**
+   (`startArrivalEvent` through the skyEvent machinery): camera flies out
+   to frame the landing coast, a meteor (`worldView.makeMeteor(glow)` —
+   core + double glow) falls with gravity's ease-in over 1.5s, impact
+   (`impactBurst` flashes processed in world3d update), the crater pops
+   in via `revealHiddenTiles` + ejecta builds (`buildEjectaFor`, extracted
+   from the boot pass), crater + surrounding tiles are marked in
+   `worldView.explored` (**the map remembers roughly where**), then 3
+   dialogue lines ("The Sky, Mid-Sentence") naming the host region; the
+   fall itself cannot be click-skipped (`advanceSkyEvent` guard); END
+   toasts the location. `run.fallerArrived` set at cinematic START so a
+   mid-event reload keeps the landing; save **v8** stores it and
+   applySave replays the reveal silently. **Wound math fixed**: 3
+   satellite bosses + ≥1 ancient crater + the faller = **5 guaranteed
+   changes in every world** — threshold 5 is reachable without RNG.
+   world3d: renderTiles/mist/rift-debris/landmark lists include faller
+   tiles (fog-state machinery shows the landmark once explored).
+   Suite: 40 seeds green incl. faller-every-seed, no double-claims,
+   leak-proof adjacency, tier = host+1, post-reveal reachability, sites
+   answer, celestial spots keep off. 18-check headless arrival test
+   green (natural trigger end-to-end, un-skippable fall, memory fog,
+   hum, guardian tier, v8 round-trip replay). BUILD is 19. Untested by
+   humans: meteor pacing at real fps, the 140-hex fallback, and whether
+   first-warden is the right beat.
+
 Branch workflow: develop on the session's designated `claude/*` branch
 (it changes per session); reset it from `origin/main` (`git checkout -B
 <branch> origin/main`) before new work. The user asks for PR + merge explicitly.
@@ -864,8 +902,8 @@ the band mid, call `battle._resolveTiming()`.
   portrait); its numbers (add tier−2 × 0.8 hp, 0.85 aggression, 3-crush
   barrage) are sim-free and untested by humans. Mutations cannot be
   removed once taken (no cleansing shrine yet — the option was polled
-  and declined for now). The Wound-at-5 path in a 1-crash world rides
-  on RNG for the fifth change — knowingly shipped, awaiting playtest.
+  and declined for now). The Wound-at-5 RNG gap was CLOSED in round 19:
+  the mid-run arrival guarantees a fifth reachable change everywhere.
 - The rarity skew and MEADOW/FOREST astral holes were fixed this round
   (16 retags; totals now 42c/48u/43r/17a, one astral per biome pool).
 - `summary.md` (this file) and the `__vael` debug handle ship in the repo;

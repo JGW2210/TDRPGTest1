@@ -6,7 +6,7 @@ import { run } from './run.js';
 import { keyOf } from './hex.js';
 
 const KEY = seed => `vaeldrift_run_${seed}`;
-const VERSION = 7; // v7: crashed-visitor worldgen reshuffles every seed (round 17); older saves discarded
+const VERSION = 8; // v8: the faller (arrival crater reshuffles worldgen again) + fallerArrived; older saves discarded
 
 export function saveRun(world, player, worldView, roamers = null) {
   try {
@@ -26,6 +26,7 @@ export function saveRun(world, player, worldView, roamers = null) {
       questsDone: [...run.questsDone],
       revealedBridges: world.satellites.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
       revealedIslets: world.islets.map((s, i) => s.revealed ? i : -1).filter(i => i >= 0),
+      fallerArrived: run.fallerArrived,
       roamers: roamers ? roamers.serialize() : null,
       reviveUsed: run.reviveUsed,
       bossesDown: run.bossesDown,
@@ -84,6 +85,14 @@ export function applySave(data, world, worldView, roamers = null) {
     if (world.revealIslet(idx)) {
       const isl = world.islets[idx];
       worldView.revealHiddenTiles([...isl.bridgeTiles, ...isl.tiles]);
+    }
+  }
+  run.fallerArrived = !!data.fallerArrived;
+  if (run.fallerArrived) {
+    const ft = world.revealFaller();   // the landing already happened
+    if (ft) {
+      worldView.revealHiddenTiles(ft);
+      worldView.buildEjectaFor([world.crashes[world.crashes.length - 1]]);
     }
   }
   if (roamers && data.roamers) roamers.restore(data.roamers);
