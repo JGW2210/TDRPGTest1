@@ -744,7 +744,12 @@ the band mid, call `battle._resolveTiming()`.
   round-11 history) asserts over 40 seeds: 0 leaks, 0 lost regions,
   3 islets each, satellite shores hinted + walkable, satellite bosses /
   wound deity / islets reachable post-reveal, every secret openable from
-  a crack-hinted neighbor, 0 impure home tiles. Keep it green.
+  a crack-hinted neighbor. Round 16 adds: 12 sky vantages, 5 drowned
+  bodies on mainland water with sites, a spark dungeon, 6 celestial
+  spots, no vantage/landmark collisions. Keep it green. (Caveat: the
+  "0 impure home tiles" claim from round 8 used some narrower metric —
+  a naive cDist≤13 volcano/tundra/desert count reads 2–22 on the
+  round-14 baseline too, so don't chase it as a regression.)
 - Round 8-11 visuals verified by headless screenshots only — debris
   density, beacon/aurora/cloud opacity, landmark scale, and the de-boxed
   UI's scrim/text-shadow strengths may want a taste pass on a real GPU.
@@ -769,17 +774,20 @@ the band mid, call `battle._resolveTiming()`.
 
 ## Next-step candidates (floated to user, none committed)
 
+- Human playtest pass on the Star Vessel / Focus economy (tier damage
+  bands, crush frequency, focus drain rates) and on errand-clue
+  discoverability at real play speed
 - By-ear audio tuning pass (needs user feedback)
-- Balance pass with human playtesting (combat numbers, roamer speeds,
-  mutation costs, deity difficulty, bargain prices)
-- GPU taste pass on round 8-11 visuals (debris/beacon/aurora/scrim
-  intensities)
+- Balance pass with human playtesting (roamer speeds, mutation costs,
+  deity difficulty, bargain prices)
+- GPU taste pass on round 8-16 visuals (debris/beacon/aurora/scrim
+  intensities, drowned-body models, constellation cinematic framing)
 - Deity phase 2 / Wound music+audio identity (WOUND has no MUSIC entry
   yet — falls back by biome default; ISLET likewise)
 - A mutation-cleansing shrine (mutations are currently permanent)
+- More speakers/errands if the story layer lands well (nebulas, the
+  hermit, the Oxidized King's dreams; a second act of keepsakes)
 - Optional "lite" render mode for weak GPUs
-- ~~Hide floating sky-labels during cinematics~~ and ~~voices for the
-  sun/shattermoons/constellations~~ — both shipped in round 16
 
 ## Conventions
 
